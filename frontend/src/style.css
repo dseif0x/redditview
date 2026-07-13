@@ -233,21 +233,19 @@ button:hover {
 /* ---- progress bar ---- */
 #progress {
   position: absolute;
-  bottom: env(safe-area-inset-bottom);
-  left: 0;
-  right: 0;
   z-index: 12;
   pointer-events: none;
 }
 
 #progress-track {
-  height: 3px;
+  position: relative;
   background: rgba(255, 255, 255, 0.08);
 }
 
 #progress-fill {
-  height: 100%;
-  width: 0;
+  position: absolute;
+  left: 0;
+  top: 0;
   background: #ff4500;
 }
 
@@ -255,13 +253,97 @@ button:hover {
 #progress.seekable {
   pointer-events: auto;
   cursor: pointer;
-  padding-top: 12px;
   touch-action: none;
 }
 
 #progress.seekable #progress-track {
-  height: 5px;
   background: rgba(255, 255, 255, 0.18);
+}
+
+/* --- horizontal docks (top/bottom) --- */
+#progress.pos-bottom,
+#progress.pos-top {
+  left: 0;
+  right: 0;
+}
+
+#progress.pos-bottom {
+  bottom: env(safe-area-inset-bottom);
+}
+
+#progress.pos-top {
+  top: env(safe-area-inset-top);
+}
+
+#progress.pos-bottom #progress-track,
+#progress.pos-top #progress-track {
+  height: 3px;
+}
+
+#progress.pos-bottom #progress-fill,
+#progress.pos-top #progress-fill {
+  height: 100%;
+  width: 0;
+}
+
+#progress.pos-bottom.seekable {
+  padding-top: 12px;
+}
+
+#progress.pos-top.seekable {
+  padding-bottom: 12px;
+}
+
+#progress.pos-bottom.seekable #progress-track,
+#progress.pos-top.seekable #progress-track {
+  height: 5px;
+}
+
+/* --- vertical docks (left/right): 60% of the screen height, centered --- */
+#progress.pos-left,
+#progress.pos-right {
+  top: 20%;
+  bottom: 20%;
+}
+
+#progress.pos-left {
+  left: 0;
+}
+
+#progress.pos-right {
+  right: 0;
+}
+
+#progress.pos-left #progress-track,
+#progress.pos-right #progress-track {
+  width: 3px;
+  height: 100%;
+}
+
+#progress.pos-left #progress-fill,
+#progress.pos-right #progress-fill {
+  width: 100%;
+  height: 0;
+}
+
+/* inverted: the vertical bar fills from the bottom up */
+#progress.pos-left.invert #progress-fill,
+#progress.pos-right.invert #progress-fill {
+  top: auto;
+  bottom: 0;
+}
+
+#progress.pos-left.seekable {
+  padding-right: 14px;
+}
+
+#progress.pos-right.seekable {
+  padding-left: 14px;
+}
+
+#progress.pos-left.seekable #progress-track,
+#progress.pos-right.seekable #progress-track {
+  width: 5px;
 }
 
 /* ---- meta ---- */

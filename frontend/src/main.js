@@ -19,6 +19,9 @@ const DEFAULTS = {
   fillScreen: false,
   vertical: false,
   smoothScroll: true,
+  moveBar: false,
+  barPos: 'bottom',
+  barInvert: false,
 };
 
 let settings = { ...DEFAULTS };
@@ -90,6 +93,8 @@ const showTextInput = $('#show-text-input');
 const fillScreenInput = $('#fill-screen-input');
 const verticalInput = $('#vertical-input');
 const smoothScrollInput = $('#smooth-scroll-input');
+const moveBarInput = $('#move-bar-input');
+const barInvertInput = $('#bar-invert-input');
 const fillBtn = $('#fill-btn');
 const appEl = $('#app');
 const prevZone = $('#prev-zone');
@@ -213,6 +218,37 @@ function maybePrefetch() {
 }
 
 // ---------------------------------------------------------------------------
+// Progress bar positioning. The bar normally lives at the bottom; with the
+// movable-bar option a tap near a screen edge docks it there. Left/right
+// docks are vertical (60% of the screen height), so the fill axis and seek
+// axis depend on the current position.
+// ---------------------------------------------------------------------------
+const effectiveBarPos = () => (settings.moveBar ? settings.barPos : 'bottom');
+const barIsVertical = () => effectiveBarPos() === 'left' || effectiveBarPos() === 'right';
+const fillProp = () => (barIsVertical() ? 'height' : 'width');
+
+function paintFill(value, transitionMs = 0) {
+  progressFill.style.transition = transitionMs ? `${fillProp()} ${transitionMs}ms linear` : 'none';
+  progressFill.style[fillProp()] = value;
+}
+
+function applyBarPos() {
+  const pos = effectiveBarPos();
+  progressEl.classList.remove('pos-top', 'pos-bottom', 'pos-left', 'pos-right', 'invert');
+  progressEl.classList.add('pos-' + pos);
+  if (settings.barInvert) progressEl.classList.add('invert');
+  // Repaint the fill for the (possibly new) axis.
+  progressFill.style.transition = 'none';
+  progressFill.style.width = '';
+  progressFill.style.height = '';
+  if (currentVideo?.duration) {
+    paintFill((currentVideo.currentTime / currentVideo.duration) * 100 + '%');
+  } else if (timerId != null) {
+    startTimer(settings.imageSeconds); // restart the countdown on the new axis
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Autoscroll timer (images / galleries / text) with progress bar. Only runs
 // when autoscroll is enabled; otherwise slides stay until manually advanced.
 // ---------------------------------------------------------------------------
@@ -220,9 +256,8 @@ function startTimer(seconds) {
   clearTimer();
   if (!settings.autoscroll) return;
   timerRemainingMs = seconds * 1000;
-  progressFill.style.transition = 'none';
-  progressFill.style.width = '0%';
-  // Force reflow so the width reset applies before the transition starts.
+  paintFill('0%');
+  // Force reflow so the reset applies before the transition starts.
   void progressFill.offsetWidth;
   resumeTimer();
 }
@@ -233,25 +268,21 @@ function pauseTimer() {
   clearTimeout(timerId);
   timerId = null;
   timerRemainingMs = Math.max(0, timerRemainingMs - (Date.now() - timerStartedAt));
-  const w = getComputedStyle(progressFill).width;
-  progressFill.style.transition = 'none';
-  progressFill.style.width = w;
+  paintFill(getComputedStyle(progressFill)[fillProp()]);
 }
 
 function resumeTimer() {
   if (timerId != null || timerRemainingMs <= 0 || !settings.autoscroll) return;
   timerStartedAt = Date.now();
   timerId = setTimeout(onTimerDone, timerRemainingMs);
-  progressFill.style.transition = `width ${timerRemainingMs}ms linear`;
-  progressFill.style.width = '100%';
+  paintFill('100%', timerRemainingMs);
 }
 
 function clearTimer() {
   clearTimeout(timerId);
   timerId = null;
   timerRemainingMs = 0;
-  progressFill.style.transition = 'none';
-  progressFill.style.width = '0%';
+  paintFill('0%');
 }
 
 function onTimerDone() {
@@ -354,8 +385,7 @@ function activateRecord(rec) {
     rec.video.loop = !settings.autoscroll;
     if (fresh && rec.video.currentTime > 0) rec.video.currentTime = 0;
     progressEl.classList.add('seekable');
-    progressFill.style.transition = 'none';
-    progressFill.style.width = '0%';
+    paintFill('0%');
     attemptPlay(rec.video);
   } else {
     currentVideo = null;
@@ -626,8 +656,7 @@ function buildVideo(rec) {
   // Playback progress in the bottom bar (only while this slide is active).
   video.addEventListener('timeupdate', () => {
     if (!isActive(rec) || !video.duration || scrubbing) return;
-    progressFill.style.transition = 'none';
-    progressFill.style.width = (video.currentTime / video.duration) * 100 + '%';
+    paintFill((video.currentTime / video.duration) * 100 + '%');
   });
 
   rec.video = video;
@@ -647,10 +676,16 @@ function clickWasScrub() {
 function seekFromPointer(e) {
   if (!currentVideo || !currentVideo.duration) return;
   const rect = progressEl.getBoundingClientRect();
-  const frac = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
+  let frac;
+  if (barIsVertical()) {
+    frac = (e.clientY - rect.top) / rect.height;
+    if (settings.barInvert) frac = 1 - frac;
+  } else {
+    frac = (e.clientX - rect.left) / rect.width;
+  }
+  frac = Math.min(1, Math.max(0, frac));
   currentVideo.currentTime = frac * currentVideo.duration;
-  progressFill.style.transition = 'none';
-  progressFill.style.width = frac * 100 + '%';
+  paintFill(frac * 100 + '%');
 }
 progressEl.addEventListener('pointerdown', (e) => {
   if (!progressEl.classList.contains('seekable')) return;
@@ -670,6 +705,34 @@ progressEl.addEventListener('pointercancel', () => {
   scrubbing = false;
   lastScrubEnd = Date.now();
 });
+
+// With the movable-bar option on, a tap near a screen edge docks the
+// progress bar there. Runs in the capture phase and swallows the tap so the
+// slide's pause handler and the nav zones don't also react; real controls
+// (topbar buttons, vote/save, the bar itself) keep priority.
+const EDGE_BAND = 32;
+document.addEventListener(
+  'click',
+  (e) => {
+    if (!settings.moveBar || settingsModal.open) return;
+    if (e.target.closest('button:not(.nav-zone), input, select, textarea, a, dialog, #progress, #meta-actions')) return;
+    let pos = null;
+    // The top edge is mostly covered by the feed input on phones, so any tap
+    // on the top bar's empty background counts as the top edge too.
+    if (e.clientY <= EDGE_BAND || e.target.closest('#topbar')) pos = 'top';
+    else if (e.clientY >= window.innerHeight - EDGE_BAND) pos = 'bottom';
+    else if (e.clientX <= EDGE_BAND) pos = 'left';
+    else if (e.clientX >= window.innerWidth - EDGE_BAND) pos = 'right';
+    if (!pos || pos === settings.barPos) return;
+    e.preventDefault();
+    e.stopPropagation();
+    settings.barPos = pos;
+    saveSettings();
+    applyBarPos();
+    showToast('Progress bar → ' + pos, 1200);
+  },
+  true
+);
 
 
 function renderMeta(post) {
@@ -1003,6 +1066,8 @@ settingsBtn.addEventListener('click', () => {
   fillScreenInput.checked = settings.fillScreen;
   verticalInput.checked = settings.vertical;
   smoothScrollInput.checked = settings.smoothScroll;
+  moveBarInput.checked = settings.moveBar;
+  barInvertInput.checked = settings.barInvert;
   showImagesInput.checked = settings.showImages;
   showVideosInput.checked = settings.showVideos;
   showTextInput.checked = settings.showText;
@@ -1037,12 +1102,15 @@ settingsForm.addEventListener('submit', (e) => {
   settings.fillScreen = fillScreenInput.checked;
   settings.vertical = verticalInput.checked;
   settings.smoothScroll = smoothScrollInput.checked;
+  settings.moveBar = moveBarInput.checked;
+  settings.barInvert = barInvertInput.checked;
   settings.showImages = showImagesInput.checked;
   settings.showVideos = showVideosInput.checked;
   settings.showText = showTextInput.checked;
   saveSettings();
   applyFill();
   applyDirection();
+  applyBarPos();
   // Mounted neighbor slides carry transforms for the old axis; re-place them.
   if (verticalChanged && activeKey && mounted.has(activeKey)) {
     showSlide(mounted.get(activeKey).pos, 0);
@@ -1114,6 +1182,7 @@ function escapeHtml(s) {
 
 applyFill();
 applyDirection();
+applyBarPos();
 updateMuteBtn();
 updateAutoscrollBtn();
 

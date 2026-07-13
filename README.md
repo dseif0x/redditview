@@ -46,6 +46,12 @@ jumps. The previous and next posts stay mounted and preloaded — videos
 buffer off-screen before you reach them and the real neighbor peeks in
 while you swipe.
 
+An optional movable progress bar (settings, default off) docks to whichever
+screen edge you tap near: top/bottom span the full width, left/right become
+vertical bars over the middle 60% of the screen height, with a setting to
+invert whether they fill downwards or upwards. The bar stays seekable in
+every position.
+
 Autoscroll is off by default: videos loop and slides stay until you navigate.
 Turning it on (▶ button or `space`) advances images after the configured
 duration and videos when they end. The bottom bar shows video playback
