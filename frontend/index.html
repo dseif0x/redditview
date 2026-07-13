@@ -19,6 +19,7 @@
           <button type="submit" title="Load feed">Go</button>
         </form>
         <div class="controls">
+          <button id="fill-btn" title="Fill screen (f)">⛶</button>
           <button id="pause-btn" title="Pause / resume autoscroll (space)">⏸</button>
           <button id="mute-btn" title="Toggle sound (m)">🔇</button>
           <button id="settings-btn" title="Settings">⚙</button>
@@ -68,6 +69,25 @@
             <input id="start-muted-input" type="checkbox" />
             Start videos muted
           </label>
+          <label class="row">
+            <input id="fill-screen-input" type="checkbox" />
+            Fill screen (crop media to fill the viewport)
+          </label>
+          <fieldset class="kinds">
+            <legend>Show post types</legend>
+            <label class="row">
+              <input id="show-images-input" type="checkbox" />
+              Images &amp; galleries
+            </label>
+            <label class="row">
+              <input id="show-videos-input" type="checkbox" />
+              Videos
+            </label>
+            <label class="row">
+              <input id="show-text-input" type="checkbox" />
+              Text posts
+            </label>
+          </fieldset>
           <p class="hint">
             Everything is stored only in this browser's localStorage. The cookie
             is sent to the backend per request and never persisted server-side.

@@ -55,3 +55,44 @@ pushes to `main`.
 docker build -t redditview .
 docker run -p 8080:8080 redditview
 ```
+
+## Kubernetes (Helm)
+
+The chart in `charts/redditview` is published to GitHub Pages by
+`.github/workflows/release-chart.yml` whenever `charts/**` changes on `main`
+(bump `version` in `Chart.yaml` to cut a new release — chart-releaser skips
+already-released versions). GitHub Pages must be set to serve the `gh-pages`
+branch (Settings → Pages); the workflow creates the branch on first run.
+
+```sh
+helm repo add redditview https://dseif0x.github.io/redditview
+helm install redditview redditview/redditview \
+  --set ingress.enabled=true \
+  --set ingress.className=nginx \
+  --set 'ingress.hosts[0].host=redditview.example.com' \
+  --set 'ingress.hosts[0].paths[0].path=/' \
+  --set 'ingress.hosts[0].paths[0].pathType=Prefix' \
+  --set 'ingress.tls[0].secretName=redditview-tls' \
+  --set 'ingress.tls[0].hosts[0]=redditview.example.com'
+```
+
+Or with a values file:
+
+```yaml
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+  hosts:
+    - host: redditview.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: redditview-tls
+      hosts:
+        - redditview.example.com
+env:
+  REDDIT_USER_AGENT: 'Mozilla/5.0 ...'
+```

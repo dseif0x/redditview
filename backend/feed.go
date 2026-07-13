@@ -256,9 +256,9 @@ func extractPost(d postData) (Post, bool) {
 			if !ok || m.Status != "valid" {
 				continue
 			}
+			// Gallery items render in <img>, so prefer the gif variant for
+			// animated entries; the mp4 variant can't be shown in an img tag.
 			switch {
-			case m.Source.MP4 != "":
-				p.Images = append(p.Images, m.Source.MP4)
 			case m.Source.GIF != "":
 				p.Images = append(p.Images, m.Source.GIF)
 			case m.Source.URL != "":

@@ -5,7 +5,16 @@ import './style.css';
 // Settings (localStorage only)
 // ---------------------------------------------------------------------------
 const SETTINGS_KEY = 'redditview.settings';
-const DEFAULTS = { cookie: '', imageSeconds: 8, startMuted: false, lastFeed: '' };
+const DEFAULTS = {
+  cookie: '',
+  imageSeconds: 8,
+  startMuted: false,
+  lastFeed: '',
+  showImages: true,
+  showVideos: true,
+  showText: true,
+  fillScreen: false,
+};
 
 let settings = { ...DEFAULTS };
 try {
@@ -26,6 +35,7 @@ let after = null;
 let exhausted = false;
 let loading = false;
 let feedPath = '';
+let feedActive = false;
 
 let idx = -1;
 let galleryIdx = 0;
@@ -55,6 +65,11 @@ const settingsForm = $('#settings-form');
 const cookieInput = $('#cookie-input');
 const imageSecondsInput = $('#image-seconds-input');
 const startMutedInput = $('#start-muted-input');
+const showImagesInput = $('#show-images-input');
+const showVideosInput = $('#show-videos-input');
+const showTextInput = $('#show-text-input');
+const fillScreenInput = $('#fill-screen-input');
+const fillBtn = $('#fill-btn');
 const progressFill = $('#progress-fill');
 const meta = $('#meta');
 const metaTitle = $('#meta-title');
@@ -93,23 +108,43 @@ function showToast(msg, ms = 4000) {
 // ---------------------------------------------------------------------------
 // Feed loading
 // ---------------------------------------------------------------------------
+function kindEnabled(post) {
+  switch (post.kind) {
+    case 'video':
+      return settings.showVideos;
+    case 'text':
+      return settings.showText;
+    default: // image + gallery
+      return settings.showImages;
+  }
+}
+
 async function fetchPage() {
   if (loading || exhausted) return;
   loading = true;
   try {
-    const params = new URLSearchParams({ path: feedPath });
-    if (after) params.set('after', after);
-    const headers = {};
-    if (settings.cookie.trim()) headers['X-Reddit-Cookie'] = settings.cookie.trim();
+    // A page may contain only filtered-out kinds; keep paging (bounded) until
+    // something usable shows up.
+    for (let attempts = 0; attempts < 5; attempts++) {
+      const params = new URLSearchParams({ path: feedPath });
+      if (after) params.set('after', after);
+      const headers = {};
+      if (settings.cookie.trim()) headers['X-Reddit-Cookie'] = settings.cookie.trim();
 
-    const res = await fetch('/api/feed?' + params.toString(), { headers });
-    if (!res.ok) {
-      throw new Error((await res.text()).slice(0, 200) || `HTTP ${res.status}`);
+      const res = await fetch('/api/feed?' + params.toString(), { headers });
+      if (!res.ok) {
+        throw new Error((await res.text()).slice(0, 200) || `HTTP ${res.status}`);
+      }
+      const data = await res.json();
+      const added = data.posts.filter(kindEnabled);
+      posts.push(...added);
+      after = data.after || null;
+      if (!after) {
+        exhausted = true;
+        break;
+      }
+      if (added.length > 0) break;
     }
-    const data = await res.json();
-    posts.push(...data.posts);
-    after = data.after || null;
-    if (!after) exhausted = true;
   } finally {
     loading = false;
   }
@@ -122,6 +157,7 @@ async function startFeed(path) {
   exhausted = false;
   idx = -1;
   feedPath = path;
+  feedActive = true;
   settings.lastFeed = path;
   saveSettings();
 
@@ -439,6 +475,17 @@ function togglePause() {
   }
 }
 
+function applyFill() {
+  viewer.classList.toggle('fill', settings.fillScreen);
+  fillBtn.classList.toggle('active', settings.fillScreen);
+}
+
+function toggleFill() {
+  settings.fillScreen = !settings.fillScreen;
+  saveSettings();
+  applyFill();
+}
+
 function toggleMute() {
   muted = !muted;
   if (currentVideo) currentVideo.muted = muted;
@@ -461,6 +508,7 @@ feedForm.addEventListener('submit', (e) => {
 
 pauseBtn.addEventListener('click', togglePause);
 muteBtn.addEventListener('click', toggleMute);
+fillBtn.addEventListener('click', toggleFill);
 $('#next-zone').addEventListener('click', next);
 $('#prev-zone').addEventListener('click', prev);
 
@@ -468,16 +516,37 @@ settingsBtn.addEventListener('click', () => {
   cookieInput.value = settings.cookie;
   imageSecondsInput.value = settings.imageSeconds;
   startMutedInput.checked = settings.startMuted;
+  fillScreenInput.checked = settings.fillScreen;
+  showImagesInput.checked = settings.showImages;
+  showVideosInput.checked = settings.showVideos;
+  showTextInput.checked = settings.showText;
   settingsModal.showModal();
 });
 
 settingsForm.addEventListener('submit', (e) => {
   if (e.submitter?.value !== 'save') return;
+  const filtersChanged =
+    settings.showImages !== showImagesInput.checked ||
+    settings.showVideos !== showVideosInput.checked ||
+    settings.showText !== showTextInput.checked;
+
   settings.cookie = cookieInput.value.trim();
   settings.imageSeconds = Math.max(1, parseFloat(imageSecondsInput.value) || DEFAULTS.imageSeconds);
   settings.startMuted = startMutedInput.checked;
+  settings.fillScreen = fillScreenInput.checked;
+  settings.showImages = showImagesInput.checked;
+  settings.showVideos = showVideosInput.checked;
+  settings.showText = showTextInput.checked;
   saveSettings();
-  showToast('Settings saved');
+  applyFill();
+
+  if (!settings.showImages && !settings.showVideos && !settings.showText) {
+    showToast('All post types disabled — the feed will be empty');
+  } else {
+    showToast('Settings saved');
+  }
+  // The loaded feed was filtered with the old toggles; reload it.
+  if (filtersChanged && feedActive) startFeed(feedPath);
 });
 
 document.addEventListener('keydown', (e) => {
@@ -498,11 +567,16 @@ document.addEventListener('keydown', (e) => {
     case 'm':
       toggleMute();
       break;
+    case 'f':
+      toggleFill();
+      break;
   }
 });
 
 function escapeHtml(s) {
   return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 }
+
+applyFill();
 
 updateMuteBtn();
