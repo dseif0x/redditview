@@ -331,7 +331,7 @@ function buildRecord(pos) {
   // same way tapping a video pauses playback.
   if (post.kind !== 'video') {
     rec.el.addEventListener('click', () => {
-      if (!isActive(rec) || !settings.autoscroll) return;
+      if (!isActive(rec) || !settings.autoscroll || clickWasScrub()) return;
       if (timerId != null) pauseTimer();
       else resumeTimer();
     });
@@ -618,7 +618,7 @@ function buildVideo(rec) {
   video.addEventListener('error', () => loadNextSource('playback error'));
   // A tap anywhere on the slide (not just the video itself) pauses/resumes.
   rec.el.addEventListener('click', () => {
-    if (!isActive(rec)) return;
+    if (!isActive(rec) || clickWasScrub()) return;
     if (video.paused) video.play().catch(() => {});
     else video.pause();
   });
@@ -637,6 +637,13 @@ function buildVideo(rec) {
 
 // Seek by clicking/dragging the progress bar while a video plays.
 let scrubbing = false;
+let lastScrubEnd = 0;
+
+// Scrub gestures can end with the pointer over the slide, making the browser
+// dispatch a click there; slide tap handlers must ignore those.
+function clickWasScrub() {
+  return scrubbing || Date.now() - lastScrubEnd < 350;
+}
 function seekFromPointer(e) {
   if (!currentVideo || !currentVideo.duration) return;
   const rect = progressEl.getBoundingClientRect();
@@ -647,6 +654,7 @@ function seekFromPointer(e) {
 }
 progressEl.addEventListener('pointerdown', (e) => {
   if (!progressEl.classList.contains('seekable')) return;
+  e.preventDefault(); // suppress the compatibility mouse events / click
   scrubbing = true;
   progressEl.setPointerCapture(e.pointerId);
   seekFromPointer(e);
@@ -656,9 +664,11 @@ progressEl.addEventListener('pointermove', (e) => {
 });
 progressEl.addEventListener('pointerup', () => {
   scrubbing = false;
+  lastScrubEnd = Date.now();
 });
 progressEl.addEventListener('pointercancel', () => {
   scrubbing = false;
+  lastScrubEnd = Date.now();
 });
 
 
