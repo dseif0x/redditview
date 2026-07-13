@@ -26,6 +26,13 @@
             spellcheck="false"
             placeholder="r/pics · user/name/m/multi · saved · upvoted · empty = home"
           />
+          <button type="submit" title="Load feed">Go</button>
+        </form>
+        <div id="feed-tools">
+          <select id="bookmark-select" title="Saved feeds" hidden>
+            <option value="">★ Feeds</option>
+          </select>
+          <button type="button" id="bm-btn" title="Bookmark this feed">☆</button>
           <select id="sort-select" title="Sort">
             <option value="">Sort</option>
             <option value="hot">Hot</option>
@@ -47,8 +54,7 @@
               <option value="controversial:all">Controversial · all time</option>
             </optgroup>
           </select>
-          <button type="submit" title="Load feed">Go</button>
-        </form>
+        </div>
         <div class="controls">
           <button id="fill-btn" title="Fill screen (f)">⛶</button>
           <button id="pause-btn" title="Toggle autoscroll (space)">⏸</button>

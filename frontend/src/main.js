@@ -23,6 +23,7 @@ const DEFAULTS = {
   barPos: 'bottom',
   barInvert: false,
   sort: '',
+  bookmarks: [],
 };
 
 let settings = { ...DEFAULTS };
@@ -1093,6 +1094,71 @@ function updateMuteBtn() {
 // ---------------------------------------------------------------------------
 // Wiring
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Feed bookmarks: star the current feed (with its sort) and re-open it from
+// the quick-pick dropdown.
+// ---------------------------------------------------------------------------
+const bookmarkSelect = $('#bookmark-select');
+const bmBtn = $('#bm-btn');
+
+function bookmarkLabel(b) {
+  const path = b.path || '(home)';
+  return b.sort ? `${path} · ${b.sort.replace(':', ' ')}` : path;
+}
+
+function populateBookmarks() {
+  if (!Array.isArray(settings.bookmarks)) settings.bookmarks = [];
+  bookmarkSelect.innerHTML = '<option value="">★ Feeds</option>';
+  settings.bookmarks.forEach((b, i) => {
+    const opt = document.createElement('option');
+    opt.value = String(i);
+    opt.textContent = bookmarkLabel(b);
+    bookmarkSelect.appendChild(opt);
+  });
+  bookmarkSelect.hidden = settings.bookmarks.length === 0;
+  updateBmBtn();
+}
+
+function currentBookmarkIndex() {
+  const path = feedInput.value.trim();
+  return settings.bookmarks.findIndex((b) => b.path === path);
+}
+
+function updateBmBtn() {
+  const marked = currentBookmarkIndex() >= 0;
+  bmBtn.textContent = marked ? '★' : '☆';
+  bmBtn.classList.toggle('active', marked);
+  bmBtn.title = marked ? 'Remove this feed from bookmarks' : 'Bookmark this feed';
+}
+
+bmBtn.addEventListener('click', () => {
+  const i = currentBookmarkIndex();
+  if (i >= 0) {
+    settings.bookmarks.splice(i, 1);
+    showToast('Bookmark removed', 1500);
+  } else {
+    settings.bookmarks.push({ path: feedInput.value.trim(), sort: settings.sort });
+    showToast('Feed bookmarked', 1500);
+  }
+  saveSettings();
+  populateBookmarks();
+});
+
+bookmarkSelect.addEventListener('change', () => {
+  const b = settings.bookmarks[Number(bookmarkSelect.value)];
+  bookmarkSelect.value = ''; // reset so the same feed can be re-picked
+  if (!b) return;
+  feedInput.value = b.path;
+  settings.sort = b.sort || '';
+  sortSelect.value = settings.sort;
+  saveSettings();
+  updateBmBtn();
+  startFeed(b.path);
+});
+
+feedInput.addEventListener('input', updateBmBtn);
+populateBookmarks();
+
 sortSelect.value = settings.sort;
 sortSelect.addEventListener('change', () => {
   settings.sort = sortSelect.value;

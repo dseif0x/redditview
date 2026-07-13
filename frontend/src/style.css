@@ -49,9 +49,15 @@ body {
 #feed-form {
   display: flex;
   gap: 0.4rem;
-  /* Shrinks to wrap the controls onto their own row on narrow screens. */
-  flex: 1 1 16rem;
-  max-width: 34rem;
+  /* Shrinks to wrap the other rows onto their own line on narrow screens. */
+  flex: 1 1 14rem;
+  max-width: 30rem;
+}
+
+#feed-tools {
+  display: flex;
+  gap: 0.4rem;
+  flex: 0 0 auto;
 }
 
 #feed-input {
@@ -68,6 +74,29 @@ body {
 #feed-input:focus {
   outline: none;
   border-color: #ff4500;
+}
+
+#bookmark-select {
+  flex: 0 0 auto;
+  max-width: 5.5rem;
+  padding: 0.45rem 0.4rem;
+  border-radius: 999px;
+  border: 1px solid #33333f;
+  background: rgba(20, 20, 28, 0.9);
+  color: inherit;
+  font-size: 0.85rem;
+}
+
+#bm-btn {
+  flex: 0 0 auto;
+  width: 2.4rem;
+  padding: 0.45rem 0;
+  text-align: center;
+}
+
+#bm-btn.active {
+  border-color: #ffd635;
+  color: #ffd635;
 }
 
 #sort-select {
