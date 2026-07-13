@@ -21,11 +21,12 @@
             type="text"
             autocomplete="off"
             spellcheck="false"
-            placeholder="r/pics · user/name/m/multi · u/name/submitted · empty = home"
+            placeholder="r/pics · user/name/m/multi · saved · empty = home"
           />
           <button type="submit" title="Load feed">Go</button>
         </form>
         <div class="controls">
+          <button id="saved-btn" title="Browse your saved posts">★</button>
           <button id="fill-btn" title="Fill screen (f)">⛶</button>
           <button id="pause-btn" title="Toggle autoscroll (space)">⏸</button>
           <button id="mute-btn" title="Toggle sound (m)">🔇</button>
@@ -39,7 +40,8 @@
           <p>Enter any reddit feed above and press <strong>Go</strong>.</p>
           <p class="hint">
             Set your reddit cookie in <strong>⚙ settings</strong> for the home
-            feed and private multireddits.
+            feed, private multireddits, and your saved posts (type
+            <strong>saved</strong> or press <strong>★</strong>).
           </p>
           <p class="hint">← / → navigate · space toggles autoscroll · m toggles sound</p>
         </div>

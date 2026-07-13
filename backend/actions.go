@@ -15,59 +15,67 @@ import (
 
 // Write actions (vote/save) against reddit's cookie-authenticated API need a
 // modhash — reddit's CSRF token — sent as the `uh` form field. It comes from
-// /api/me.json and is cached per cookie, refreshed once on rejection.
+// /api/me.json (along with the username, used to resolve the "saved" feed)
+// and is cached per cookie, refreshed once on rejection.
 
-var modhashes = struct {
+type identity struct {
+	Modhash string
+	Name    string
+}
+
+var identities = struct {
 	sync.Mutex
-	m map[string]string
-}{m: map[string]string{}}
+	m map[string]identity
+}{m: map[string]identity{}}
 
 func cookieKey(cookie string) string {
 	sum := sha256.Sum256([]byte(cookie))
 	return hex.EncodeToString(sum[:])
 }
 
-func getModhash(r *http.Request, cookie string, force bool) (string, error) {
+func getIdentity(r *http.Request, cookie string, force bool) (identity, error) {
 	key := cookieKey(cookie)
-	modhashes.Lock()
-	cached, ok := modhashes.m[key]
-	modhashes.Unlock()
+	identities.Lock()
+	cached, ok := identities.m[key]
+	identities.Unlock()
 	if ok && !force {
 		return cached, nil
 	}
 
 	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, "https://old.reddit.com/api/me.json", nil)
 	if err != nil {
-		return "", err
+		return identity{}, err
 	}
 	req.Header.Set("User-Agent", userAgent)
 	req.Header.Set("Cookie", cookie)
 
 	resp, err := httpClient.Do(req)
 	if err != nil {
-		return "", err
+		return identity{}, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("reddit /api/me returned %d", resp.StatusCode)
+		return identity{}, fmt.Errorf("reddit /api/me returned %d", resp.StatusCode)
 	}
 
 	var body struct {
 		Data struct {
 			Modhash string `json:"modhash"`
+			Name    string `json:"name"`
 		} `json:"data"`
 	}
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&body); err != nil {
-		return "", fmt.Errorf("failed to parse /api/me: %w", err)
+		return identity{}, fmt.Errorf("failed to parse /api/me: %w", err)
 	}
-	if body.Data.Modhash == "" {
-		return "", fmt.Errorf("cookie is not logged in (no modhash from reddit)")
+	if body.Data.Modhash == "" || body.Data.Name == "" {
+		return identity{}, fmt.Errorf("cookie is not logged in (reddit did not identify the session)")
 	}
 
-	modhashes.Lock()
-	modhashes.m[key] = body.Data.Modhash
-	modhashes.Unlock()
-	return body.Data.Modhash, nil
+	id := identity{Modhash: body.Data.Modhash, Name: body.Data.Name}
+	identities.Lock()
+	identities.m[key] = id
+	identities.Unlock()
+	return id, nil
 }
 
 var fullnameRe = regexp.MustCompile(`^t3_[a-z0-9]+$`)
@@ -117,12 +125,12 @@ func doRedditAction(w http.ResponseWriter, r *http.Request, endpoint string, for
 	}
 
 	for attempt := 0; ; attempt++ {
-		uh, err := getModhash(r, cookie, attempt > 0)
+		ident, err := getIdentity(r, cookie, attempt > 0)
 		if err != nil {
 			http.Error(w, "could not get modhash: "+err.Error(), http.StatusBadGateway)
 			return
 		}
-		form.Set("uh", uh)
+		form.Set("uh", ident.Modhash)
 
 		req, err := http.NewRequestWithContext(r.Context(), http.MethodPost, endpoint, strings.NewReader(form.Encode()))
 		if err != nil {

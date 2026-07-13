@@ -30,6 +30,8 @@ advancing; images advance after a configurable duration.
    - `r/pics`, `r/pics/top?t=week`
    - `user/<name>/m/<multi>` (private multis require cookie)
    - `u/<name>/submitted`
+   - `saved` (or the ★ button) → your saved posts (requires cookie; the
+     backend resolves your username automatically)
    - or paste any full reddit URL
 
 Controls: arrow keys, edge clicks, swipe, or mouse wheel to navigate; `space`
