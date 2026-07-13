@@ -37,7 +37,9 @@ advancing; images advance after a configurable duration.
 
 Controls: arrow keys, edge clicks, swipe, or mouse wheel to navigate; `space`
 toggles autoscroll, `m` toggles sound, `f` toggles fill-screen, `a`/`z`/`s`
-vote/save. Settings has a vertical navigation mode (swipe up/down,
+vote/save. Double-tap a post to upvote it. The sort selector next to the
+feed input applies hot/new/rising/top/controversial (with time ranges) to
+any listing feed and reloads it on change. Settings has a vertical navigation mode (swipe up/down,
 TikTok-style) and multiple accounts (each with its own cookie).
 
 Navigation uses smooth reels-style slide transitions by default (slides

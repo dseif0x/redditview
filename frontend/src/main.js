@@ -22,6 +22,7 @@ const DEFAULTS = {
   moveBar: false,
   barPos: 'bottom',
   barInvert: false,
+  sort: '',
 };
 
 let settings = { ...DEFAULTS };
@@ -97,6 +98,7 @@ const moveBarInput = $('#move-bar-input');
 const barInvertInput = $('#bar-invert-input');
 const fillBtn = $('#fill-btn');
 const appEl = $('#app');
+const sortSelect = $('#sort-select');
 const prevZone = $('#prev-zone');
 const nextZone = $('#next-zone');
 const progressEl = $('#progress');
@@ -141,6 +143,44 @@ function showToast(msg, ms = 4000) {
 // ---------------------------------------------------------------------------
 // Feed loading
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Sort. Rewrites the feed path for the selected sort mode: listing feeds
+// (home/subreddit/multi) take the sort as a trailing path segment, user pages
+// take ?sort=/&t= query params, and the per-user pseudo-feeds ignore it.
+// ---------------------------------------------------------------------------
+const SORT_SEGMENTS = ['hot', 'new', 'rising', 'top', 'controversial', 'best'];
+
+function applySort(raw) {
+  if (!settings.sort) return raw;
+  const [sort, t] = settings.sort.split(':');
+
+  // Strip scheme/host from pasted URLs so path logic below works.
+  if (raw.includes('://')) {
+    raw = raw.slice(raw.indexOf('://') + 3);
+    const slash = raw.indexOf('/');
+    raw = slash >= 0 ? raw.slice(slash + 1) : '';
+  }
+  const qi = raw.indexOf('?');
+  let path = (qi >= 0 ? raw.slice(0, qi) : raw).replace(/^\/+|\/+$/g, '');
+  const params = new URLSearchParams(qi >= 0 ? raw.slice(qi + 1) : '');
+
+  if (['saved', 'upvoted', 'downvoted', 'hidden'].includes(path)) return raw;
+
+  t ? params.set('t', t) : params.delete('t');
+
+  // User listing pages (not multireddits) sort via query params.
+  if (/^(u|user)\/[^/]+(\/(submitted|posts|overview|comments|gilded))?$/i.test(path)) {
+    params.set('sort', sort);
+    return path + '?' + params.toString();
+  }
+
+  const parts = path.split('/').filter(Boolean);
+  if (SORT_SEGMENTS.includes(parts[parts.length - 1])) parts.pop();
+  parts.push(sort);
+  const q = params.toString();
+  return parts.join('/') + (q ? '?' + q : '');
+}
+
 function kindEnabled(post) {
   switch (post.kind) {
     case 'video':
@@ -159,7 +199,7 @@ async function fetchPage() {
     // A page may contain only filtered-out kinds; keep paging (bounded) until
     // something usable shows up.
     for (let attempts = 0; attempts < 5; attempts++) {
-      const params = new URLSearchParams({ path: feedPath });
+      const params = new URLSearchParams({ path: applySort(feedPath) });
       if (after) params.set('after', after);
       const headers = {};
       if (settings.cookie.trim()) headers['X-Reddit-Cookie'] = settings.cookie.trim();
@@ -361,13 +401,55 @@ function buildRecord(pos) {
   // Tapping a non-video slide pauses/resumes the autoscroll countdown, the
   // same way tapping a video pauses playback.
   if (post.kind !== 'video') {
-    rec.el.addEventListener('click', () => {
-      if (!isActive(rec) || !settings.autoscroll || clickWasScrub()) return;
+    addTapHandlers(rec, () => {
+      if (!settings.autoscroll) return;
       if (timerId != null) pauseTimer();
       else resumeTimer();
     });
   }
   return rec;
+}
+
+// Single taps run their action after a short delay so a second tap within
+// the window becomes a double-tap upvote instead.
+const DOUBLE_TAP_MS = 300;
+function addTapHandlers(rec, single) {
+  let tapTimer = null;
+  let lastTap = 0;
+  rec.el.addEventListener('click', (e) => {
+    if (!isActive(rec) || clickWasScrub()) return;
+    const now = Date.now();
+    if (now - lastTap < DOUBLE_TAP_MS) {
+      lastTap = 0;
+      clearTimeout(tapTimer);
+      tapTimer = null;
+      doubleTapUpvote(e);
+      return;
+    }
+    lastTap = now;
+    clearTimeout(tapTimer);
+    tapTimer = setTimeout(() => {
+      tapTimer = null;
+      single(e);
+    }, DOUBLE_TAP_MS - 20);
+  });
+}
+
+function doubleTapUpvote(e) {
+  spawnVoteBurst(e.clientX, e.clientY);
+  const post = posts[idx];
+  // Like Instagram/TikTok: double-tap only upvotes, never removes the vote.
+  if (post && post.likes !== true) vote(1);
+}
+
+function spawnVoteBurst(x, y) {
+  const el = document.createElement('div');
+  el.className = 'vote-burst';
+  el.textContent = '▲';
+  el.style.left = x + 'px';
+  el.style.top = y + 'px';
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 900);
 }
 
 function activateRecord(rec) {
@@ -647,8 +729,7 @@ function buildVideo(rec) {
   });
   video.addEventListener('error', () => loadNextSource('playback error'));
   // A tap anywhere on the slide (not just the video itself) pauses/resumes.
-  rec.el.addEventListener('click', () => {
-    if (!isActive(rec) || clickWasScrub()) return;
+  addTapHandlers(rec, () => {
     if (video.paused) video.play().catch(() => {});
     else video.pause();
   });
@@ -892,6 +973,13 @@ function updateMuteBtn() {
 // ---------------------------------------------------------------------------
 // Wiring
 // ---------------------------------------------------------------------------
+sortSelect.value = settings.sort;
+sortSelect.addEventListener('change', () => {
+  settings.sort = sortSelect.value;
+  saveSettings();
+  if (feedActive) startFeed(feedInput.value.trim() || settings.lastFeed);
+});
+
 feedForm.addEventListener('submit', (e) => {
   e.preventDefault();
   feedInput.blur();
