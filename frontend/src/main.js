@@ -1350,6 +1350,20 @@ applyBarPos();
 updateMuteBtn();
 updateAutoscrollBtn();
 
+// iOS scrolls the document when the on-screen keyboard opens and doesn't
+// always scroll back when it closes. The app is position-fixed so nothing
+// looks wrong, but hit-testing stays offset by the leftover scroll — taps
+// then land on the element above their visual position. Snap the scroll back
+// whenever an input loses focus or the visual viewport changes.
+function resetViewportScroll() {
+  if (window.scrollX || window.scrollY) window.scrollTo(0, 0);
+  if (document.documentElement.scrollTop) document.documentElement.scrollTop = 0;
+  if (document.body.scrollTop) document.body.scrollTop = 0;
+}
+document.addEventListener('focusout', () => setTimeout(resetViewportScroll, 60));
+window.visualViewport?.addEventListener('resize', () => setTimeout(resetViewportScroll, 60));
+window.addEventListener('orientationchange', () => setTimeout(resetViewportScroll, 250));
+
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js').catch(() => {});
