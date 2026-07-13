@@ -411,18 +411,14 @@ function renderVideo(slide, post) {
 
   const attemptPlay = () => {
     // Autoplay with sound is often blocked before user interaction: fall back
-    // to muted playback rather than stalling the feed.
-    video
-      .play()
-      .then(() => addUnmuteOverlay(slide, video))
-      .catch(() => {
-        if (!video.muted) {
-          video.muted = true;
-          updateMuteBtn();
-          video.play().catch(() => {});
-        }
-        addUnmuteOverlay(slide, video);
-      });
+    // to muted playback rather than stalling the feed (unmute with 🔇 / m).
+    video.play().catch(() => {
+      if (!video.muted) {
+        video.muted = true;
+        updateMuteBtn();
+        video.play().catch(() => {});
+      }
+    });
   };
 
   const loadNextSource = (why) => {
@@ -465,7 +461,8 @@ function renderVideo(slide, post) {
     if (settings.autoscroll) next();
   });
   video.addEventListener('error', () => loadNextSource('playback error'));
-  video.addEventListener('click', () => {
+  // A tap anywhere on the slide (not just the video itself) pauses/resumes.
+  slide.addEventListener('click', () => {
     if (video.paused) video.play().catch(() => {});
     else video.pause();
   });
@@ -509,25 +506,6 @@ progressEl.addEventListener('pointercancel', () => {
   scrubbing = false;
 });
 
-// A prominent tap-for-sound button whenever a video is playing muted, since
-// browsers routinely force autoplay to start muted.
-function addUnmuteOverlay(slide, video) {
-  if (currentVideo !== video || !video.muted) return;
-  const btn = document.createElement('button');
-  btn.className = 'unmute-overlay';
-  btn.textContent = '🔊 Tap for sound';
-  btn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    video.muted = false;
-    muted = false;
-    updateMuteBtn();
-    video.play().catch(() => {});
-  });
-  video.addEventListener('volumechange', () => {
-    if (!video.muted) btn.remove();
-  });
-  slide.appendChild(btn);
-}
 
 function renderMeta(post) {
   meta.hidden = false;
