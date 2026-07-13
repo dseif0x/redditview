@@ -30,8 +30,10 @@ body {
   flex-wrap: wrap;
   gap: 0.5rem;
   align-items: center;
-  padding: 0.5rem 0.75rem;
-  background: linear-gradient(rgba(11, 11, 15, 0.85), rgba(11, 11, 15, 0));
+  /* keep clear of the iOS status bar / notch in standalone PWA mode */
+  padding: calc(0.5rem + env(safe-area-inset-top)) calc(0.75rem + env(safe-area-inset-right)) 0.5rem
+    calc(0.75rem + env(safe-area-inset-left));
+  background: linear-gradient(rgba(11, 11, 15, 0.85), rgba(11, 11, 15, 0.5), rgba(11, 11, 15, 0));
 }
 
 #feed-form {
@@ -87,7 +89,8 @@ button:hover {
 
 @media (max-width: 480px) {
   #topbar {
-    padding: 0.4rem 0.5rem;
+    padding: calc(0.4rem + env(safe-area-inset-top)) calc(0.5rem + env(safe-area-inset-right)) 0.4rem
+      calc(0.5rem + env(safe-area-inset-left));
     gap: 0.35rem;
   }
 
@@ -132,7 +135,7 @@ button:hover {
 
 .unmute-overlay {
   position: absolute;
-  bottom: 5.5rem;
+  bottom: calc(5.5rem + env(safe-area-inset-bottom));
   left: 50%;
   transform: translateX(-50%);
   z-index: 8;
@@ -204,7 +207,7 @@ button:hover {
 /* ---- progress bar ---- */
 #progress {
   position: absolute;
-  bottom: 0;
+  bottom: env(safe-area-inset-bottom);
   left: 0;
   right: 0;
   height: 3px;
@@ -221,14 +224,14 @@ button:hover {
 /* ---- meta ---- */
 #meta {
   position: absolute;
-  bottom: 3px;
+  bottom: calc(3px + env(safe-area-inset-bottom));
   left: 0;
   right: 0;
   z-index: 11;
   display: flex;
   align-items: flex-end;
   gap: 0.75rem;
-  padding: 2.5rem 1rem 0.8rem;
+  padding: 2.5rem calc(1rem + env(safe-area-inset-right)) 0.8rem calc(1rem + env(safe-area-inset-left));
   background: linear-gradient(rgba(11, 11, 15, 0), rgba(11, 11, 15, 0.85));
   pointer-events: none;
 }
@@ -330,7 +333,7 @@ button:hover {
 }
 
 #app.vertical #prev-zone {
-  top: 4.5rem;
+  top: calc(4.5rem + env(safe-area-inset-top));
   bottom: auto;
 }
 
@@ -340,7 +343,7 @@ button:hover {
 
 #app.vertical #next-zone {
   top: auto;
-  bottom: 5rem;
+  bottom: calc(5rem + env(safe-area-inset-bottom));
 }
 
 #app.vertical #next-zone:hover {
