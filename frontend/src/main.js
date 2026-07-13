@@ -14,6 +14,7 @@ const DEFAULTS = {
   showVideos: true,
   showText: true,
   fillScreen: false,
+  vertical: false,
 };
 
 let settings = { ...DEFAULTS };
@@ -69,7 +70,11 @@ const showImagesInput = $('#show-images-input');
 const showVideosInput = $('#show-videos-input');
 const showTextInput = $('#show-text-input');
 const fillScreenInput = $('#fill-screen-input');
+const verticalInput = $('#vertical-input');
 const fillBtn = $('#fill-btn');
+const appEl = $('#app');
+const prevZone = $('#prev-zone');
+const nextZone = $('#next-zone');
 const progressFill = $('#progress-fill');
 const meta = $('#meta');
 const metaTitle = $('#meta-title');
@@ -521,6 +526,14 @@ function applyFill() {
   fillBtn.classList.toggle('active', settings.fillScreen);
 }
 
+function applyDirection() {
+  appEl.classList.toggle('vertical', settings.vertical);
+  prevZone.textContent = settings.vertical ? '⌃' : '‹';
+  nextZone.textContent = settings.vertical ? '⌄' : '›';
+  prevZone.title = settings.vertical ? 'Previous (↑)' : 'Previous (←)';
+  nextZone.title = settings.vertical ? 'Next (↓)' : 'Next (→)';
+}
+
 function toggleFill() {
   settings.fillScreen = !settings.fillScreen;
   saveSettings();
@@ -550,14 +563,56 @@ feedForm.addEventListener('submit', (e) => {
 pauseBtn.addEventListener('click', togglePause);
 muteBtn.addEventListener('click', toggleMute);
 fillBtn.addEventListener('click', toggleFill);
-$('#next-zone').addEventListener('click', next);
-$('#prev-zone').addEventListener('click', prev);
+nextZone.addEventListener('click', next);
+prevZone.addEventListener('click', prev);
+
+// Swipe gestures: swipe toward the next slide along the configured axis.
+let touchStartX = 0;
+let touchStartY = 0;
+viewer.addEventListener(
+  'touchstart',
+  (e) => {
+    touchStartX = e.touches[0].clientX;
+    touchStartY = e.touches[0].clientY;
+  },
+  { passive: true }
+);
+viewer.addEventListener(
+  'touchend',
+  (e) => {
+    const dx = e.changedTouches[0].clientX - touchStartX;
+    const dy = e.changedTouches[0].clientY - touchStartY;
+    const main = settings.vertical ? dy : dx;
+    const cross = settings.vertical ? dx : dy;
+    if (Math.abs(main) < 60 || Math.abs(main) < Math.abs(cross) * 1.5) return;
+    // Swiping up/left pulls the next slide in; down/right goes back.
+    if (main < 0) next();
+    else prev();
+  },
+  { passive: true }
+);
+
+// Mouse wheel / trackpad: scroll down for next, up for previous.
+let wheelLockUntil = 0;
+window.addEventListener(
+  'wheel',
+  (e) => {
+    if (settingsModal.open || Math.abs(e.deltaY) < 20) return;
+    const now = Date.now();
+    if (now < wheelLockUntil) return;
+    wheelLockUntil = now + 500;
+    if (e.deltaY > 0) next();
+    else prev();
+  },
+  { passive: true }
+);
 
 settingsBtn.addEventListener('click', () => {
   cookieInput.value = settings.cookie;
   imageSecondsInput.value = settings.imageSeconds;
   startMutedInput.checked = settings.startMuted;
   fillScreenInput.checked = settings.fillScreen;
+  verticalInput.checked = settings.vertical;
   showImagesInput.checked = settings.showImages;
   showVideosInput.checked = settings.showVideos;
   showTextInput.checked = settings.showText;
@@ -575,11 +630,13 @@ settingsForm.addEventListener('submit', (e) => {
   settings.imageSeconds = Math.max(1, parseFloat(imageSecondsInput.value) || DEFAULTS.imageSeconds);
   settings.startMuted = startMutedInput.checked;
   settings.fillScreen = fillScreenInput.checked;
+  settings.vertical = verticalInput.checked;
   settings.showImages = showImagesInput.checked;
   settings.showVideos = showVideosInput.checked;
   settings.showText = showTextInput.checked;
   saveSettings();
   applyFill();
+  applyDirection();
 
   if (!settings.showImages && !settings.showVideos && !settings.showText) {
     showToast('All post types disabled — the feed will be empty');
@@ -598,11 +655,15 @@ document.addEventListener('keydown', (e) => {
       togglePause();
       break;
     case 'ArrowRight':
+    case 'ArrowDown':
     case 'j':
+      if (e.key === 'ArrowDown') e.preventDefault();
       next();
       break;
     case 'ArrowLeft':
+    case 'ArrowUp':
     case 'k':
+      if (e.key === 'ArrowUp') e.preventDefault();
       prev();
       break;
     case 'm':
@@ -619,5 +680,11 @@ function escapeHtml(s) {
 }
 
 applyFill();
-
+applyDirection();
 updateMuteBtn();
+
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  });
+}

@@ -282,6 +282,34 @@ button:hover {
   background: linear-gradient(to left, rgba(0, 0, 0, 0.25), transparent);
 }
 
+/* vertical navigation: zones become top/bottom strips */
+#app.vertical .nav-zone {
+  left: 25%;
+  right: 25%;
+  width: auto;
+  height: 3.5rem;
+  font-size: 2rem;
+  line-height: 3.5rem;
+}
+
+#app.vertical #prev-zone {
+  top: 4.5rem;
+  bottom: auto;
+}
+
+#app.vertical #prev-zone:hover {
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.25), transparent);
+}
+
+#app.vertical #next-zone {
+  top: auto;
+  bottom: 5rem;
+}
+
+#app.vertical #next-zone:hover {
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.25), transparent);
+}
+
 /* ---- toast ---- */
 #toast {
   position: absolute;
