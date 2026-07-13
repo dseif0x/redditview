@@ -210,8 +210,12 @@ button:hover {
   bottom: env(safe-area-inset-bottom);
   left: 0;
   right: 0;
-  height: 3px;
   z-index: 12;
+  pointer-events: none;
+}
+
+#progress-track {
+  height: 3px;
   background: rgba(255, 255, 255, 0.08);
 }
 
@@ -219,6 +223,19 @@ button:hover {
   height: 100%;
   width: 0;
   background: #ff4500;
+}
+
+/* video playback: the bar becomes a seek control with a bigger hit area */
+#progress.seekable {
+  pointer-events: auto;
+  cursor: pointer;
+  padding-top: 12px;
+  touch-action: none;
+}
+
+#progress.seekable #progress-track {
+  height: 5px;
+  background: rgba(255, 255, 255, 0.18);
 }
 
 /* ---- meta ---- */
@@ -408,7 +425,19 @@ button:hover {
   padding: 0 0.3rem;
 }
 
+#settings-form .account-actions {
+  margin: -0.5rem 0 1rem;
+}
+
+#settings-form .account-actions button {
+  font-size: 0.8rem;
+  border-radius: 8px;
+  color: #ff7a66;
+}
+
+#settings-form select,
 #settings-form textarea,
+#settings-form input[type='text'],
 #settings-form input[type='number'] {
   display: block;
   width: 100%;

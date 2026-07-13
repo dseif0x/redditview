@@ -27,7 +27,7 @@
         </form>
         <div class="controls">
           <button id="fill-btn" title="Fill screen (f)">⛶</button>
-          <button id="pause-btn" title="Pause / resume autoscroll (space)">⏸</button>
+          <button id="pause-btn" title="Toggle autoscroll (space)">⏸</button>
           <button id="mute-btn" title="Toggle sound (m)">🔇</button>
           <button id="settings-btn" title="Settings">⚙</button>
         </div>
@@ -41,11 +41,13 @@
             Set your reddit cookie in <strong>⚙ settings</strong> for the home
             feed and private multireddits.
           </p>
-          <p class="hint">← / → navigate · space pauses · m toggles sound</p>
+          <p class="hint">← / → navigate · space toggles autoscroll · m toggles sound</p>
         </div>
       </main>
 
-      <div id="progress"><div id="progress-fill"></div></div>
+      <div id="progress">
+        <div id="progress-track"><div id="progress-fill"></div></div>
+      </div>
 
       <footer id="meta" hidden>
         <div id="meta-text">
@@ -68,6 +70,14 @@
         <form method="dialog" id="settings-form">
           <h2>Settings</h2>
           <label>
+            Account
+            <select id="account-select"></select>
+          </label>
+          <label>
+            Account name
+            <input id="account-name-input" type="text" autocomplete="off" placeholder="e.g. main" />
+          </label>
+          <label>
             Reddit cookie
             <textarea
               id="cookie-input"
@@ -75,6 +85,9 @@
               placeholder="Paste the FULL Cookie header from a logged-in reddit.com request (DevTools → Network → request headers). Just reddit_session usually gets blocked as a bot."
             ></textarea>
           </label>
+          <div class="account-actions">
+            <button type="button" id="delete-account-btn">Delete this account</button>
+          </div>
           <label>
             Image duration (seconds)
             <input id="image-seconds-input" type="number" min="1" max="600" step="0.5" />

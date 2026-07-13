@@ -33,8 +33,14 @@ advancing; images advance after a configurable duration.
    - or paste any full reddit URL
 
 Controls: arrow keys, edge clicks, swipe, or mouse wheel to navigate; `space`
-pauses, `m` toggles sound, `f` toggles fill-screen. Settings has a vertical
-navigation mode (swipe up/down, TikTok-style).
+toggles autoscroll, `m` toggles sound, `f` toggles fill-screen, `a`/`z`/`s`
+vote/save. Settings has a vertical navigation mode (swipe up/down,
+TikTok-style) and multiple accounts (each with its own cookie).
+
+Autoscroll is off by default: videos loop and slides stay until you navigate.
+Turning it on (▶ button or `space`) advances images after the configured
+duration and videos when they end. The bottom bar shows video playback
+progress and can be clicked/dragged to seek; tapping a video pauses it.
 
 The app is an installable PWA (requires HTTPS): "Add to Home Screen" on
 mobile or the install prompt in desktop browsers gives a standalone
