@@ -27,6 +27,7 @@ body {
   right: 0;
   z-index: 10;
   display: flex;
+  flex-wrap: wrap;
   gap: 0.5rem;
   align-items: center;
   padding: 0.5rem 0.75rem;
@@ -36,7 +37,8 @@ body {
 #feed-form {
   display: flex;
   gap: 0.4rem;
-  flex: 1;
+  /* Shrinks to wrap the controls onto their own row on narrow screens. */
+  flex: 1 1 16rem;
   max-width: 34rem;
 }
 
@@ -74,12 +76,35 @@ button:hover {
   margin-left: auto;
   display: flex;
   gap: 0.4rem;
+  flex-shrink: 0;
 }
 
 .controls button {
   width: 2.4rem;
   padding: 0.45rem 0;
   text-align: center;
+}
+
+@media (max-width: 480px) {
+  #topbar {
+    padding: 0.4rem 0.5rem;
+    gap: 0.35rem;
+  }
+
+  #feed-input,
+  #feed-form button {
+    font-size: 0.85rem;
+    padding: 0.4rem 0.6rem;
+  }
+
+  .controls {
+    gap: 0.3rem;
+  }
+
+  .controls button {
+    width: 2.2rem;
+    padding: 0.4rem 0;
+  }
 }
 
 #pause-btn.active {
