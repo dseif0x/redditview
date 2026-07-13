@@ -42,7 +42,9 @@ TikTok-style) and multiple accounts (each with its own cookie).
 
 Navigation uses smooth reels-style slide transitions by default (slides
 follow your finger on touch and snap); disable in settings for instant
-jumps.
+jumps. The previous and next posts stay mounted and preloaded — videos
+buffer off-screen before you reach them and the real neighbor peeks in
+while you swipe.
 
 Autoscroll is off by default: videos loop and slides stay until you navigate.
 Turning it on (▶ button or `space`) advances images after the configured

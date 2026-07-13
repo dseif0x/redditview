@@ -62,7 +62,6 @@ let muted = settings.startMuted;
 let timerId = null;
 let timerRemainingMs = 0;
 
-let hls = null;
 let currentVideo = null;
 
 // ---------------------------------------------------------------------------
@@ -243,163 +242,206 @@ function onTimerDone() {
 }
 
 // ---------------------------------------------------------------------------
-// Slide rendering
+// Slide window: the previous, current, and next slides stay mounted so
+// neighbors are preloaded before you reach them and visible while swiping.
+// Each record owns its media (img/video + hls instance); positions are
+// addressed as {i: post index, g: gallery image index}.
 // ---------------------------------------------------------------------------
+const SLIDE_MS = 350;
+const mounted = new Map(); // key "i:g" -> record
+let activeKey = null;
+
+const keyOf = (pos) => pos.i + ':' + pos.g;
+const isActive = (rec) => rec.key === activeKey;
+const axisName = () => (settings.vertical ? 'Y' : 'X');
+
+function nextPosOf(pos) {
+  const p = posts[pos.i];
+  if (p?.kind === 'gallery' && pos.g < p.images.length - 1) return { i: pos.i, g: pos.g + 1 };
+  return posts[pos.i + 1] ? { i: pos.i + 1, g: 0 } : null;
+}
+
+function prevPosOf(pos) {
+  if (pos.g > 0) return { i: pos.i, g: pos.g - 1 };
+  return pos.i > 0 ? { i: pos.i - 1, g: 0 } : null;
+}
+
+// Position a slide at its window offset (-100/0/100%), optionally shifted by
+// a drag delta in px, optionally animating there.
+function placeRecord(rec, offPct, animate, dragPx = 0) {
+  rec.baseOff = offPct;
+  rec.el.classList.toggle('sliding', animate);
+  rec.el.style.transform =
+    offPct === 0 && !dragPx ? '' : `translate${axisName()}(calc(${offPct}% + ${dragPx}px))`;
+}
+
+function destroyRecord(rec) {
+  mounted.delete(rec.key);
+  rec.hls?.destroy();
+  rec.hls = null;
+  if (rec.video) {
+    rec.video.pause();
+    rec.video.removeAttribute('src');
+  }
+  rec.el.remove();
+}
+
 function stopSlide() {
   clearTimer();
   progressEl.classList.remove('seekable');
-  if (hls) {
-    hls.destroy();
-    hls = null;
+  currentVideo = null;
+  activeKey = null;
+  for (const rec of [...mounted.values()]) destroyRecord(rec);
+}
+
+function buildRecord(pos) {
+  const post = posts[pos.i];
+  const el = document.createElement('div');
+  el.className = 'slide';
+  const rec = { key: keyOf(pos), pos, post, el, video: null, hls: null, failed: false, baseOff: 0 };
+  switch (post.kind) {
+    case 'video':
+      buildVideo(rec);
+      break;
+    case 'gallery':
+    case 'image':
+      buildImage(rec);
+      break;
+    case 'text':
+      buildText(rec);
+      break;
   }
-  if (currentVideo) {
-    currentVideo.pause();
-    currentVideo.removeAttribute('src');
+  return rec;
+}
+
+function activateRecord(rec) {
+  idx = rec.pos.i;
+  galleryIdx = rec.pos.g;
+  const fresh = currentVideo !== rec.video || !rec.video;
+  if (rec.failed) {
+    showToast('Media failed to load, skipping');
+    setTimeout(() => isActive(rec) && next(), 700);
+  }
+  if (rec.video) {
+    clearTimer();
+    currentVideo = rec.video;
+    rec.video.muted = muted;
+    rec.video.loop = !settings.autoscroll;
+    if (fresh && rec.video.currentTime > 0) rec.video.currentTime = 0;
+    progressEl.classList.add('seekable');
+    progressFill.style.transition = 'none';
+    progressFill.style.width = '0%';
+    attemptPlay(rec.video);
+  } else {
     currentVideo = null;
+    progressEl.classList.remove('seekable');
+    startTimer(settings.imageSeconds);
+  }
+  renderMeta(rec.post);
+}
+
+function deactivateRecord(rec) {
+  if (rec.video) {
+    rec.video.pause();
+    rec.video.muted = true; // previews never make sound
   }
 }
 
-function next() {
-  // Step through gallery images before leaving the post.
-  const current = posts[idx];
-  if (current?.kind === 'gallery' && galleryIdx < current.images.length - 1) {
-    galleryIdx++;
-    renderSlide(1);
-    return;
+// Mount the window around pos and make pos the active slide.
+// dir: 1 = advancing, -1 = going back, 0 = reposition without animation.
+function showSlide(pos, dir = 0) {
+  if (!posts[pos.i]) return;
+  if (mounted.size === 0) viewer.innerHTML = ''; // clear loading/empty placeholders
+
+  const oldActive = activeKey && mounted.get(activeKey);
+  if (oldActive && oldActive.key !== keyOf(pos)) deactivateRecord(oldActive);
+
+  const want = [{ pos, off: 0 }];
+  const pp = prevPosOf(pos);
+  const np = nextPosOf(pos);
+  if (pp) want.push({ pos: pp, off: -100 });
+  if (np) want.push({ pos: np, off: 100 });
+  const wantKeys = new Set(want.map((w) => keyOf(w.pos)));
+
+  for (const rec of [...mounted.values()]) {
+    if (!wantKeys.has(rec.key)) destroyRecord(rec);
   }
-  if (idx >= posts.length - 1) {
-    maybePrefetch();
-    if (idx >= posts.length - 1) {
-      if (exhausted) {
-        stopSlide();
-        viewer.innerHTML = '<div class="loading">End of feed.</div>';
-        meta.hidden = true;
-      } else {
-        // Next page still loading; retry shortly.
-        stopSlide();
-        viewer.innerHTML = '<div class="loading">loading…</div>';
-        setTimeout(() => {
-          if (idx < posts.length - 1) next();
-          else if (exhausted) viewer.innerHTML = '<div class="loading">End of feed.</div>';
-          else setTimeout(next, 700);
-        }, 700);
-      }
-      return;
+
+  const animate = settings.smoothScroll && dir !== 0;
+  for (const w of want) {
+    let rec = mounted.get(keyOf(w.pos));
+    if (!rec) {
+      rec = buildRecord(w.pos);
+      mounted.set(rec.key, rec);
+      viewer.appendChild(rec.el);
+      placeRecord(rec, w.off, false); // fresh mounts appear in place
+    } else {
+      placeRecord(rec, w.off, animate);
     }
   }
-  idx++;
-  galleryIdx = 0;
-  renderSlide(1);
+
+  activeKey = keyOf(pos);
+  activateRecord(mounted.get(activeKey));
+  preloadUpcoming();
+}
+
+function next() {
+  const np = posts[idx] ? nextPosOf({ i: idx, g: galleryIdx }) : posts.length ? { i: 0, g: 0 } : null;
+  if (!np) {
+    maybePrefetch();
+    if (exhausted) {
+      stopSlide();
+      viewer.innerHTML = '<div class="loading">End of feed.</div>';
+      meta.hidden = true;
+    } else {
+      // Next page still loading; retry shortly.
+      stopSlide();
+      viewer.innerHTML = '<div class="loading">loading…</div>';
+      setTimeout(() => {
+        if (nextPosOf({ i: idx, g: galleryIdx })) next();
+        else if (exhausted) viewer.innerHTML = '<div class="loading">End of feed.</div>';
+        else setTimeout(next, 700);
+      }, 700);
+    }
+    return;
+  }
+  showSlide(np, 1);
   maybePrefetch();
 }
 
 function prev() {
-  const current = posts[idx];
-  if (current?.kind === 'gallery' && galleryIdx > 0) {
-    galleryIdx--;
-    renderSlide(-1);
-    return;
-  }
-  if (idx <= 0) return;
-  idx--;
-  galleryIdx = 0;
-  renderSlide(-1);
+  const pp = prevPosOf({ i: idx, g: galleryIdx });
+  if (!pp) return;
+  showSlide(pp, -1);
 }
 
-const SLIDE_MS = 350;
-
-// dir: 1 = advancing (new slide enters from the far side), -1 = going back,
-// 0 = replace without animation.
-function renderSlide(dir = 0) {
-  const post = posts[idx];
-  if (!post) return;
-
-  // Cut short any transition still in flight.
-  viewer.querySelectorAll('.slide.exiting').forEach((el) => el.remove());
-  const oldSlide = viewer.querySelector('.slide');
-
-  // Take over the outgoing slide's media so it keeps its last frame while it
-  // animates out; actual teardown happens after the transition.
-  const oldHls = hls;
-  const oldVideo = currentVideo;
-  hls = null;
-  currentVideo = null;
-  clearTimer();
-  progressEl.classList.remove('seekable');
-  oldVideo?.pause();
-
-  const slide = document.createElement('div');
-  slide.className = 'slide';
-
-  switch (post.kind) {
-    case 'video':
-      renderVideo(slide, post);
-      break;
-    case 'gallery':
-    case 'image':
-      renderImage(slide, post);
-      break;
-    case 'text':
-      renderText(slide, post);
-      break;
-  }
-
-  const retire = () => {
-    oldHls?.destroy();
-    oldVideo?.removeAttribute('src');
-  };
-
-  if (settings.smoothScroll && dir !== 0 && oldSlide) {
-    const axis = settings.vertical ? 'Y' : 'X';
-    slide.style.transform = `translate${axis}(${dir > 0 ? 100 : -100}%)`;
-    viewer.appendChild(slide);
-    void slide.offsetWidth; // commit the start position before transitioning
-    slide.classList.add('sliding');
-    oldSlide.classList.add('sliding', 'exiting');
-    oldSlide.style.transition = '';
-    slide.style.transform = '';
-    oldSlide.style.transform = `translate${axis}(${dir > 0 ? -100 : 100}%)`;
-    setTimeout(() => {
-      retire();
-      oldSlide.remove();
-      slide.classList.remove('sliding');
-    }, SLIDE_MS + 50);
-  } else {
-    retire();
-    viewer.innerHTML = '';
-    viewer.appendChild(slide);
-  }
-
-  renderMeta(post);
-  preloadUpcoming();
-}
-
-function renderImage(slide, post) {
-  const src = post.images[post.kind === 'gallery' ? galleryIdx : 0];
+function buildImage(rec) {
+  const src = rec.post.images[rec.pos.g] || rec.post.images[0];
   const img = document.createElement('img');
   img.src = mediaUrl(src);
-  img.alt = post.title;
+  img.alt = rec.post.title;
   img.addEventListener('error', () => {
-    showToast('Image failed to load, skipping');
-    setTimeout(next, 800);
+    rec.failed = true;
+    if (isActive(rec)) {
+      showToast('Image failed to load, skipping');
+      setTimeout(() => isActive(rec) && next(), 800);
+    }
   });
-  slide.appendChild(img);
-  startTimer(settings.imageSeconds);
+  rec.el.appendChild(img);
 }
 
-function renderText(slide, post) {
+function buildText(rec) {
   const box = document.createElement('div');
   box.className = 'text-post';
   const h = document.createElement('h2');
-  h.textContent = post.title;
+  h.textContent = rec.post.title;
   box.appendChild(h);
-  if (post.text) {
+  if (rec.post.text) {
     const body = document.createElement('p');
-    body.textContent = post.text.length > 2000 ? post.text.slice(0, 2000) + '…' : post.text;
+    body.textContent = rec.post.text.length > 2000 ? rec.post.text.slice(0, 2000) + '…' : rec.post.text;
     box.appendChild(body);
   }
-  slide.appendChild(box);
-  startTimer(settings.imageSeconds);
+  rec.el.appendChild(box);
 }
 
 // Reddit's transcode of redgifs posts has no audio; ask the backend to
@@ -418,21 +460,31 @@ async function resolveRedgifs(post) {
   } catch {
     /* fall through to reddit's silent transcode */
   }
-  showToast('redgifs lookup failed — playing silent reddit preview');
+  console.warn('redgifs lookup failed for', post.redgifsId, '— using silent reddit preview');
 }
 
-function renderVideo(slide, post) {
+// Autoplay with sound is often blocked before user interaction: fall back
+// to muted playback rather than stalling the feed (unmute with 🔇 / m).
+function attemptPlay(video) {
+  video.play().catch(() => {
+    if (!video.muted) {
+      video.muted = true;
+      updateMuteBtn();
+      video.play().catch(() => {});
+    }
+  });
+}
+
+function buildVideo(rec) {
+  const post = rec.post;
   if (post.redgifsId && !post.redgifsMp4 && !post.redgifsResolved) {
     post.redgifsResolved = true;
-    const spinner = document.createElement('div');
-    spinner.className = 'loading';
-    spinner.textContent = 'loading…';
-    slide.appendChild(spinner);
+    rec.el.innerHTML = '<div class="loading">loading…</div>';
     resolveRedgifs(post).then(() => {
-      if (posts[idx] === post && slide.isConnected) {
-        slide.innerHTML = '';
-        renderVideo(slide, post);
-      }
+      if (mounted.get(rec.key) !== rec) return;
+      rec.el.innerHTML = '';
+      buildVideo(rec);
+      if (isActive(rec)) activateRecord(rec);
     });
     return;
   }
@@ -446,45 +498,35 @@ function renderVideo(slide, post) {
 
   const video = document.createElement('video');
   video.playsInline = true;
-  video.autoplay = true;
-  video.muted = muted;
-  // Without autoscroll, videos loop instead of advancing the feed.
+  video.preload = 'auto'; // buffer while still off-screen
+  video.muted = true; // silent as preview; activation applies the real state
   video.loop = !settings.autoscroll;
   if (post.poster) video.poster = mediaUrl(post.poster);
-
-  const attemptPlay = () => {
-    // Autoplay with sound is often blocked before user interaction: fall back
-    // to muted playback rather than stalling the feed (unmute with 🔇 / m).
-    video.play().catch(() => {
-      if (!video.muted) {
-        video.muted = true;
-        updateMuteBtn();
-        video.play().catch(() => {});
-      }
-    });
-  };
 
   const loadNextSource = (why) => {
     if (si >= 0) console.warn('video source failed:', sources[si]?.url, why);
     si++;
     const s = sources[si];
     if (!s) {
-      showToast(`Video failed (${why}), skipping`);
-      setTimeout(next, 800);
+      rec.failed = true;
+      if (isActive(rec)) {
+        showToast(`Video failed (${why}), skipping`);
+        setTimeout(() => isActive(rec) && next(), 800);
+      }
       return;
     }
-    if (hls) {
-      hls.destroy();
-      hls = null;
+    if (rec.hls) {
+      rec.hls.destroy();
+      rec.hls = null;
     }
     if (s.type === 'hls') {
       if (Hls.isSupported()) {
-        hls = new Hls({ maxBufferLength: 20 });
-        hls.on(Hls.Events.ERROR, (_ev, data) => {
+        rec.hls = new Hls({ maxBufferLength: 20 });
+        rec.hls.on(Hls.Events.ERROR, (_ev, data) => {
           if (data.fatal) loadNextSource(data.type);
         });
-        hls.loadSource(mediaUrl(s.url));
-        hls.attachMedia(video);
+        rec.hls.loadSource(mediaUrl(s.url));
+        rec.hls.attachMedia(video);
       } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
         video.src = mediaUrl(s.url);
       } else {
@@ -493,33 +535,33 @@ function renderVideo(slide, post) {
       }
     } else {
       // reddit's fallback mp4 is video-only; explain the silence.
-      if (s.silent) showToast('Video stream failed — using fallback (no audio)');
+      if (s.silent && isActive(rec)) showToast('Video stream failed — using fallback (no audio)');
       video.src = mediaUrl(s.url);
     }
-    attemptPlay();
+    if (isActive(rec)) attemptPlay(video);
   };
 
   // With autoscroll on, videos run to the end, then advance (loop is off).
   video.addEventListener('ended', () => {
-    if (settings.autoscroll) next();
+    if (isActive(rec) && settings.autoscroll) next();
   });
   video.addEventListener('error', () => loadNextSource('playback error'));
   // A tap anywhere on the slide (not just the video itself) pauses/resumes.
-  slide.addEventListener('click', () => {
+  rec.el.addEventListener('click', () => {
+    if (!isActive(rec)) return;
     if (video.paused) video.play().catch(() => {});
     else video.pause();
   });
 
-  // Playback progress in the bottom bar, with seeking.
-  progressEl.classList.add('seekable');
+  // Playback progress in the bottom bar (only while this slide is active).
   video.addEventListener('timeupdate', () => {
-    if (!video.duration || scrubbing) return;
+    if (!isActive(rec) || !video.duration || scrubbing) return;
     progressFill.style.transition = 'none';
     progressFill.style.width = (video.currentTime / video.duration) * 100 + '%';
   });
 
-  currentVideo = video;
-  slide.appendChild(video);
+  rec.video = video;
+  rec.el.appendChild(video);
   loadNextSource('start');
 }
 
@@ -736,33 +778,30 @@ saveBtn.addEventListener('click', toggleSave);
 // swipe doesn't reach the threshold.
 let touchStartX = 0;
 let touchStartY = 0;
-let dragSlide = null;
 let dragging = false;
+let canDrag = false;
 viewer.addEventListener(
   'touchstart',
   (e) => {
     touchStartX = e.touches[0].clientX;
     touchStartY = e.touches[0].clientY;
     dragging = false;
-    dragSlide =
-      settings.smoothScroll && !e.target.closest('.text-post')
-        ? viewer.querySelector('.slide:not(.exiting)')
-        : null;
+    canDrag = settings.smoothScroll && mounted.size > 0 && !e.target.closest('.text-post');
   },
   { passive: true }
 );
 viewer.addEventListener(
   'touchmove',
   (e) => {
-    if (!dragSlide || !dragSlide.isConnected) return;
+    if (!canDrag) return;
     const dx = e.touches[0].clientX - touchStartX;
     const dy = e.touches[0].clientY - touchStartY;
     const main = settings.vertical ? dy : dx;
     const cross = settings.vertical ? dx : dy;
     if (!dragging && Math.abs(main) > 10 && Math.abs(main) > Math.abs(cross)) dragging = true;
     if (dragging) {
-      dragSlide.style.transition = 'none';
-      dragSlide.style.transform = `translate${settings.vertical ? 'Y' : 'X'}(${main}px)`;
+      // The whole window follows the finger, so the neighbor peeks in.
+      for (const rec of mounted.values()) placeRecord(rec, rec.baseOff, false, main);
     }
   },
   { passive: true }
@@ -776,17 +815,12 @@ viewer.addEventListener(
     const cross = settings.vertical ? dx : dy;
     const fired = Math.abs(main) >= 60 && Math.abs(main) >= Math.abs(cross) * 1.5;
 
-    if (dragging && dragSlide?.isConnected) {
-      dragSlide.style.transition = '';
-      if (!fired) {
-        // Snap back to center.
-        dragSlide.classList.add('sliding');
-        dragSlide.style.transform = '';
-        const el = dragSlide;
-        setTimeout(() => el.classList.remove('sliding'), SLIDE_MS + 50);
-      }
+    if (dragging) {
+      // Snap everything back; a completed swipe immediately re-targets the
+      // window from the dragged position, so the transition continues on.
+      for (const rec of mounted.values()) placeRecord(rec, rec.baseOff, true);
     }
-    dragSlide = null;
+    canDrag = false;
     if (!fired) return;
     // Swiping up/left pulls the next slide in; down/right goes back.
     if (main < 0) next();
@@ -876,6 +910,7 @@ settingsForm.addEventListener('submit', (e) => {
     settings.showImages !== showImagesInput.checked ||
     settings.showVideos !== showVideosInput.checked ||
     settings.showText !== showTextInput.checked;
+  const verticalChanged = settings.vertical !== verticalInput.checked;
   const prevCookie = settings.cookie;
 
   // Saving selects the edited account as the active one.
@@ -903,6 +938,10 @@ settingsForm.addEventListener('submit', (e) => {
   saveSettings();
   applyFill();
   applyDirection();
+  // Mounted neighbor slides carry transforms for the old axis; re-place them.
+  if (verticalChanged && activeKey && mounted.has(activeKey)) {
+    showSlide(mounted.get(activeKey).pos, 0);
+  }
 
   if (!settings.showImages && !settings.showVideos && !settings.showText) {
     showToast('All post types disabled — the feed will be empty');
