@@ -11,24 +11,25 @@ import (
 
 // Post is the normalized shape the frontend consumes.
 type Post struct {
-	ID        string   `json:"id"`
-	Name      string   `json:"name"` // fullname (t3_...), needed for vote/save
-	Likes     *bool    `json:"likes"`
-	Saved     bool     `json:"saved"`
-	Title     string   `json:"title"`
-	Author    string   `json:"author"`
-	Subreddit string   `json:"subreddit"`
-	Permalink string   `json:"permalink"`
-	NSFW      bool     `json:"nsfw"`
-	Kind      string   `json:"kind"` // image | gallery | video | text
-	Images    []string `json:"images,omitempty"`
-	VideoHLS  string   `json:"videoHls,omitempty"`
-	VideoMP4  string   `json:"videoMp4,omitempty"`
-	RedgifsID string   `json:"redgifsId,omitempty"`
-	Poster    string   `json:"poster,omitempty"`
-	Duration  float64  `json:"duration,omitempty"`
-	Text      string   `json:"text,omitempty"`
-	LinkURL   string   `json:"linkUrl,omitempty"`
+	ID          string   `json:"id"`
+	Name        string   `json:"name"` // fullname (t3_...), needed for vote/save
+	Likes       *bool    `json:"likes"`
+	Saved       bool     `json:"saved"`
+	Title       string   `json:"title"`
+	Author      string   `json:"author"`
+	Subreddit   string   `json:"subreddit"`
+	Permalink   string   `json:"permalink"`
+	NSFW        bool     `json:"nsfw"`
+	NumComments int      `json:"numComments"`
+	Kind        string   `json:"kind"` // image | gallery | video | text
+	Images      []string `json:"images,omitempty"`
+	VideoHLS    string   `json:"videoHls,omitempty"`
+	VideoMP4    string   `json:"videoMp4,omitempty"`
+	RedgifsID   string   `json:"redgifsId,omitempty"`
+	Poster      string   `json:"poster,omitempty"`
+	Duration    float64  `json:"duration,omitempty"`
+	Text        string   `json:"text,omitempty"`
+	LinkURL     string   `json:"linkUrl,omitempty"`
 }
 
 type feedResponse struct {
@@ -78,6 +79,7 @@ type postData struct {
 	Subreddit     string `json:"subreddit_name_prefixed"`
 	Permalink     string `json:"permalink"`
 	Over18        bool   `json:"over_18"`
+	NumComments   int    `json:"num_comments"`
 	Stickied      bool   `json:"stickied"`
 	IsGallery     bool   `json:"is_gallery"`
 	IsSelf        bool   `json:"is_self"`
@@ -250,15 +252,16 @@ func handleFeed(w http.ResponseWriter, r *http.Request) {
 // extractPost classifies a reddit post into one of our media kinds.
 func extractPost(d postData) (Post, bool) {
 	p := Post{
-		ID:        d.ID,
-		Name:      d.Name,
-		Likes:     d.Likes,
-		Saved:     d.Saved,
-		Title:     d.Title,
-		Author:    d.Author,
-		Subreddit: d.Subreddit,
-		Permalink: "https://www.reddit.com" + d.Permalink,
-		NSFW:      d.Over18,
+		ID:          d.ID,
+		Name:        d.Name,
+		Likes:       d.Likes,
+		Saved:       d.Saved,
+		Title:       d.Title,
+		Author:      d.Author,
+		Subreddit:   d.Subreddit,
+		Permalink:   "https://www.reddit.com" + d.Permalink,
+		NSFW:        d.Over18,
+		NumComments: d.NumComments,
 	}
 
 	poster := ""

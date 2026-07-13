@@ -210,3 +210,29 @@ func TestMediaHostAllowed(t *testing.T) {
 		}
 	}
 }
+
+func TestParseComments(t *testing.T) {
+	raw := `{"data":{"children":[
+		{"kind":"t1","data":{"id":"c1","author":"alice","body":"top comment","score":42,"is_submitter":true,
+			"replies":{"data":{"children":[
+				{"kind":"t1","data":{"id":"c2","author":"bob","body":"nested","score":7,"replies":""}},
+				{"kind":"more","data":{"count":12}}
+			]}}}},
+		{"kind":"more","data":{"count":5}}
+	]}}`
+	var l cListing
+	if err := json.Unmarshal([]byte(raw), &l); err != nil {
+		t.Fatal(err)
+	}
+	comments, more := parseComments(l)
+	if len(comments) != 1 || more != 5 {
+		t.Fatalf("got %d comments, more=%d", len(comments), more)
+	}
+	c := comments[0]
+	if c.Author != "alice" || !c.IsSubmitter || c.Score != 42 {
+		t.Errorf("top comment wrong: %+v", c)
+	}
+	if len(c.Replies) != 1 || c.Replies[0].Body != "nested" || c.MoreCount != 12 {
+		t.Errorf("nesting wrong: replies=%d moreCount=%d", len(c.Replies), c.MoreCount)
+	}
+}

@@ -507,6 +507,149 @@ button:hover {
   background: linear-gradient(to top, rgba(0, 0, 0, 0.25), transparent);
 }
 
+/* ---- comments bottom sheet ---- */
+#comments-panel {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+}
+
+#comments-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+}
+
+#comments-sheet {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: min(78dvh, 100dvh - env(safe-area-inset-top) - 3rem);
+  display: flex;
+  flex-direction: column;
+  background: #14141c;
+  border-top: 1px solid #33333f;
+  border-radius: 16px 16px 0 0;
+  animation: sheet-up 0.25s ease-out;
+}
+
+@keyframes sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+#comments-header {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #26262f;
+}
+
+#comments-title {
+  font-weight: 600;
+  flex: 1;
+}
+
+#comments-sort {
+  padding: 0.35rem 0.5rem;
+  border-radius: 8px;
+  border: 1px solid #33333f;
+  background: #0b0b0f;
+  color: inherit;
+  font-size: 0.85rem;
+}
+
+#comments-close {
+  width: 2.2rem;
+  padding: 0.35rem 0;
+  text-align: center;
+  border-radius: 8px;
+}
+
+#comments-list {
+  flex: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  padding: 0.5rem 0.75rem calc(0.75rem + env(safe-area-inset-bottom));
+}
+
+.comment {
+  padding: 0.4rem 0 0.1rem;
+  cursor: pointer;
+}
+
+.comment.nested {
+  margin-left: 0.9rem;
+  padding-left: 0.6rem;
+  border-left: 2px solid #2c2c38;
+}
+
+.c-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.45rem;
+  font-size: 0.8rem;
+  flex-wrap: wrap;
+}
+
+.c-author {
+  font-weight: 600;
+  color: #d7d7e0;
+}
+
+.c-author.op {
+  color: #ff8b66;
+}
+
+.c-badge {
+  font-size: 0.65rem;
+  color: #7fb4ff;
+  border: 1px solid #33445f;
+  border-radius: 4px;
+  padding: 0 0.25rem;
+}
+
+.c-meta {
+  color: #8a8a98;
+}
+
+.c-collapsed-hint {
+  display: none;
+  color: #8a8a98;
+}
+
+.c-body {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 0.92rem;
+  line-height: 1.45;
+  color: #d9d9e2;
+  margin: 0.15rem 0 0.3rem;
+}
+
+.c-more {
+  font-size: 0.8rem;
+  color: #71717f;
+  padding: 0.3rem 0;
+  font-style: italic;
+}
+
+.comment.collapsed > .c-body,
+.comment.collapsed > .c-kids {
+  display: none;
+}
+
+.comment.collapsed > .c-head .c-collapsed-hint {
+  display: inline;
+}
+
 /* ---- double-tap vote burst ---- */
 .vote-burst {
   position: fixed;
