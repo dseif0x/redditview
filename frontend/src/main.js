@@ -210,7 +210,10 @@ async function fetchPage() {
         throw new Error((await res.text()).slice(0, 200) || `HTTP ${res.status}`);
       }
       const data = await res.json();
+      const cursorUsed = after || '';
       const added = data.posts.filter(kindEnabled);
+      // Remember which cursor fetched each post so the feed can resume here.
+      for (const p of added) p._cursor = cursorUsed;
       posts.push(...added);
       after = data.after || null;
       if (!after) {
@@ -224,10 +227,10 @@ async function fetchPage() {
   }
 }
 
-async function startFeed(path) {
+async function startFeed(path, resume = null) {
   stopSlide();
   posts = [];
-  after = null;
+  after = resume?.cursor || null;
   exhausted = false;
   idx = -1;
   feedPath = path;
@@ -249,7 +252,10 @@ async function startFeed(path) {
     viewer.innerHTML = '<div class="loading">No viewable posts in this feed.</div>';
     return;
   }
-  next();
+  // When resuming, jump straight to the remembered post if it's still there.
+  const at = resume ? posts.findIndex((p) => p.name === resume.name) : -1;
+  if (at >= 0) showSlide(at, 0);
+  else next();
 }
 
 function maybePrefetch() {
@@ -456,6 +462,9 @@ function spawnVoteBurst(x, y) {
 function activateRecord(rec) {
   idx = rec.pos;
   galleryIdx = rec.gallery ? rec.gallery.idx : 0;
+  // Remember the position so reopening the app resumes here.
+  settings.resume = { path: feedPath, sort: settings.sort, cursor: rec.post._cursor || '', name: rec.post.name };
+  saveSettings();
   const fresh = currentVideo !== rec.video || !rec.video;
   if (rec.failed) {
     showToast('Media failed to load, skipping');
@@ -1556,6 +1565,20 @@ function resetViewportScroll() {
 document.addEventListener('focusout', () => setTimeout(resetViewportScroll, 60));
 window.visualViewport?.addEventListener('resize', () => setTimeout(resetViewportScroll, 60));
 window.addEventListener('orientationchange', () => setTimeout(resetViewportScroll, 250));
+
+// Resume the last session's feed and position.
+{
+  const r = settings.resume;
+  if (r && typeof r.path === 'string' && r.name) {
+    feedInput.value = r.path;
+    if (typeof r.sort === 'string') {
+      settings.sort = r.sort;
+      sortSelect.value = r.sort;
+    }
+    updateBmBtn();
+    startFeed(r.path, r);
+  }
+}
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
