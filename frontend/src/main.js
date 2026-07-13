@@ -672,6 +672,14 @@ feedForm.addEventListener('submit', (e) => {
 });
 
 pauseBtn.addEventListener('click', toggleAutoscroll);
+$('#saved-btn').addEventListener('click', () => {
+  if (!activeCookie()) {
+    showToast('Set your reddit cookie in ⚙ settings to browse saved posts');
+    return;
+  }
+  feedInput.value = 'saved';
+  startFeed('saved');
+});
 muteBtn.addEventListener('click', toggleMute);
 fillBtn.addEventListener('click', toggleFill);
 nextZone.addEventListener('click', next);
