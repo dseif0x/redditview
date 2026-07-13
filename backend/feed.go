@@ -151,12 +151,13 @@ func handleFeed(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// "saved" is a pseudo-feed for the logged-in user's saved posts; reddit
-	// only serves it under the username, which we resolve from the cookie.
-	if path == "saved" {
+	// Pseudo-feeds for the logged-in user's own listings; reddit only serves
+	// these under the username, which we resolve from the cookie.
+	switch path {
+	case "saved", "upvoted", "downvoted", "hidden":
 		cookie := r.Header.Get("X-Reddit-Cookie")
 		if cookie == "" {
-			http.Error(w, "reddit cookie required to view saved posts — set it in settings", http.StatusUnauthorized)
+			http.Error(w, "reddit cookie required to view "+path+" posts — set it in settings", http.StatusUnauthorized)
 			return
 		}
 		ident, err := getIdentity(r, cookie, false)
@@ -164,7 +165,7 @@ func handleFeed(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "could not resolve your username: "+err.Error(), http.StatusBadGateway)
 			return
 		}
-		path = "user/" + ident.Name + "/saved"
+		path = "user/" + ident.Name + "/" + path
 	}
 
 	q := url.Values{}
