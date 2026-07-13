@@ -133,19 +133,6 @@ button:hover {
   justify-content: center;
 }
 
-.unmute-overlay {
-  position: absolute;
-  bottom: calc(5.5rem + env(safe-area-inset-bottom));
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 8;
-  background: rgba(20, 20, 28, 0.92);
-  border: 1px solid #ff4500;
-  color: #fff;
-  font-size: 1rem;
-  padding: 0.6rem 1.2rem;
-}
-
 .slide img,
 .slide video {
   max-width: 100%;
