@@ -79,6 +79,9 @@ const progressFill = $('#progress-fill');
 const meta = $('#meta');
 const metaTitle = $('#meta-title');
 const metaSub = $('#meta-sub');
+const upBtn = $('#up-btn');
+const downBtn = $('#down-btn');
+const saveBtn = $('#save-btn');
 const toast = $('#toast');
 
 feedInput.value = settings.lastFeed;
@@ -494,6 +497,77 @@ function renderMeta(post) {
   link.rel = 'noopener';
   link.textContent = 'open ↗';
   metaSub.append(span, link);
+  updateActionButtons(post);
+}
+
+// ---------------------------------------------------------------------------
+// Vote / save
+// ---------------------------------------------------------------------------
+function updateActionButtons(post) {
+  upBtn.classList.toggle('active-up', post.likes === true);
+  downBtn.classList.toggle('active-down', post.likes === false);
+  saveBtn.classList.toggle('active-save', !!post.saved);
+  saveBtn.textContent = post.saved ? '★' : '☆';
+}
+
+function actionHeaders() {
+  return {
+    'Content-Type': 'application/json',
+    'X-Reddit-Cookie': settings.cookie.trim(),
+  };
+}
+
+function requireCookieAndPost() {
+  const post = posts[idx];
+  if (!post || !post.name) return null;
+  if (!settings.cookie.trim()) {
+    showToast('Set your reddit cookie in ⚙ settings to vote/save');
+    return null;
+  }
+  return post;
+}
+
+async function vote(dir) {
+  const post = requireCookieAndPost();
+  if (!post) return;
+  const current = post.likes === true ? 1 : post.likes === false ? -1 : 0;
+  const target = current === dir ? 0 : dir; // voting the same way again clears it
+  const prev = post.likes;
+  post.likes = target === 1 ? true : target === -1 ? false : null;
+  updateActionButtons(post);
+  try {
+    const res = await fetch('/api/vote', {
+      method: 'POST',
+      headers: actionHeaders(),
+      body: JSON.stringify({ id: post.name, dir: target }),
+    });
+    if (!res.ok) throw new Error((await res.text()).slice(0, 150));
+  } catch (err) {
+    post.likes = prev;
+    if (posts[idx] === post) updateActionButtons(post);
+    showToast('Vote failed: ' + (err.message || err));
+  }
+}
+
+async function toggleSave() {
+  const post = requireCookieAndPost();
+  if (!post) return;
+  const prev = post.saved;
+  post.saved = !prev;
+  updateActionButtons(post);
+  try {
+    const res = await fetch('/api/save', {
+      method: 'POST',
+      headers: actionHeaders(),
+      body: JSON.stringify({ id: post.name, save: post.saved }),
+    });
+    if (!res.ok) throw new Error((await res.text()).slice(0, 150));
+    showToast(post.saved ? 'Saved' : 'Unsaved', 1500);
+  } catch (err) {
+    post.saved = prev;
+    if (posts[idx] === post) updateActionButtons(post);
+    showToast('Save failed: ' + (err.message || err));
+  }
 }
 
 function preloadUpcoming() {
@@ -565,6 +639,9 @@ muteBtn.addEventListener('click', toggleMute);
 fillBtn.addEventListener('click', toggleFill);
 nextZone.addEventListener('click', next);
 prevZone.addEventListener('click', prev);
+upBtn.addEventListener('click', () => vote(1));
+downBtn.addEventListener('click', () => vote(-1));
+saveBtn.addEventListener('click', toggleSave);
 
 // Swipe gestures: swipe toward the next slide along the configured axis.
 let touchStartX = 0;
@@ -671,6 +748,15 @@ document.addEventListener('keydown', (e) => {
       break;
     case 'f':
       toggleFill();
+      break;
+    case 'a':
+      vote(1);
+      break;
+    case 'z':
+      vote(-1);
+      break;
+    case 's':
+      toggleSave();
       break;
   }
 });
