@@ -5,7 +5,7 @@ import './style.css';
 // Settings (localStorage only)
 // ---------------------------------------------------------------------------
 const SETTINGS_KEY = 'redditview.settings';
-const DEFAULTS = { cookie: '', imageSeconds: 8, startMuted: true, lastFeed: '' };
+const DEFAULTS = { cookie: '', imageSeconds: 8, startMuted: false, lastFeed: '' };
 
 let settings = { ...DEFAULTS };
 try {
@@ -318,6 +318,9 @@ function renderVideo(slide, post) {
         hls.destroy();
         hls = null;
       }
+      console.warn('HLS failed, using mp4 fallback:', why);
+      // reddit's fallback mp4 is video-only; tell the user why it's silent.
+      showToast('Video stream failed — using fallback (no audio)');
       video.src = mediaUrl(post.videoMp4);
       video.play().catch(() => {});
       return;
@@ -353,17 +356,41 @@ function renderVideo(slide, post) {
 
   // Autoplay with sound is often blocked before user interaction: fall back
   // to muted playback rather than stalling the feed.
-  video.play().catch(() => {
-    if (!video.muted) {
-      video.muted = true;
-      updateMuteBtn();
-      video.play().catch(() => {});
-    }
-  });
+  video
+    .play()
+    .then(() => addUnmuteOverlay(slide, video))
+    .catch(() => {
+      if (!video.muted) {
+        video.muted = true;
+        updateMuteBtn();
+        video.play().catch(() => {});
+      }
+      addUnmuteOverlay(slide, video);
+    });
 
   video.addEventListener('click', () => togglePause());
   currentVideo = video;
   slide.appendChild(video);
+}
+
+// A prominent tap-for-sound button whenever a video is playing muted, since
+// browsers routinely force autoplay to start muted.
+function addUnmuteOverlay(slide, video) {
+  if (currentVideo !== video || !video.muted) return;
+  const btn = document.createElement('button');
+  btn.className = 'unmute-overlay';
+  btn.textContent = '🔊 Tap for sound';
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    video.muted = false;
+    muted = false;
+    updateMuteBtn();
+    video.play().catch(() => {});
+  });
+  video.addEventListener('volumechange', () => {
+    if (!video.muted) btn.remove();
+  });
+  slide.appendChild(btn);
 }
 
 function renderMeta(post) {
