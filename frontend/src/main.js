@@ -18,6 +18,7 @@ const DEFAULTS = {
   showText: true,
   fillScreen: false,
   vertical: false,
+  smoothScroll: true,
 };
 
 let settings = { ...DEFAULTS };
@@ -88,6 +89,7 @@ const showVideosInput = $('#show-videos-input');
 const showTextInput = $('#show-text-input');
 const fillScreenInput = $('#fill-screen-input');
 const verticalInput = $('#vertical-input');
+const smoothScrollInput = $('#smooth-scroll-input');
 const fillBtn = $('#fill-btn');
 const appEl = $('#app');
 const prevZone = $('#prev-zone');
@@ -262,7 +264,7 @@ function next() {
   const current = posts[idx];
   if (current?.kind === 'gallery' && galleryIdx < current.images.length - 1) {
     galleryIdx++;
-    renderSlide();
+    renderSlide(1);
     return;
   }
   if (idx >= posts.length - 1) {
@@ -287,7 +289,7 @@ function next() {
   }
   idx++;
   galleryIdx = 0;
-  renderSlide();
+  renderSlide(1);
   maybePrefetch();
 }
 
@@ -295,21 +297,37 @@ function prev() {
   const current = posts[idx];
   if (current?.kind === 'gallery' && galleryIdx > 0) {
     galleryIdx--;
-    renderSlide();
+    renderSlide(-1);
     return;
   }
   if (idx <= 0) return;
   idx--;
   galleryIdx = 0;
-  renderSlide();
+  renderSlide(-1);
 }
 
-function renderSlide() {
-  stopSlide();
+const SLIDE_MS = 350;
+
+// dir: 1 = advancing (new slide enters from the far side), -1 = going back,
+// 0 = replace without animation.
+function renderSlide(dir = 0) {
   const post = posts[idx];
   if (!post) return;
 
-  viewer.innerHTML = '';
+  // Cut short any transition still in flight.
+  viewer.querySelectorAll('.slide.exiting').forEach((el) => el.remove());
+  const oldSlide = viewer.querySelector('.slide');
+
+  // Take over the outgoing slide's media so it keeps its last frame while it
+  // animates out; actual teardown happens after the transition.
+  const oldHls = hls;
+  const oldVideo = currentVideo;
+  hls = null;
+  currentVideo = null;
+  clearTimer();
+  progressEl.classList.remove('seekable');
+  oldVideo?.pause();
+
   const slide = document.createElement('div');
   slide.className = 'slide';
 
@@ -326,7 +344,32 @@ function renderSlide() {
       break;
   }
 
-  viewer.appendChild(slide);
+  const retire = () => {
+    oldHls?.destroy();
+    oldVideo?.removeAttribute('src');
+  };
+
+  if (settings.smoothScroll && dir !== 0 && oldSlide) {
+    const axis = settings.vertical ? 'Y' : 'X';
+    slide.style.transform = `translate${axis}(${dir > 0 ? 100 : -100}%)`;
+    viewer.appendChild(slide);
+    void slide.offsetWidth; // commit the start position before transitioning
+    slide.classList.add('sliding');
+    oldSlide.classList.add('sliding', 'exiting');
+    oldSlide.style.transition = '';
+    slide.style.transform = '';
+    oldSlide.style.transform = `translate${axis}(${dir > 0 ? -100 : 100}%)`;
+    setTimeout(() => {
+      retire();
+      oldSlide.remove();
+      slide.classList.remove('sliding');
+    }, SLIDE_MS + 50);
+  } else {
+    retire();
+    viewer.innerHTML = '';
+    viewer.appendChild(slide);
+  }
+
   renderMeta(post);
   preloadUpcoming();
 }
@@ -689,13 +732,38 @@ downBtn.addEventListener('click', () => vote(-1));
 saveBtn.addEventListener('click', toggleSave);
 
 // Swipe gestures: swipe toward the next slide along the configured axis.
+// With smooth scrolling the slide follows the finger and snaps back when the
+// swipe doesn't reach the threshold.
 let touchStartX = 0;
 let touchStartY = 0;
+let dragSlide = null;
+let dragging = false;
 viewer.addEventListener(
   'touchstart',
   (e) => {
     touchStartX = e.touches[0].clientX;
     touchStartY = e.touches[0].clientY;
+    dragging = false;
+    dragSlide =
+      settings.smoothScroll && !e.target.closest('.text-post')
+        ? viewer.querySelector('.slide:not(.exiting)')
+        : null;
+  },
+  { passive: true }
+);
+viewer.addEventListener(
+  'touchmove',
+  (e) => {
+    if (!dragSlide || !dragSlide.isConnected) return;
+    const dx = e.touches[0].clientX - touchStartX;
+    const dy = e.touches[0].clientY - touchStartY;
+    const main = settings.vertical ? dy : dx;
+    const cross = settings.vertical ? dx : dy;
+    if (!dragging && Math.abs(main) > 10 && Math.abs(main) > Math.abs(cross)) dragging = true;
+    if (dragging) {
+      dragSlide.style.transition = 'none';
+      dragSlide.style.transform = `translate${settings.vertical ? 'Y' : 'X'}(${main}px)`;
+    }
   },
   { passive: true }
 );
@@ -706,7 +774,20 @@ viewer.addEventListener(
     const dy = e.changedTouches[0].clientY - touchStartY;
     const main = settings.vertical ? dy : dx;
     const cross = settings.vertical ? dx : dy;
-    if (Math.abs(main) < 60 || Math.abs(main) < Math.abs(cross) * 1.5) return;
+    const fired = Math.abs(main) >= 60 && Math.abs(main) >= Math.abs(cross) * 1.5;
+
+    if (dragging && dragSlide?.isConnected) {
+      dragSlide.style.transition = '';
+      if (!fired) {
+        // Snap back to center.
+        dragSlide.classList.add('sliding');
+        dragSlide.style.transform = '';
+        const el = dragSlide;
+        setTimeout(() => el.classList.remove('sliding'), SLIDE_MS + 50);
+      }
+    }
+    dragSlide = null;
+    if (!fired) return;
     // Swiping up/left pulls the next slide in; down/right goes back.
     if (main < 0) next();
     else prev();
@@ -782,6 +863,7 @@ settingsBtn.addEventListener('click', () => {
   startMutedInput.checked = settings.startMuted;
   fillScreenInput.checked = settings.fillScreen;
   verticalInput.checked = settings.vertical;
+  smoothScrollInput.checked = settings.smoothScroll;
   showImagesInput.checked = settings.showImages;
   showVideosInput.checked = settings.showVideos;
   showTextInput.checked = settings.showText;
@@ -814,6 +896,7 @@ settingsForm.addEventListener('submit', (e) => {
   settings.startMuted = startMutedInput.checked;
   settings.fillScreen = fillScreenInput.checked;
   settings.vertical = verticalInput.checked;
+  settings.smoothScroll = smoothScrollInput.checked;
   settings.showImages = showImagesInput.checked;
   settings.showVideos = showVideosInput.checked;
   settings.showText = showTextInput.checked;

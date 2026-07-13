@@ -40,6 +40,10 @@ toggles autoscroll, `m` toggles sound, `f` toggles fill-screen, `a`/`z`/`s`
 vote/save. Settings has a vertical navigation mode (swipe up/down,
 TikTok-style) and multiple accounts (each with its own cookie).
 
+Navigation uses smooth reels-style slide transitions by default (slides
+follow your finger on touch and snap); disable in settings for instant
+jumps.
+
 Autoscroll is off by default: videos loop and slides stay until you navigate.
 Turning it on (▶ button or `space`) advances images after the configured
 duration and videos when they end. The bottom bar shows video playback
