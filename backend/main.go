@@ -30,6 +30,8 @@ func main() {
 	mux.HandleFunc("GET /api/feed", handleFeed)
 	mux.HandleFunc("GET /api/media", handleMedia)
 	mux.HandleFunc("GET /api/redgifs", handleRedgifs)
+	mux.HandleFunc("POST /api/vote", handleVote)
+	mux.HandleFunc("POST /api/save", handleSave)
 	mux.Handle("GET /", spaHandler(staticDir))
 
 	log.Printf("redditview listening on %s (static: %s)", addr, staticDir)

@@ -40,7 +40,8 @@ func TestNormalizeFeedPath(t *testing.T) {
 
 func TestExtractPostVideo(t *testing.T) {
 	raw := `{
-		"id": "abc", "title": "vid", "author": "u1",
+		"id": "abc", "name": "t3_abc", "likes": true, "saved": true,
+		"title": "vid", "author": "u1",
 		"subreddit_name_prefixed": "r/videos", "permalink": "/r/videos/abc/",
 		"secure_media": {"reddit_video": {
 			"hls_url": "https://v.redd.it/x/HLSPlaylist.m3u8",
@@ -58,6 +59,24 @@ func TestExtractPostVideo(t *testing.T) {
 	}
 	if p.VideoHLS == "" || p.VideoMP4 == "" || p.Duration != 12.5 {
 		t.Errorf("video fields not extracted: %+v", p)
+	}
+	if p.Name != "t3_abc" || p.Likes == nil || !*p.Likes || !p.Saved {
+		t.Errorf("vote/save fields not extracted: name=%q likes=%v saved=%v", p.Name, p.Likes, p.Saved)
+	}
+}
+
+func TestFullnameValidation(t *testing.T) {
+	for id, want := range map[string]bool{
+		"t3_abc123": true,
+		"t3_":       false,
+		"t1_abc":    false,
+		"abc":       false,
+		"t3_ABC":    false,
+		"t3_a b":    false,
+	} {
+		if got := fullnameRe.MatchString(id); got != want {
+			t.Errorf("fullnameRe(%q) = %v, want %v", id, got, want)
+		}
 	}
 }
 

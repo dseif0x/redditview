@@ -12,6 +12,9 @@ import (
 // Post is the normalized shape the frontend consumes.
 type Post struct {
 	ID        string   `json:"id"`
+	Name      string   `json:"name"` // fullname (t3_...), needed for vote/save
+	Likes     *bool    `json:"likes"`
+	Saved     bool     `json:"saved"`
 	Title     string   `json:"title"`
 	Author    string   `json:"author"`
 	Subreddit string   `json:"subreddit"`
@@ -67,6 +70,9 @@ type mediaMeta struct {
 
 type postData struct {
 	ID            string `json:"id"`
+	Name          string `json:"name"`
+	Likes         *bool  `json:"likes"`
+	Saved         bool   `json:"saved"`
 	Title         string `json:"title"`
 	Author        string `json:"author"`
 	Subreddit     string `json:"subreddit_name_prefixed"`
@@ -228,6 +234,9 @@ func handleFeed(w http.ResponseWriter, r *http.Request) {
 func extractPost(d postData) (Post, bool) {
 	p := Post{
 		ID:        d.ID,
+		Name:      d.Name,
+		Likes:     d.Likes,
+		Saved:     d.Saved,
 		Title:     d.Title,
 		Author:    d.Author,
 		Subreddit: d.Subreddit,
