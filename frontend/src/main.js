@@ -417,7 +417,7 @@ function addTapHandlers(rec, single) {
   let tapTimer = null;
   let lastTap = 0;
   rec.el.addEventListener('click', (e) => {
-    if (!isActive(rec) || clickWasScrub()) return;
+    if (!isActive(rec) || clickWasScrub() || pinch || Date.now() - lastPinchEnd < 400) return;
     const now = Date.now();
     if (now - lastTap < DOUBLE_TAP_MS) {
       lastTap = 0;
@@ -995,6 +995,68 @@ upBtn.addEventListener('click', () => vote(1));
 downBtn.addEventListener('click', () => vote(-1));
 saveBtn.addEventListener('click', toggleSave);
 
+// ---------------------------------------------------------------------------
+// Pinch-zoom: two fingers zoom the active post's media only — the shell
+// (top bar, meta, progress bar) stays put, like Instagram. The zoom is
+// transient: releasing springs the media back to its normal size.
+// ---------------------------------------------------------------------------
+let pinch = null;
+let lastPinchEnd = 0;
+
+function activeMedia() {
+  const rec = activeKey && mounted.get(activeKey);
+  if (!rec) return null;
+  if (rec.video) return { rec, el: rec.video };
+  if (rec.gallery) {
+    const cell = rec.gallery.strip.children[rec.gallery.idx];
+    const img = cell?.querySelector('img');
+    return img ? { rec, el: img } : null;
+  }
+  const img = rec.el.querySelector('img');
+  return img ? { rec, el: img } : null;
+}
+
+function beginPinch(touches) {
+  const media = activeMedia();
+  if (!media) return;
+  const [a, b] = touches;
+  const rect = media.el.getBoundingClientRect();
+  const midX = (a.clientX + b.clientX) / 2;
+  const midY = (a.clientY + b.clientY) / 2;
+  pinch = {
+    rec: media.rec,
+    el: media.el,
+    dist0: Math.max(20, Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY)),
+    midX0: midX,
+    midY0: midY,
+  };
+  media.el.style.transition = 'none';
+  media.el.style.transformOrigin = `${midX - rect.left}px ${midY - rect.top}px`;
+  media.rec.el.classList.add('zooming');
+}
+
+function movePinch(touches) {
+  const [a, b] = touches;
+  const dist = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+  const scale = Math.min(5, Math.max(1, dist / pinch.dist0));
+  const dx = (a.clientX + b.clientX) / 2 - pinch.midX0;
+  const dy = (a.clientY + b.clientY) / 2 - pinch.midY0;
+  pinch.el.style.transform = `translate(${dx}px, ${dy}px) scale(${scale})`;
+}
+
+function endPinch() {
+  const { rec, el } = pinch;
+  pinch = null;
+  lastPinchEnd = Date.now();
+  el.style.transition = 'transform 0.25s ease-out';
+  el.style.transform = '';
+  setTimeout(() => {
+    el.style.transition = '';
+    el.style.transformOrigin = '';
+    rec.el.classList.remove('zooming');
+  }, 300);
+}
+
 // Swipe gestures. Along the feed axis the whole slide window follows the
 // finger (the neighbor post peeks in); along the cross axis the active
 // gallery's strip follows the finger. Whichever axis dominates the first
@@ -1013,6 +1075,19 @@ function dragGalleryStrip(rec, px, animate) {
 viewer.addEventListener(
   'touchstart',
   (e) => {
+    if (e.touches.length >= 2) {
+      // Second finger: abort any in-progress drag and start pinching.
+      if (dragMode === 'main') {
+        for (const rec of mounted.values()) placeRecord(rec, rec.baseOff, true);
+      } else if (dragMode === 'gallery') {
+        const rec = activeGallery();
+        if (rec) updateGalleryTransform(rec, true);
+      }
+      dragMode = null;
+      canDrag = false;
+      if (!pinch) beginPinch(e.touches);
+      return;
+    }
     touchStartX = e.touches[0].clientX;
     touchStartY = e.touches[0].clientY;
     dragMode = null;
@@ -1023,6 +1098,10 @@ viewer.addEventListener(
 viewer.addEventListener(
   'touchmove',
   (e) => {
+    if (pinch) {
+      if (e.touches.length >= 2) movePinch(e.touches);
+      return;
+    }
     if (!canDrag) return;
     const dx = e.touches[0].clientX - touchStartX;
     const dy = e.touches[0].clientY - touchStartY;
@@ -1043,6 +1122,11 @@ viewer.addEventListener(
 viewer.addEventListener(
   'touchend',
   (e) => {
+    if (pinch) {
+      if (e.touches.length < 2) endPinch();
+      return;
+    }
+    if (Date.now() - lastPinchEnd < 300) return; // ignore the pinch's tail
     const dx = e.changedTouches[0].clientX - touchStartX;
     const dy = e.changedTouches[0].clientY - touchStartY;
     const main = settings.vertical ? dy : dx;

@@ -36,7 +36,9 @@ advancing; images advance after a configurable duration.
 
 Controls: arrow keys, edge clicks, swipe, or mouse wheel to navigate; `space`
 toggles autoscroll, `m` toggles sound, `f` toggles fill-screen, `a`/`z`/`s`
-vote/save. Double-tap a post to upvote it. The sort selector next to the
+vote/save. Double-tap a post to upvote it. Pinch to zoom into the post media
+(Instagram-style: only the media zooms — the UI stays put — and it springs
+back on release); browser page zoom is disabled in exchange. The sort selector next to the
 feed input applies hot/new/rising/top/controversial (with time ranges) to
 any listing feed and reloads it on change. Settings has a vertical navigation mode (swipe up/down,
 TikTok-style) and multiple accounts (each with its own cookie).

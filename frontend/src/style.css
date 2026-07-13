@@ -10,6 +10,16 @@ body {
   color: #e8e8ee;
   font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
   overflow: hidden;
+  /* browser pinch-zoom is disabled; the app pinch-zooms the post media */
+  touch-action: pan-x pan-y;
+}
+
+#viewer {
+  touch-action: none;
+}
+
+.text-post {
+  touch-action: pan-y;
 }
 
 #app {
@@ -147,6 +157,17 @@ button:hover {
 .slide.sliding,
 .gallery-strip.sliding {
   transition: transform 0.35s cubic-bezier(0.22, 0.61, 0.36, 1);
+  will-change: transform;
+}
+
+/* pinch-zoom: the zoomed media rises above the shell (topbar/meta/bar) */
+.slide.zooming {
+  z-index: 15;
+  overflow: visible;
+}
+
+.slide.zooming img,
+.slide.zooming video {
   will-change: transform;
 }
 
