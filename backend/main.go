@@ -11,9 +11,12 @@ import (
 
 var httpClient = &http.Client{Timeout: 30 * time.Second}
 
-const userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
+var userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
 
 func main() {
+	if ua := os.Getenv("REDDIT_USER_AGENT"); ua != "" {
+		userAgent = ua
+	}
 	addr := ":8080"
 	if p := os.Getenv("PORT"); p != "" {
 		addr = ":" + p
