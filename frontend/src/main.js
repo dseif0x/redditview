@@ -666,7 +666,6 @@ function renderMeta(post) {
   meta.hidden = false;
   metaTitle.textContent = post.title;
   const parts = [
-    `${idx + 1}/${posts.length}${exhausted ? '' : '+'}`,
     post.subreddit,
     post.author ? `u/${post.author}` : null,
     post.nsfw ? 'NSFW' : null,
