@@ -24,6 +24,7 @@ const DEFAULTS = {
   barInvert: false,
   sort: '',
   bookmarks: [],
+  skipSeen: false,
 };
 
 let settings = { ...DEFAULTS };
@@ -49,6 +50,33 @@ settings.cookie = activeCookie();
 function saveSettings() {
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
 }
+
+// ---------------------------------------------------------------------------
+// Seen-post tracking for the skip-seen option. Insertion-ordered and capped
+// so storage can't grow forever.
+// ---------------------------------------------------------------------------
+const SEEN_KEY = 'redditview.seen';
+const SEEN_MAX = 5000;
+let seenIds = new Set();
+try {
+  seenIds = new Set(JSON.parse(localStorage.getItem(SEEN_KEY) || '[]'));
+} catch {
+  /* corrupted -> start fresh */
+}
+
+let seenSaveTimer = null;
+function markSeen(id) {
+  if (!id || seenIds.has(id)) return;
+  seenIds.add(id);
+  if (seenIds.size > SEEN_MAX) {
+    seenIds.delete(seenIds.values().next().value); // drop the oldest
+  }
+  clearTimeout(seenSaveTimer);
+  seenSaveTimer = setTimeout(() => localStorage.setItem(SEEN_KEY, JSON.stringify([...seenIds])), 500);
+}
+
+// The post a resume is targeting must never be filtered as already-seen.
+let resumeExemptName = null;
 
 // ---------------------------------------------------------------------------
 // State
@@ -97,6 +125,7 @@ const verticalInput = $('#vertical-input');
 const smoothScrollInput = $('#smooth-scroll-input');
 const moveBarInput = $('#move-bar-input');
 const barInvertInput = $('#bar-invert-input');
+const skipSeenInput = $('#skip-seen-input');
 const fillBtn = $('#fill-btn');
 const appEl = $('#app');
 const sortSelect = $('#sort-select');
@@ -211,7 +240,9 @@ async function fetchPage() {
       }
       const data = await res.json();
       const cursorUsed = after || '';
-      const added = data.posts.filter(kindEnabled);
+      const added = data.posts.filter(
+        (p) => kindEnabled(p) && (!settings.skipSeen || !seenIds.has(p.id) || p.name === resumeExemptName)
+      );
       // Remember which cursor fetched each post so the feed can resume here.
       for (const p of added) p._cursor = cursorUsed;
       posts.push(...added);
@@ -241,6 +272,7 @@ async function startFeed(path, resume = null) {
   emptyState?.remove();
   viewer.innerHTML = '<div class="loading">loading…</div>';
   meta.hidden = true;
+  resumeExemptName = resume?.name || null;
 
   try {
     await fetchPage();
@@ -465,6 +497,7 @@ function activateRecord(rec) {
   // Remember the position so reopening the app resumes here.
   settings.resume = { path: feedPath, sort: settings.sort, cursor: rec.post._cursor || '', name: rec.post.name };
   saveSettings();
+  markSeen(rec.post.id);
   const fresh = currentVideo !== rec.video || !rec.video;
   if (rec.failed) {
     showToast('Media failed to load, skipping');
@@ -1427,6 +1460,7 @@ settingsBtn.addEventListener('click', () => {
   smoothScrollInput.checked = settings.smoothScroll;
   moveBarInput.checked = settings.moveBar;
   barInvertInput.checked = settings.barInvert;
+  skipSeenInput.checked = settings.skipSeen;
   showImagesInput.checked = settings.showImages;
   showVideosInput.checked = settings.showVideos;
   showTextInput.checked = settings.showText;
@@ -1438,7 +1472,8 @@ settingsForm.addEventListener('submit', (e) => {
   const filtersChanged =
     settings.showImages !== showImagesInput.checked ||
     settings.showVideos !== showVideosInput.checked ||
-    settings.showText !== showTextInput.checked;
+    settings.showText !== showTextInput.checked ||
+    settings.skipSeen !== skipSeenInput.checked;
   const verticalChanged = settings.vertical !== verticalInput.checked;
   const prevCookie = settings.cookie;
 
@@ -1463,6 +1498,7 @@ settingsForm.addEventListener('submit', (e) => {
   settings.smoothScroll = smoothScrollInput.checked;
   settings.moveBar = moveBarInput.checked;
   settings.barInvert = barInvertInput.checked;
+  settings.skipSeen = skipSeenInput.checked;
   settings.showImages = showImagesInput.checked;
   settings.showVideos = showVideosInput.checked;
   settings.showText = showTextInput.checked;
