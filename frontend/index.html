@@ -187,9 +187,15 @@
               Text posts
             </label>
           </fieldset>
+          <div class="settings-io">
+            <button type="button" id="export-btn">Export settings</button>
+            <button type="button" id="import-btn">Import settings</button>
+          </div>
+          <textarea id="io-text" rows="3" hidden placeholder="Exported settings JSON appears here — or paste JSON and press Import again"></textarea>
           <p class="hint">
             Everything is stored only in this browser's localStorage. The cookie
             is sent to the backend per request and never persisted server-side.
+            Export includes accounts and cookies — treat it like a password.
           </p>
           <div class="actions">
             <button type="submit" value="cancel">Cancel</button>

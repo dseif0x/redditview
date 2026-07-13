@@ -1602,6 +1602,76 @@ document.addEventListener('focusout', () => setTimeout(resetViewportScroll, 60))
 window.visualViewport?.addEventListener('resize', () => setTimeout(resetViewportScroll, 60));
 window.addEventListener('orientationchange', () => setTimeout(resetViewportScroll, 250));
 
+// ---------------------------------------------------------------------------
+// Settings export/import: move accounts + preferences between devices, since
+// localStorage is per-browser.
+// ---------------------------------------------------------------------------
+const ioText = $('#io-text');
+
+$('#export-btn').addEventListener('click', () => {
+  const json = JSON.stringify(settings, null, 1);
+  ioText.hidden = false;
+  ioText.value = json;
+  ioText.select?.();
+  navigator.clipboard
+    ?.writeText(json)
+    .then(() => showToast('Settings copied to clipboard'))
+    .catch(() => showToast('Copy the JSON from the box below'));
+});
+
+$('#import-btn').addEventListener('click', () => {
+  if (ioText.hidden || !ioText.value.trim()) {
+    ioText.hidden = false;
+    ioText.value = '';
+    ioText.focus();
+    showToast('Paste exported JSON, then press Import again');
+    return;
+  }
+  let parsed;
+  try {
+    parsed = JSON.parse(ioText.value);
+  } catch {
+    showToast('That is not valid JSON');
+    return;
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    showToast('That does not look like exported settings');
+    return;
+  }
+  settings = { ...DEFAULTS, ...parsed };
+  if (!Array.isArray(settings.accounts)) settings.accounts = [];
+  if (!Array.isArray(settings.bookmarks)) settings.bookmarks = [];
+  if (typeof settings.activeAccount !== 'number' || !settings.accounts[settings.activeAccount]) {
+    settings.activeAccount = 0;
+  }
+  settings.cookie = activeCookie();
+  saveSettings();
+  // Refresh everything driven by settings.
+  applyFill();
+  applyDirection();
+  applyBarPos();
+  updateAutoscrollBtn();
+  sortSelect.value = settings.sort || '';
+  populateBookmarks();
+  editingAccount = settings.accounts.length ? settings.activeAccount : -1;
+  populateAccountSelect();
+  loadAccountFields();
+  imageSecondsInput.value = settings.imageSeconds;
+  startMutedInput.checked = settings.startMuted;
+  fillScreenInput.checked = settings.fillScreen;
+  verticalInput.checked = settings.vertical;
+  smoothScrollInput.checked = settings.smoothScroll;
+  moveBarInput.checked = settings.moveBar;
+  barInvertInput.checked = settings.barInvert;
+  skipSeenInput.checked = settings.skipSeen;
+  showImagesInput.checked = settings.showImages;
+  showVideosInput.checked = settings.showVideos;
+  showTextInput.checked = settings.showText;
+  ioText.hidden = true;
+  showToast('Settings imported');
+  if (feedActive) startFeed(feedInput.value.trim());
+});
+
 // Resume the last session's feed and position.
 {
   const r = settings.resume;

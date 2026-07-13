@@ -800,6 +800,31 @@ button:hover {
   resize: vertical;
 }
 
+#settings-form .settings-io {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+#settings-form .settings-io button {
+  font-size: 0.8rem;
+  border-radius: 8px;
+}
+
+#settings-form #io-text {
+  display: block;
+  width: 100%;
+  margin-bottom: 1rem;
+  padding: 0.5rem;
+  border-radius: 8px;
+  border: 1px solid #33333f;
+  background: #0b0b0f;
+  color: inherit;
+  font-family: monospace;
+  font-size: 0.75rem;
+  resize: vertical;
+}
+
 #settings-form .actions {
   display: flex;
   justify-content: flex-end;
