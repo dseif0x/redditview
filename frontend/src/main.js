@@ -60,6 +60,7 @@ let galleryIdx = 0;
 let muted = settings.startMuted;
 
 let timerId = null;
+let timerStartedAt = 0;
 let timerRemainingMs = 0;
 
 let currentVideo = null;
@@ -223,6 +224,23 @@ function startTimer(seconds) {
   progressFill.style.width = '0%';
   // Force reflow so the width reset applies before the transition starts.
   void progressFill.offsetWidth;
+  resumeTimer();
+}
+
+// Tapping an image/text slide pauses the countdown, like pausing a video.
+function pauseTimer() {
+  if (timerId == null) return;
+  clearTimeout(timerId);
+  timerId = null;
+  timerRemainingMs = Math.max(0, timerRemainingMs - (Date.now() - timerStartedAt));
+  const w = getComputedStyle(progressFill).width;
+  progressFill.style.transition = 'none';
+  progressFill.style.width = w;
+}
+
+function resumeTimer() {
+  if (timerId != null || timerRemainingMs <= 0 || !settings.autoscroll) return;
+  timerStartedAt = Date.now();
   timerId = setTimeout(onTimerDone, timerRemainingMs);
   progressFill.style.transition = `width ${timerRemainingMs}ms linear`;
   progressFill.style.width = '100%';
@@ -238,33 +256,29 @@ function clearTimer() {
 
 function onTimerDone() {
   timerId = null;
-  next(); // steps through gallery images before advancing to the next post
+  // Galleries show every image for the configured duration before moving on.
+  if (galleryStep(1)) return;
+  next();
 }
 
 // ---------------------------------------------------------------------------
-// Slide window: the previous, current, and next slides stay mounted so
+// Slide window: the previous, current, and next posts stay mounted so
 // neighbors are preloaded before you reach them and visible while swiping.
-// Each record owns its media (img/video + hls instance); positions are
-// addressed as {i: post index, g: gallery image index}.
+// Each record owns its media (img/video + hls instance); positions are post
+// indices. Galleries are ONE position with an internal strip of images that
+// swipes along the cross axis (left/right in a vertical feed and vice versa).
 // ---------------------------------------------------------------------------
 const SLIDE_MS = 350;
-const mounted = new Map(); // key "i:g" -> record
+const mounted = new Map(); // key "p<i>" -> record
 let activeKey = null;
 
-const keyOf = (pos) => pos.i + ':' + pos.g;
+const keyOf = (pos) => 'p' + pos;
 const isActive = (rec) => rec.key === activeKey;
 const axisName = () => (settings.vertical ? 'Y' : 'X');
+const crossAxisName = () => (settings.vertical ? 'X' : 'Y');
 
-function nextPosOf(pos) {
-  const p = posts[pos.i];
-  if (p?.kind === 'gallery' && pos.g < p.images.length - 1) return { i: pos.i, g: pos.g + 1 };
-  return posts[pos.i + 1] ? { i: pos.i + 1, g: 0 } : null;
-}
-
-function prevPosOf(pos) {
-  if (pos.g > 0) return { i: pos.i, g: pos.g - 1 };
-  return pos.i > 0 ? { i: pos.i - 1, g: 0 } : null;
-}
+const nextPosOf = (pos) => (posts[pos + 1] ? pos + 1 : null);
+const prevPosOf = (pos) => (pos > 0 ? pos - 1 : null);
 
 // Position a slide at its window offset (-100/0/100%), optionally shifted by
 // a drag delta in px, optionally animating there.
@@ -295,15 +309,17 @@ function stopSlide() {
 }
 
 function buildRecord(pos) {
-  const post = posts[pos.i];
+  const post = posts[pos];
   const el = document.createElement('div');
   el.className = 'slide';
-  const rec = { key: keyOf(pos), pos, post, el, video: null, hls: null, failed: false, baseOff: 0 };
+  const rec = { key: keyOf(pos), pos, post, el, video: null, hls: null, gallery: null, failed: false, baseOff: 0 };
   switch (post.kind) {
     case 'video':
       buildVideo(rec);
       break;
     case 'gallery':
+      buildGallery(rec);
+      break;
     case 'image':
       buildImage(rec);
       break;
@@ -311,12 +327,21 @@ function buildRecord(pos) {
       buildText(rec);
       break;
   }
+  // Tapping a non-video slide pauses/resumes the autoscroll countdown, the
+  // same way tapping a video pauses playback.
+  if (post.kind !== 'video') {
+    rec.el.addEventListener('click', () => {
+      if (!isActive(rec) || !settings.autoscroll) return;
+      if (timerId != null) pauseTimer();
+      else resumeTimer();
+    });
+  }
   return rec;
 }
 
 function activateRecord(rec) {
-  idx = rec.pos.i;
-  galleryIdx = rec.pos.g;
+  idx = rec.pos;
+  galleryIdx = rec.gallery ? rec.gallery.idx : 0;
   const fresh = currentVideo !== rec.video || !rec.video;
   if (rec.failed) {
     showToast('Media failed to load, skipping');
@@ -350,7 +375,7 @@ function deactivateRecord(rec) {
 // Mount the window around pos and make pos the active slide.
 // dir: 1 = advancing, -1 = going back, 0 = reposition without animation.
 function showSlide(pos, dir = 0) {
-  if (!posts[pos.i]) return;
+  if (!posts[pos]) return;
   if (mounted.size === 0) viewer.innerHTML = ''; // clear loading/empty placeholders
 
   const oldActive = activeKey && mounted.get(activeKey);
@@ -359,8 +384,8 @@ function showSlide(pos, dir = 0) {
   const want = [{ pos, off: 0 }];
   const pp = prevPosOf(pos);
   const np = nextPosOf(pos);
-  if (pp) want.push({ pos: pp, off: -100 });
-  if (np) want.push({ pos: np, off: 100 });
+  if (pp != null) want.push({ pos: pp, off: -100 });
+  if (np != null) want.push({ pos: np, off: 100 });
   const wantKeys = new Set(want.map((w) => keyOf(w.pos)));
 
   for (const rec of [...mounted.values()]) {
@@ -386,8 +411,8 @@ function showSlide(pos, dir = 0) {
 }
 
 function next() {
-  const np = posts[idx] ? nextPosOf({ i: idx, g: galleryIdx }) : posts.length ? { i: 0, g: 0 } : null;
-  if (!np) {
+  const np = posts[idx] ? nextPosOf(idx) : posts.length ? 0 : null;
+  if (np == null) {
     maybePrefetch();
     if (exhausted) {
       stopSlide();
@@ -398,7 +423,7 @@ function next() {
       stopSlide();
       viewer.innerHTML = '<div class="loading">loading…</div>';
       setTimeout(() => {
-        if (nextPosOf({ i: idx, g: galleryIdx })) next();
+        if (nextPosOf(idx) != null) next();
         else if (exhausted) viewer.innerHTML = '<div class="loading">End of feed.</div>';
         else setTimeout(next, 700);
       }, 700);
@@ -410,15 +435,42 @@ function next() {
 }
 
 function prev() {
-  const pp = prevPosOf({ i: idx, g: galleryIdx });
-  if (!pp) return;
+  const pp = prevPosOf(idx);
+  if (pp == null) return;
   showSlide(pp, -1);
 }
 
+// ---------------------------------------------------------------------------
+// Gallery strip: all images of a gallery post live in one slide and swipe
+// along the cross axis. Returns false at the ends so callers can fall back.
+// ---------------------------------------------------------------------------
+function activeGallery() {
+  const rec = activeKey && mounted.get(activeKey);
+  return rec?.gallery ? rec : null;
+}
+
+function updateGalleryTransform(rec, animate) {
+  const g = rec.gallery;
+  g.strip.classList.toggle('sliding', animate);
+  g.strip.style.transform = g.idx === 0 ? '' : `translate${crossAxisName()}(${-g.idx * 100}%)`;
+}
+
+function galleryStep(dir) {
+  const rec = activeGallery();
+  if (!rec) return false;
+  const ni = rec.gallery.idx + dir;
+  if (ni < 0 || ni >= rec.gallery.count) return false;
+  rec.gallery.idx = ni;
+  galleryIdx = ni;
+  updateGalleryTransform(rec, settings.smoothScroll);
+  renderMeta(rec.post);
+  if (settings.autoscroll) startTimer(settings.imageSeconds); // each image gets the full duration
+  return true;
+}
+
 function buildImage(rec) {
-  const src = rec.post.images[rec.pos.g] || rec.post.images[0];
   const img = document.createElement('img');
-  img.src = mediaUrl(src);
+  img.src = mediaUrl(rec.post.images[0]);
   img.alt = rec.post.title;
   img.addEventListener('error', () => {
     rec.failed = true;
@@ -428,6 +480,24 @@ function buildImage(rec) {
     }
   });
   rec.el.appendChild(img);
+}
+
+function buildGallery(rec) {
+  const strip = document.createElement('div');
+  strip.className = 'gallery-strip';
+  rec.post.images.forEach((src, j) => {
+    const cell = document.createElement('div');
+    cell.className = 'gallery-cell';
+    const img = document.createElement('img');
+    img.loading = j <= 1 ? 'eager' : 'lazy';
+    img.src = mediaUrl(src);
+    img.alt = rec.post.title;
+    cell.appendChild(img);
+    strip.appendChild(cell);
+  });
+  rec.gallery = { idx: 0, count: rec.post.images.length, strip };
+  rec.el.appendChild(strip);
+  updateGalleryTransform(rec, false);
 }
 
 function buildText(rec) {
@@ -773,19 +843,27 @@ upBtn.addEventListener('click', () => vote(1));
 downBtn.addEventListener('click', () => vote(-1));
 saveBtn.addEventListener('click', toggleSave);
 
-// Swipe gestures: swipe toward the next slide along the configured axis.
-// With smooth scrolling the slide follows the finger and snaps back when the
-// swipe doesn't reach the threshold.
+// Swipe gestures. Along the feed axis the whole slide window follows the
+// finger (the neighbor post peeks in); along the cross axis the active
+// gallery's strip follows the finger. Whichever axis dominates the first
+// significant movement wins for the rest of the gesture.
 let touchStartX = 0;
 let touchStartY = 0;
-let dragging = false;
+let dragMode = null; // null | 'main' | 'gallery'
 let canDrag = false;
+
+function dragGalleryStrip(rec, px, animate) {
+  const g = rec.gallery;
+  g.strip.classList.toggle('sliding', animate);
+  g.strip.style.transform = `translate${crossAxisName()}(calc(${-g.idx * 100}% + ${px}px))`;
+}
+
 viewer.addEventListener(
   'touchstart',
   (e) => {
     touchStartX = e.touches[0].clientX;
     touchStartY = e.touches[0].clientY;
-    dragging = false;
+    dragMode = null;
     canDrag = settings.smoothScroll && mounted.size > 0 && !e.target.closest('.text-post');
   },
   { passive: true }
@@ -798,10 +876,14 @@ viewer.addEventListener(
     const dy = e.touches[0].clientY - touchStartY;
     const main = settings.vertical ? dy : dx;
     const cross = settings.vertical ? dx : dy;
-    if (!dragging && Math.abs(main) > 10 && Math.abs(main) > Math.abs(cross)) dragging = true;
-    if (dragging) {
-      // The whole window follows the finger, so the neighbor peeks in.
+    if (!dragMode && (Math.abs(main) > 10 || Math.abs(cross) > 10)) {
+      dragMode = Math.abs(main) >= Math.abs(cross) ? 'main' : activeGallery() ? 'gallery' : null;
+    }
+    if (dragMode === 'main') {
       for (const rec of mounted.values()) placeRecord(rec, rec.baseOff, false, main);
+    } else if (dragMode === 'gallery') {
+      const rec = activeGallery();
+      if (rec) dragGalleryStrip(rec, cross, false);
     }
   },
   { passive: true }
@@ -813,14 +895,28 @@ viewer.addEventListener(
     const dy = e.changedTouches[0].clientY - touchStartY;
     const main = settings.vertical ? dy : dx;
     const cross = settings.vertical ? dx : dy;
-    const fired = Math.abs(main) >= 60 && Math.abs(main) >= Math.abs(cross) * 1.5;
+    const mode = dragMode;
+    dragMode = null;
+    canDrag = false;
 
-    if (dragging) {
+    if (mode === 'gallery') {
+      const rec = activeGallery();
+      if (!rec) return;
+      // Step if the swipe was far enough and the strip has room; else snap.
+      if (Math.abs(cross) >= 60 && !galleryStep(cross < 0 ? 1 : -1)) {
+        updateGalleryTransform(rec, true);
+      } else if (Math.abs(cross) < 60) {
+        updateGalleryTransform(rec, true);
+      }
+      return;
+    }
+
+    const fired = Math.abs(main) >= 60 && Math.abs(main) >= Math.abs(cross) * 1.5;
+    if (mode === 'main') {
       // Snap everything back; a completed swipe immediately re-targets the
       // window from the dragged position, so the transition continues on.
       for (const rec of mounted.values()) placeRecord(rec, rec.baseOff, true);
     }
-    canDrag = false;
     if (!fired) return;
     // Swiping up/left pulls the next slide in; down/right goes back.
     if (main < 0) next();
@@ -959,16 +1055,30 @@ document.addEventListener('keydown', (e) => {
       e.preventDefault();
       toggleAutoscroll();
       break;
+    // Arrows on the main axis move between posts; arrows on the cross axis
+    // step through the active gallery (falling back to posts otherwise).
     case 'ArrowRight':
-    case 'ArrowDown':
-    case 'j':
-      if (e.key === 'ArrowDown') e.preventDefault();
+      if (settings.vertical && galleryStep(1)) break;
       next();
       break;
     case 'ArrowLeft':
+      if (settings.vertical && galleryStep(-1)) break;
+      prev();
+      break;
+    case 'ArrowDown':
+      e.preventDefault();
+      if (!settings.vertical && galleryStep(1)) break;
+      next();
+      break;
     case 'ArrowUp':
+      e.preventDefault();
+      if (!settings.vertical && galleryStep(-1)) break;
+      prev();
+      break;
+    case 'j':
+      next();
+      break;
     case 'k':
-      if (e.key === 'ArrowUp') e.preventDefault();
       prev();
       break;
     case 'm':
