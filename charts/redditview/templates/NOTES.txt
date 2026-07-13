@@ -1,0 +1,16 @@
+redditview is deployed.
+
+{{- if .Values.ingress.enabled }}
+{{- range .Values.ingress.hosts }}
+Open http{{ if $.Values.ingress.tls }}s{{ end }}://{{ .host }}
+{{- end }}
+{{- else }}
+No ingress is enabled. Reach the app with:
+
+  kubectl --namespace {{ .Release.Namespace }} port-forward svc/{{ include "redditview.fullname" . }} 8080:{{ .Values.service.port }}
+
+then open http://localhost:8080
+{{- end }}
+
+Configure your reddit cookie and preferences in the web UI (stored in the
+browser's localStorage; nothing is persisted server-side).

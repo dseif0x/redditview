@@ -1,0 +1,9 @@
+apiVersion: v2
+name: redditview
+description: Autoscrolling media viewer for any reddit feed
+type: application
+version: 0.1.0
+appVersion: "latest"
+home: https://github.com/dseif0x/redditview
+sources:
+  - https://github.com/dseif0x/redditview
