@@ -488,6 +488,7 @@ function deactivateRecord(rec) {
 // dir: 1 = advancing, -1 = going back, 0 = reposition without animation.
 function showSlide(pos, dir = 0) {
   if (!posts[pos]) return;
+  if (commentsOpen && commentsPost !== posts[pos]) closeComments();
   if (mounted.size === 0) viewer.innerHTML = ''; // clear loading/empty placeholders
 
   const oldActive = activeKey && mounted.get(activeKey);
@@ -725,7 +726,7 @@ function buildVideo(rec) {
 
   // With autoscroll on, videos run to the end, then advance (loop is off).
   video.addEventListener('ended', () => {
-    if (isActive(rec) && settings.autoscroll) next();
+    if (isActive(rec) && settings.autoscroll && !commentsOpen) next();
   });
   video.addEventListener('error', () => loadNextSource('playback error'));
   // A tap anywhere on the slide (not just the video itself) pauses/resumes.
@@ -836,6 +837,125 @@ function renderMeta(post) {
   metaSub.append(span, link);
   updateActionButtons(post);
 }
+
+// ---------------------------------------------------------------------------
+// Comments: bottom sheet with the full comment tree, sortable, tap a comment
+// to collapse/expand its subtree.
+// ---------------------------------------------------------------------------
+const commentsPanel = $('#comments-panel');
+const commentsSheet = $('#comments-sheet');
+const commentsList = $('#comments-list');
+const commentsTitle = $('#comments-title');
+const commentsSort = $('#comments-sort');
+let commentsOpen = false;
+let commentsPost = null;
+
+function timeAgo(utcSeconds) {
+  const s = Math.max(0, Date.now() / 1000 - utcSeconds);
+  if (s < 3600) return Math.max(1, Math.floor(s / 60)) + 'm';
+  if (s < 86400) return Math.floor(s / 3600) + 'h';
+  if (s < 31536000) return Math.floor(s / 86400) + 'd';
+  return Math.floor(s / 31536000) + 'y';
+}
+
+function countReplies(c) {
+  let n = c.replies?.length || 0;
+  for (const r of c.replies || []) n += countReplies(r);
+  return n;
+}
+
+function renderComment(c, depth) {
+  const el = document.createElement('div');
+  el.className = 'comment' + (depth ? ' nested' : '');
+
+  const head = document.createElement('div');
+  head.className = 'c-head';
+  const kidCount = countReplies(c) + (c.moreCount || 0);
+  const badges = [
+    c.isSubmitter ? 'OP' : null,
+    c.distinguished === 'moderator' ? 'MOD' : null,
+    c.stickied ? '📌' : null,
+  ].filter(Boolean);
+  head.innerHTML =
+    `<span class="c-author${c.isSubmitter ? ' op' : ''}">${escapeHtml(c.author)}</span>` +
+    badges.map((b) => `<span class="c-badge">${b}</span>`).join('') +
+    `<span class="c-meta">${c.scoreHidden ? '·' : c.score + ' pts'} · ${timeAgo(c.createdUtc)}</span>` +
+    `<span class="c-collapsed-hint">[+${kidCount + 1}]</span>`;
+
+  const body = document.createElement('div');
+  body.className = 'c-body';
+  body.textContent = c.body;
+
+  const kids = document.createElement('div');
+  kids.className = 'c-kids';
+  for (const r of c.replies || []) kids.appendChild(renderComment(r, depth + 1));
+  if (c.moreCount) {
+    const more = document.createElement('div');
+    more.className = 'c-more';
+    more.textContent = `… ${c.moreCount} more repl${c.moreCount === 1 ? 'y' : 'ies'} on reddit`;
+    kids.appendChild(more);
+  }
+
+  el.append(head, body, kids);
+  el.addEventListener('click', (e) => {
+    e.stopPropagation(); // innermost comment wins, don't toggle ancestors
+    el.classList.toggle('collapsed');
+  });
+  return el;
+}
+
+async function loadComments() {
+  commentsList.innerHTML = '<div class="loading">loading…</div>';
+  const post = commentsPost;
+  try {
+    const headers = {};
+    if (settings.cookie.trim()) headers['X-Reddit-Cookie'] = settings.cookie.trim();
+    const res = await fetch(`/api/comments?id=${encodeURIComponent(post.id)}&sort=${commentsSort.value}`, { headers });
+    if (!res.ok) throw new Error((await res.text()).slice(0, 200) || `HTTP ${res.status}`);
+    const data = await res.json();
+    if (commentsPost !== post || !commentsOpen) return; // user moved on
+    commentsList.innerHTML = '';
+    if (!data.comments.length) {
+      commentsList.innerHTML = '<div class="loading">No comments yet.</div>';
+      return;
+    }
+    for (const c of data.comments) commentsList.appendChild(renderComment(c, 0));
+    if (data.more) {
+      const more = document.createElement('div');
+      more.className = 'c-more';
+      more.textContent = `… ${data.more} more comments on reddit`;
+      commentsList.appendChild(more);
+    }
+  } catch (err) {
+    if (commentsPost !== post || !commentsOpen) return;
+    commentsList.innerHTML = `<div class="loading error">Failed to load comments:<br>${escapeHtml(String(err.message || err))}</div>`;
+  }
+}
+
+function openComments() {
+  const post = posts[idx];
+  if (!post) return;
+  commentsPost = post;
+  commentsOpen = true;
+  commentsPanel.hidden = false;
+  commentsTitle.textContent = post.numComments ? `Comments (${post.numComments})` : 'Comments';
+  pauseTimer(); // hold the autoscroll countdown while reading
+  loadComments();
+}
+
+function closeComments() {
+  commentsOpen = false;
+  commentsPanel.hidden = true;
+  commentsList.innerHTML = '';
+  resumeTimer();
+}
+
+$('#comments-btn').addEventListener('click', openComments);
+$('#comments-close').addEventListener('click', closeComments);
+$('#comments-backdrop').addEventListener('click', closeComments);
+commentsSort.addEventListener('change', () => {
+  if (commentsOpen) loadComments();
+});
 
 // ---------------------------------------------------------------------------
 // Vote / save
@@ -1291,6 +1411,10 @@ settingsForm.addEventListener('submit', (e) => {
 
 document.addEventListener('keydown', (e) => {
   if (settingsModal.open || document.activeElement === feedInput) return;
+  if (commentsOpen) {
+    if (e.key === 'Escape' || e.key === 'c') closeComments();
+    return; // don't navigate the feed under the panel
+  }
   switch (e.key) {
     case ' ':
       e.preventDefault();
@@ -1336,6 +1460,9 @@ document.addEventListener('keydown', (e) => {
       break;
     case 's':
       toggleSave();
+      break;
+    case 'c':
+      openComments();
       break;
   }
 });

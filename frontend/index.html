@@ -81,6 +81,7 @@
           <div id="meta-sub"></div>
         </div>
         <div id="meta-actions">
+          <button id="comments-btn" title="Comments (c)">💬</button>
           <button id="up-btn" title="Upvote (a)">▲</button>
           <button id="down-btn" title="Downvote (z)">▼</button>
           <button id="save-btn" title="Save (s)">☆</button>
@@ -91,6 +92,25 @@
       <button id="next-zone" class="nav-zone" title="Next (→)">›</button>
 
       <div id="toast" hidden></div>
+
+      <div id="comments-panel" hidden>
+        <div id="comments-backdrop"></div>
+        <div id="comments-sheet">
+          <header id="comments-header">
+            <span id="comments-title">Comments</span>
+            <select id="comments-sort" title="Comment sort">
+              <option value="confidence">Best</option>
+              <option value="top">Top</option>
+              <option value="new">New</option>
+              <option value="controversial">Controversial</option>
+              <option value="old">Old</option>
+              <option value="qa">Q&amp;A</option>
+            </select>
+            <button id="comments-close" title="Close (Esc)">✕</button>
+          </header>
+          <div id="comments-list"></div>
+        </div>
+      </div>
 
       <dialog id="settings-modal">
         <form method="dialog" id="settings-form">
