@@ -32,8 +32,14 @@ advancing; images advance after a configurable duration.
    - `u/<name>/submitted`
    - or paste any full reddit URL
 
-Controls: `←`/`→` or edge clicks to navigate, `space` to pause, `m` to toggle
-sound.
+Controls: arrow keys, edge clicks, swipe, or mouse wheel to navigate; `space`
+pauses, `m` toggles sound, `f` toggles fill-screen. Settings has a vertical
+navigation mode (swipe up/down, TikTok-style).
+
+The app is an installable PWA (requires HTTPS): "Add to Home Screen" on
+mobile or the install prompt in desktop browsers gives a standalone
+fullscreen window. Feeds and media are never cached offline — only the app
+shell is.
 
 ## Development
 
