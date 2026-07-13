@@ -23,6 +23,27 @@
             spellcheck="false"
             placeholder="r/pics · user/name/m/multi · saved · upvoted · empty = home"
           />
+          <select id="sort-select" title="Sort">
+            <option value="">Sort</option>
+            <option value="hot">Hot</option>
+            <option value="new">New</option>
+            <option value="rising">Rising</option>
+            <optgroup label="Top">
+              <option value="top:hour">Top · hour</option>
+              <option value="top:day">Top · day</option>
+              <option value="top:week">Top · week</option>
+              <option value="top:month">Top · month</option>
+              <option value="top:year">Top · year</option>
+              <option value="top:all">Top · all time</option>
+            </optgroup>
+            <optgroup label="Controversial">
+              <option value="controversial:day">Controversial · day</option>
+              <option value="controversial:week">Controversial · week</option>
+              <option value="controversial:month">Controversial · month</option>
+              <option value="controversial:year">Controversial · year</option>
+              <option value="controversial:all">Controversial · all time</option>
+            </optgroup>
+          </select>
           <button type="submit" title="Load feed">Go</button>
         </form>
         <div class="controls">
