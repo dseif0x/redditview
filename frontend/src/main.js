@@ -7,8 +7,11 @@ import './style.css';
 const SETTINGS_KEY = 'redditview.settings';
 const DEFAULTS = {
   cookie: '',
+  accounts: [],
+  activeAccount: 0,
   imageSeconds: 8,
   startMuted: false,
+  autoscroll: false,
   lastFeed: '',
   showImages: true,
   showVideos: true,
@@ -23,6 +26,19 @@ try {
 } catch {
   /* corrupted storage -> defaults */
 }
+
+// Migrate a pre-accounts cookie into the account list.
+if (!Array.isArray(settings.accounts)) settings.accounts = [];
+if (settings.accounts.length === 0 && settings.cookie) {
+  settings.accounts = [{ name: 'Account 1', cookie: settings.cookie }];
+  settings.activeAccount = 0;
+}
+
+function activeCookie() {
+  const a = settings.accounts[settings.activeAccount];
+  return a ? a.cookie.trim() : '';
+}
+settings.cookie = activeCookie();
 
 function saveSettings() {
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
@@ -40,11 +56,9 @@ let feedActive = false;
 
 let idx = -1;
 let galleryIdx = 0;
-let paused = false;
 let muted = settings.startMuted;
 
 let timerId = null;
-let timerStartedAt = 0;
 let timerRemainingMs = 0;
 
 let hls = null;
@@ -66,6 +80,9 @@ const settingsForm = $('#settings-form');
 const cookieInput = $('#cookie-input');
 const imageSecondsInput = $('#image-seconds-input');
 const startMutedInput = $('#start-muted-input');
+const accountSelect = $('#account-select');
+const accountNameInput = $('#account-name-input');
+const deleteAccountBtn = $('#delete-account-btn');
 const showImagesInput = $('#show-images-input');
 const showVideosInput = $('#show-videos-input');
 const showTextInput = $('#show-text-input');
@@ -75,6 +92,7 @@ const fillBtn = $('#fill-btn');
 const appEl = $('#app');
 const prevZone = $('#prev-zone');
 const nextZone = $('#next-zone');
+const progressEl = $('#progress');
 const progressFill = $('#progress-fill');
 const meta = $('#meta');
 const metaTitle = $('#meta-title');
@@ -193,33 +211,20 @@ function maybePrefetch() {
 }
 
 // ---------------------------------------------------------------------------
-// Timer (images / galleries / text) with progress bar
+// Autoscroll timer (images / galleries / text) with progress bar. Only runs
+// when autoscroll is enabled; otherwise slides stay until manually advanced.
 // ---------------------------------------------------------------------------
 function startTimer(seconds) {
   clearTimer();
+  if (!settings.autoscroll) return;
   timerRemainingMs = seconds * 1000;
   progressFill.style.transition = 'none';
   progressFill.style.width = '0%';
   // Force reflow so the width reset applies before the transition starts.
   void progressFill.offsetWidth;
-  if (!paused) runTimer();
-}
-
-function runTimer() {
-  timerStartedAt = Date.now();
   timerId = setTimeout(onTimerDone, timerRemainingMs);
   progressFill.style.transition = `width ${timerRemainingMs}ms linear`;
   progressFill.style.width = '100%';
-}
-
-function pauseTimer() {
-  if (timerId == null) return;
-  clearTimeout(timerId);
-  timerId = null;
-  timerRemainingMs = Math.max(0, timerRemainingMs - (Date.now() - timerStartedAt));
-  const w = getComputedStyle(progressFill).width;
-  progressFill.style.transition = 'none';
-  progressFill.style.width = w;
 }
 
 function clearTimer() {
@@ -232,13 +237,7 @@ function clearTimer() {
 
 function onTimerDone() {
   timerId = null;
-  const post = posts[idx];
-  if (post && post.kind === 'gallery' && galleryIdx < post.images.length - 1) {
-    galleryIdx++;
-    renderSlide();
-  } else {
-    next();
-  }
+  next(); // steps through gallery images before advancing to the next post
 }
 
 // ---------------------------------------------------------------------------
@@ -246,6 +245,7 @@ function onTimerDone() {
 // ---------------------------------------------------------------------------
 function stopSlide() {
   clearTimer();
+  progressEl.classList.remove('seekable');
   if (hls) {
     hls.destroy();
     hls = null;
@@ -258,6 +258,13 @@ function stopSlide() {
 }
 
 function next() {
+  // Step through gallery images before leaving the post.
+  const current = posts[idx];
+  if (current?.kind === 'gallery' && galleryIdx < current.images.length - 1) {
+    galleryIdx++;
+    renderSlide();
+    return;
+  }
   if (idx >= posts.length - 1) {
     maybePrefetch();
     if (idx >= posts.length - 1) {
@@ -285,6 +292,12 @@ function next() {
 }
 
 function prev() {
+  const current = posts[idx];
+  if (current?.kind === 'gallery' && galleryIdx > 0) {
+    galleryIdx--;
+    renderSlide();
+    return;
+  }
   if (idx <= 0) return;
   idx--;
   galleryIdx = 0;
@@ -392,6 +405,8 @@ function renderVideo(slide, post) {
   video.playsInline = true;
   video.autoplay = true;
   video.muted = muted;
+  // Without autoscroll, videos loop instead of advancing the feed.
+  video.loop = !settings.autoscroll;
   if (post.poster) video.poster = mediaUrl(post.poster);
 
   const attemptPlay = () => {
@@ -445,18 +460,54 @@ function renderVideo(slide, post) {
     attemptPlay();
   };
 
-  // Videos run to the end, then advance.
-  video.addEventListener('ended', () => next());
-  video.addEventListener('error', () => loadNextSource('playback error'));
-  video.addEventListener('play', () => {
-    if (paused) video.pause();
+  // With autoscroll on, videos run to the end, then advance (loop is off).
+  video.addEventListener('ended', () => {
+    if (settings.autoscroll) next();
   });
-  video.addEventListener('click', () => togglePause());
+  video.addEventListener('error', () => loadNextSource('playback error'));
+  video.addEventListener('click', () => {
+    if (video.paused) video.play().catch(() => {});
+    else video.pause();
+  });
+
+  // Playback progress in the bottom bar, with seeking.
+  progressEl.classList.add('seekable');
+  video.addEventListener('timeupdate', () => {
+    if (!video.duration || scrubbing) return;
+    progressFill.style.transition = 'none';
+    progressFill.style.width = (video.currentTime / video.duration) * 100 + '%';
+  });
 
   currentVideo = video;
   slide.appendChild(video);
   loadNextSource('start');
 }
+
+// Seek by clicking/dragging the progress bar while a video plays.
+let scrubbing = false;
+function seekFromPointer(e) {
+  if (!currentVideo || !currentVideo.duration) return;
+  const rect = progressEl.getBoundingClientRect();
+  const frac = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
+  currentVideo.currentTime = frac * currentVideo.duration;
+  progressFill.style.transition = 'none';
+  progressFill.style.width = frac * 100 + '%';
+}
+progressEl.addEventListener('pointerdown', (e) => {
+  if (!progressEl.classList.contains('seekable')) return;
+  scrubbing = true;
+  progressEl.setPointerCapture(e.pointerId);
+  seekFromPointer(e);
+});
+progressEl.addEventListener('pointermove', (e) => {
+  if (scrubbing) seekFromPointer(e);
+});
+progressEl.addEventListener('pointerup', () => {
+  scrubbing = false;
+});
+progressEl.addEventListener('pointercancel', () => {
+  scrubbing = false;
+});
 
 // A prominent tap-for-sound button whenever a video is playing muted, since
 // browsers routinely force autoplay to start muted.
@@ -580,18 +631,26 @@ function preloadUpcoming() {
 }
 
 // ---------------------------------------------------------------------------
-// Pause / mute
+// Autoscroll / mute
 // ---------------------------------------------------------------------------
-function togglePause() {
-  paused = !paused;
-  pauseBtn.textContent = paused ? '▶' : '⏸';
-  pauseBtn.classList.toggle('active', paused);
-  if (paused) {
-    pauseTimer();
-    currentVideo?.pause();
+function updateAutoscrollBtn() {
+  pauseBtn.textContent = settings.autoscroll ? '⏸' : '▶';
+  pauseBtn.classList.toggle('active', settings.autoscroll);
+  pauseBtn.title = settings.autoscroll ? 'Autoscroll on — click to stop (space)' : 'Autoscroll off — click to start (space)';
+}
+
+function toggleAutoscroll() {
+  settings.autoscroll = !settings.autoscroll;
+  saveSettings();
+  updateAutoscrollBtn();
+  if (currentVideo) currentVideo.loop = !settings.autoscroll;
+  const post = posts[idx];
+  if (settings.autoscroll) {
+    if (post && post.kind !== 'video') startTimer(settings.imageSeconds);
+    showToast('Autoscroll on', 1200);
   } else {
-    if (timerRemainingMs > 0) runTimer();
-    currentVideo?.play().catch(() => {});
+    if (post && post.kind !== 'video') clearTimer();
+    showToast('Autoscroll off', 1200);
   }
 }
 
@@ -634,7 +693,7 @@ feedForm.addEventListener('submit', (e) => {
   startFeed(feedInput.value.trim());
 });
 
-pauseBtn.addEventListener('click', togglePause);
+pauseBtn.addEventListener('click', toggleAutoscroll);
 muteBtn.addEventListener('click', toggleMute);
 fillBtn.addEventListener('click', toggleFill);
 nextZone.addEventListener('click', next);
@@ -684,8 +743,55 @@ window.addEventListener(
   { passive: true }
 );
 
+// Which account the modal is editing: an index into settings.accounts, or -1
+// for the "add new account" entry.
+let editingAccount = 0;
+
+function populateAccountSelect() {
+  accountSelect.innerHTML = '';
+  settings.accounts.forEach((a, i) => {
+    const opt = document.createElement('option');
+    opt.value = String(i);
+    opt.textContent = (a.name || `Account ${i + 1}`) + (i === settings.activeAccount ? ' (active)' : '');
+    accountSelect.appendChild(opt);
+  });
+  const add = document.createElement('option');
+  add.value = 'new';
+  add.textContent = '+ Add account…';
+  accountSelect.appendChild(add);
+  accountSelect.value = editingAccount === -1 ? 'new' : String(editingAccount);
+}
+
+function loadAccountFields() {
+  const a = settings.accounts[editingAccount];
+  accountNameInput.value = a ? a.name : '';
+  cookieInput.value = a ? a.cookie : '';
+  deleteAccountBtn.hidden = !a;
+}
+
+accountSelect.addEventListener('change', () => {
+  editingAccount = accountSelect.value === 'new' ? -1 : Number(accountSelect.value);
+  loadAccountFields();
+});
+
+deleteAccountBtn.addEventListener('click', () => {
+  if (editingAccount < 0) return;
+  settings.accounts.splice(editingAccount, 1);
+  if (settings.activeAccount >= settings.accounts.length) settings.activeAccount = 0;
+  editingAccount = settings.accounts.length ? Math.min(editingAccount, settings.accounts.length - 1) : -1;
+  const prevCookie = settings.cookie;
+  settings.cookie = activeCookie();
+  saveSettings();
+  populateAccountSelect();
+  loadAccountFields();
+  showToast('Account deleted');
+  if (prevCookie !== settings.cookie && feedActive) startFeed(feedPath);
+});
+
 settingsBtn.addEventListener('click', () => {
-  cookieInput.value = settings.cookie;
+  editingAccount = settings.accounts.length ? settings.activeAccount : -1;
+  populateAccountSelect();
+  loadAccountFields();
   imageSecondsInput.value = settings.imageSeconds;
   startMutedInput.checked = settings.startMuted;
   fillScreenInput.checked = settings.fillScreen;
@@ -702,8 +808,22 @@ settingsForm.addEventListener('submit', (e) => {
     settings.showImages !== showImagesInput.checked ||
     settings.showVideos !== showVideosInput.checked ||
     settings.showText !== showTextInput.checked;
+  const prevCookie = settings.cookie;
 
-  settings.cookie = cookieInput.value.trim();
+  // Saving selects the edited account as the active one.
+  const name = accountNameInput.value.trim();
+  const cookie = cookieInput.value.trim();
+  if (editingAccount === -1) {
+    if (name || cookie) {
+      settings.accounts.push({ name: name || `Account ${settings.accounts.length + 1}`, cookie });
+      settings.activeAccount = settings.accounts.length - 1;
+    }
+  } else if (settings.accounts[editingAccount]) {
+    settings.accounts[editingAccount] = { name: name || `Account ${editingAccount + 1}`, cookie };
+    settings.activeAccount = editingAccount;
+  }
+  settings.cookie = activeCookie();
+
   settings.imageSeconds = Math.max(1, parseFloat(imageSecondsInput.value) || DEFAULTS.imageSeconds);
   settings.startMuted = startMutedInput.checked;
   settings.fillScreen = fillScreenInput.checked;
@@ -720,8 +840,8 @@ settingsForm.addEventListener('submit', (e) => {
   } else {
     showToast('Settings saved');
   }
-  // The loaded feed was filtered with the old toggles; reload it.
-  if (filtersChanged && feedActive) startFeed(feedPath);
+  // Reload if the account or the type filters changed what the feed contains.
+  if ((filtersChanged || prevCookie !== settings.cookie) && feedActive) startFeed(feedPath);
 });
 
 document.addEventListener('keydown', (e) => {
@@ -729,7 +849,7 @@ document.addEventListener('keydown', (e) => {
   switch (e.key) {
     case ' ':
       e.preventDefault();
-      togglePause();
+      toggleAutoscroll();
       break;
     case 'ArrowRight':
     case 'ArrowDown':
@@ -768,6 +888,7 @@ function escapeHtml(s) {
 applyFill();
 applyDirection();
 updateMuteBtn();
+updateAutoscrollBtn();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
