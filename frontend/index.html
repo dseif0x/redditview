@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>redditview</title>
+  </head>
+  <body>
+    <div id="app">
+      <header id="topbar">
+        <form id="feed-form">
+          <input
+            id="feed-input"
+            type="text"
+            autocomplete="off"
+            spellcheck="false"
+            placeholder="r/pics · user/name/m/multi · u/name/submitted · empty = home"
+          />
+          <button type="submit" title="Load feed">Go</button>
+        </form>
+        <div class="controls">
+          <button id="pause-btn" title="Pause / resume autoscroll (space)">⏸</button>
+          <button id="mute-btn" title="Toggle sound (m)">🔇</button>
+          <button id="settings-btn" title="Settings">⚙</button>
+        </div>
+      </header>
+
+      <main id="viewer">
+        <div id="empty-state">
+          <h1>redditview</h1>
+          <p>Enter any reddit feed above and press <strong>Go</strong>.</p>
+          <p class="hint">
+            Set your reddit cookie in <strong>⚙ settings</strong> for the home
+            feed and private multireddits.
+          </p>
+          <p class="hint">← / → navigate · space pauses · m toggles sound</p>
+        </div>
+      </main>
+
+      <div id="progress"><div id="progress-fill"></div></div>
+
+      <footer id="meta" hidden>
+        <div id="meta-title"></div>
+        <div id="meta-sub"></div>
+      </footer>
+
+      <button id="prev-zone" class="nav-zone" title="Previous (←)">‹</button>
+      <button id="next-zone" class="nav-zone" title="Next (→)">›</button>
+
+      <div id="toast" hidden></div>
+
+      <dialog id="settings-modal">
+        <form method="dialog" id="settings-form">
+          <h2>Settings</h2>
+          <label>
+            Reddit cookie
+            <textarea
+              id="cookie-input"
+              rows="4"
+              placeholder="Paste the Cookie header from a logged-in reddit.com request (DevTools → Network)"
+            ></textarea>
+          </label>
+          <label>
+            Image duration (seconds)
+            <input id="image-seconds-input" type="number" min="1" max="600" step="0.5" />
+          </label>
+          <label class="row">
+            <input id="start-muted-input" type="checkbox" />
+            Start videos muted
+          </label>
+          <p class="hint">
+            Everything is stored only in this browser's localStorage. The cookie
+            is sent to the backend per request and never persisted server-side.
+          </p>
+          <div class="actions">
+            <button type="submit" value="cancel">Cancel</button>
+            <button type="submit" value="save" class="primary">Save</button>
+          </div>
+        </form>
+      </dialog>
+    </div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

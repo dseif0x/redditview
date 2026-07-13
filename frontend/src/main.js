@@ -1,0 +1,481 @@
+import Hls from 'hls.js';
+import './style.css';
+
+// ---------------------------------------------------------------------------
+// Settings (localStorage only)
+// ---------------------------------------------------------------------------
+const SETTINGS_KEY = 'redditview.settings';
+const DEFAULTS = { cookie: '', imageSeconds: 8, startMuted: true, lastFeed: '' };
+
+let settings = { ...DEFAULTS };
+try {
+  settings = { ...DEFAULTS, ...JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}') };
+} catch {
+  /* corrupted storage -> defaults */
+}
+
+function saveSettings() {
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+}
+
+// ---------------------------------------------------------------------------
+// State
+// ---------------------------------------------------------------------------
+let posts = [];
+let after = null;
+let exhausted = false;
+let loading = false;
+let feedPath = '';
+
+let idx = -1;
+let galleryIdx = 0;
+let paused = false;
+let muted = settings.startMuted;
+
+let timerId = null;
+let timerStartedAt = 0;
+let timerRemainingMs = 0;
+
+let hls = null;
+let currentVideo = null;
+
+// ---------------------------------------------------------------------------
+// DOM
+// ---------------------------------------------------------------------------
+const $ = (sel) => document.querySelector(sel);
+const viewer = $('#viewer');
+const emptyState = $('#empty-state');
+const feedForm = $('#feed-form');
+const feedInput = $('#feed-input');
+const pauseBtn = $('#pause-btn');
+const muteBtn = $('#mute-btn');
+const settingsBtn = $('#settings-btn');
+const settingsModal = $('#settings-modal');
+const settingsForm = $('#settings-form');
+const cookieInput = $('#cookie-input');
+const imageSecondsInput = $('#image-seconds-input');
+const startMutedInput = $('#start-muted-input');
+const progressFill = $('#progress-fill');
+const meta = $('#meta');
+const metaTitle = $('#meta-title');
+const metaSub = $('#meta-sub');
+const toast = $('#toast');
+
+feedInput.value = settings.lastFeed;
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+const PROXIED_HOSTS = ['redd.it', 'redditmedia.com', 'redditstatic.com', 'imgur.com'];
+
+// Route media through the backend proxy when it lives on a reddit/imgur CDN
+// (CORS + hotlinking); anything else loads directly.
+function mediaUrl(u) {
+  try {
+    const host = new URL(u).hostname.toLowerCase();
+    if (PROXIED_HOSTS.some((d) => host === d || host.endsWith('.' + d))) {
+      return '/api/media?u=' + encodeURIComponent(u);
+    }
+  } catch {
+    /* relative or malformed -> use as-is */
+  }
+  return u;
+}
+
+let toastTimer = null;
+function showToast(msg, ms = 4000) {
+  toast.textContent = msg;
+  toast.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => (toast.hidden = true), ms);
+}
+
+// ---------------------------------------------------------------------------
+// Feed loading
+// ---------------------------------------------------------------------------
+async function fetchPage() {
+  if (loading || exhausted) return;
+  loading = true;
+  try {
+    const params = new URLSearchParams({ path: feedPath });
+    if (after) params.set('after', after);
+    const headers = {};
+    if (settings.cookie.trim()) headers['X-Reddit-Cookie'] = settings.cookie.trim();
+
+    const res = await fetch('/api/feed?' + params.toString(), { headers });
+    if (!res.ok) {
+      throw new Error((await res.text()).slice(0, 200) || `HTTP ${res.status}`);
+    }
+    const data = await res.json();
+    posts.push(...data.posts);
+    after = data.after || null;
+    if (!after) exhausted = true;
+  } finally {
+    loading = false;
+  }
+}
+
+async function startFeed(path) {
+  stopSlide();
+  posts = [];
+  after = null;
+  exhausted = false;
+  idx = -1;
+  feedPath = path;
+  settings.lastFeed = path;
+  saveSettings();
+
+  emptyState?.remove();
+  viewer.innerHTML = '<div class="loading">loading…</div>';
+  meta.hidden = true;
+
+  try {
+    await fetchPage();
+  } catch (err) {
+    viewer.innerHTML = `<div class="loading error">Failed to load feed:<br>${escapeHtml(String(err.message || err))}</div>`;
+    return;
+  }
+  if (posts.length === 0) {
+    viewer.innerHTML = '<div class="loading">No viewable posts in this feed.</div>';
+    return;
+  }
+  next();
+}
+
+function maybePrefetch() {
+  if (idx >= posts.length - 5 && !exhausted && !loading) {
+    fetchPage().catch((err) => showToast('Failed to load more: ' + err.message));
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Timer (images / galleries / text) with progress bar
+// ---------------------------------------------------------------------------
+function startTimer(seconds) {
+  clearTimer();
+  timerRemainingMs = seconds * 1000;
+  progressFill.style.transition = 'none';
+  progressFill.style.width = '0%';
+  // Force reflow so the width reset applies before the transition starts.
+  void progressFill.offsetWidth;
+  if (!paused) runTimer();
+}
+
+function runTimer() {
+  timerStartedAt = Date.now();
+  timerId = setTimeout(onTimerDone, timerRemainingMs);
+  progressFill.style.transition = `width ${timerRemainingMs}ms linear`;
+  progressFill.style.width = '100%';
+}
+
+function pauseTimer() {
+  if (timerId == null) return;
+  clearTimeout(timerId);
+  timerId = null;
+  timerRemainingMs = Math.max(0, timerRemainingMs - (Date.now() - timerStartedAt));
+  const w = getComputedStyle(progressFill).width;
+  progressFill.style.transition = 'none';
+  progressFill.style.width = w;
+}
+
+function clearTimer() {
+  clearTimeout(timerId);
+  timerId = null;
+  timerRemainingMs = 0;
+  progressFill.style.transition = 'none';
+  progressFill.style.width = '0%';
+}
+
+function onTimerDone() {
+  timerId = null;
+  const post = posts[idx];
+  if (post && post.kind === 'gallery' && galleryIdx < post.images.length - 1) {
+    galleryIdx++;
+    renderSlide();
+  } else {
+    next();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Slide rendering
+// ---------------------------------------------------------------------------
+function stopSlide() {
+  clearTimer();
+  if (hls) {
+    hls.destroy();
+    hls = null;
+  }
+  if (currentVideo) {
+    currentVideo.pause();
+    currentVideo.removeAttribute('src');
+    currentVideo = null;
+  }
+}
+
+function next() {
+  if (idx >= posts.length - 1) {
+    maybePrefetch();
+    if (idx >= posts.length - 1) {
+      if (exhausted) {
+        stopSlide();
+        viewer.innerHTML = '<div class="loading">End of feed.</div>';
+        meta.hidden = true;
+      } else {
+        // Next page still loading; retry shortly.
+        stopSlide();
+        viewer.innerHTML = '<div class="loading">loading…</div>';
+        setTimeout(() => {
+          if (idx < posts.length - 1) next();
+          else if (exhausted) viewer.innerHTML = '<div class="loading">End of feed.</div>';
+          else setTimeout(next, 700);
+        }, 700);
+      }
+      return;
+    }
+  }
+  idx++;
+  galleryIdx = 0;
+  renderSlide();
+  maybePrefetch();
+}
+
+function prev() {
+  if (idx <= 0) return;
+  idx--;
+  galleryIdx = 0;
+  renderSlide();
+}
+
+function renderSlide() {
+  stopSlide();
+  const post = posts[idx];
+  if (!post) return;
+
+  viewer.innerHTML = '';
+  const slide = document.createElement('div');
+  slide.className = 'slide';
+
+  switch (post.kind) {
+    case 'video':
+      renderVideo(slide, post);
+      break;
+    case 'gallery':
+    case 'image':
+      renderImage(slide, post);
+      break;
+    case 'text':
+      renderText(slide, post);
+      break;
+  }
+
+  viewer.appendChild(slide);
+  renderMeta(post);
+  preloadUpcoming();
+}
+
+function renderImage(slide, post) {
+  const src = post.images[post.kind === 'gallery' ? galleryIdx : 0];
+  const img = document.createElement('img');
+  img.src = mediaUrl(src);
+  img.alt = post.title;
+  img.addEventListener('error', () => {
+    showToast('Image failed to load, skipping');
+    setTimeout(next, 800);
+  });
+  slide.appendChild(img);
+  startTimer(settings.imageSeconds);
+}
+
+function renderText(slide, post) {
+  const box = document.createElement('div');
+  box.className = 'text-post';
+  const h = document.createElement('h2');
+  h.textContent = post.title;
+  box.appendChild(h);
+  if (post.text) {
+    const body = document.createElement('p');
+    body.textContent = post.text.length > 2000 ? post.text.slice(0, 2000) + '…' : post.text;
+    box.appendChild(body);
+  }
+  slide.appendChild(box);
+  startTimer(settings.imageSeconds);
+}
+
+function renderVideo(slide, post) {
+  const video = document.createElement('video');
+  video.playsInline = true;
+  video.autoplay = true;
+  video.muted = muted;
+  if (post.poster) video.poster = mediaUrl(post.poster);
+
+  let triedMp4 = !post.videoMp4;
+
+  const fail = (why) => {
+    if (!triedMp4) {
+      triedMp4 = true;
+      if (hls) {
+        hls.destroy();
+        hls = null;
+      }
+      video.src = mediaUrl(post.videoMp4);
+      video.play().catch(() => {});
+      return;
+    }
+    showToast(`Video failed (${why}), skipping`);
+    setTimeout(next, 800);
+  };
+
+  // Videos run to the end, then advance.
+  video.addEventListener('ended', () => next());
+  video.addEventListener('error', () => fail('playback error'));
+  video.addEventListener('play', () => {
+    if (paused) video.pause();
+  });
+
+  const hlsSrc = post.videoHls ? mediaUrl(post.videoHls) : null;
+  if (hlsSrc && Hls.isSupported()) {
+    hls = new Hls({ maxBufferLength: 20 });
+    hls.on(Hls.Events.ERROR, (_ev, data) => {
+      if (data.fatal) fail(data.type);
+    });
+    hls.loadSource(hlsSrc);
+    hls.attachMedia(video);
+  } else if (hlsSrc && video.canPlayType('application/vnd.apple.mpegurl')) {
+    video.src = hlsSrc;
+  } else if (post.videoMp4) {
+    triedMp4 = true;
+    video.src = mediaUrl(post.videoMp4);
+  } else {
+    fail('no source');
+    return;
+  }
+
+  // Autoplay with sound is often blocked before user interaction: fall back
+  // to muted playback rather than stalling the feed.
+  video.play().catch(() => {
+    if (!video.muted) {
+      video.muted = true;
+      updateMuteBtn();
+      video.play().catch(() => {});
+    }
+  });
+
+  video.addEventListener('click', () => togglePause());
+  currentVideo = video;
+  slide.appendChild(video);
+}
+
+function renderMeta(post) {
+  meta.hidden = false;
+  metaTitle.textContent = post.title;
+  const parts = [
+    `${idx + 1}/${posts.length}${exhausted ? '' : '+'}`,
+    post.subreddit,
+    post.author ? `u/${post.author}` : null,
+    post.nsfw ? 'NSFW' : null,
+    post.kind === 'gallery' ? `${galleryIdx + 1}/${post.images.length}` : null,
+  ].filter(Boolean);
+  metaSub.innerHTML = '';
+  const span = document.createElement('span');
+  span.textContent = parts.join(' · ') + ' · ';
+  const link = document.createElement('a');
+  link.href = post.permalink;
+  link.target = '_blank';
+  link.rel = 'noopener';
+  link.textContent = 'open ↗';
+  metaSub.append(span, link);
+}
+
+function preloadUpcoming() {
+  for (let i = idx + 1; i <= Math.min(idx + 2, posts.length - 1); i++) {
+    const p = posts[i];
+    if ((p.kind === 'image' || p.kind === 'gallery') && p.images?.[0]) {
+      new Image().src = mediaUrl(p.images[0]);
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Pause / mute
+// ---------------------------------------------------------------------------
+function togglePause() {
+  paused = !paused;
+  pauseBtn.textContent = paused ? '▶' : '⏸';
+  pauseBtn.classList.toggle('active', paused);
+  if (paused) {
+    pauseTimer();
+    currentVideo?.pause();
+  } else {
+    if (timerRemainingMs > 0) runTimer();
+    currentVideo?.play().catch(() => {});
+  }
+}
+
+function toggleMute() {
+  muted = !muted;
+  if (currentVideo) currentVideo.muted = muted;
+  updateMuteBtn();
+}
+
+function updateMuteBtn() {
+  if (currentVideo) muted = currentVideo.muted;
+  muteBtn.textContent = muted ? '🔇' : '🔊';
+}
+
+// ---------------------------------------------------------------------------
+// Wiring
+// ---------------------------------------------------------------------------
+feedForm.addEventListener('submit', (e) => {
+  e.preventDefault();
+  feedInput.blur();
+  startFeed(feedInput.value.trim());
+});
+
+pauseBtn.addEventListener('click', togglePause);
+muteBtn.addEventListener('click', toggleMute);
+$('#next-zone').addEventListener('click', next);
+$('#prev-zone').addEventListener('click', prev);
+
+settingsBtn.addEventListener('click', () => {
+  cookieInput.value = settings.cookie;
+  imageSecondsInput.value = settings.imageSeconds;
+  startMutedInput.checked = settings.startMuted;
+  settingsModal.showModal();
+});
+
+settingsForm.addEventListener('submit', (e) => {
+  if (e.submitter?.value !== 'save') return;
+  settings.cookie = cookieInput.value.trim();
+  settings.imageSeconds = Math.max(1, parseFloat(imageSecondsInput.value) || DEFAULTS.imageSeconds);
+  settings.startMuted = startMutedInput.checked;
+  saveSettings();
+  showToast('Settings saved');
+});
+
+document.addEventListener('keydown', (e) => {
+  if (settingsModal.open || document.activeElement === feedInput) return;
+  switch (e.key) {
+    case ' ':
+      e.preventDefault();
+      togglePause();
+      break;
+    case 'ArrowRight':
+    case 'j':
+      next();
+      break;
+    case 'ArrowLeft':
+    case 'k':
+      prev();
+      break;
+    case 'm':
+      toggleMute();
+      break;
+  }
+});
+
+function escapeHtml(s) {
+  return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+}
+
+updateMuteBtn();
