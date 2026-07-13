@@ -133,18 +133,16 @@ func normalizeFeedPath(raw string) (path string, query url.Values, err error) {
 	return raw, query, nil
 }
 
+// feedHosts are tried in order. old.reddit.com serves the same JSON listings
+// but its anti-bot filtering is far less aggressive than www.reddit.com's.
+var feedHosts = []string{"https://old.reddit.com/", "https://www.reddit.com/"}
+
 func handleFeed(w http.ResponseWriter, r *http.Request) {
 	path, extra, err := normalizeFeedPath(r.URL.Query().Get("path"))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-
-	target := "https://www.reddit.com/"
-	if path != "" {
-		target += path + "/"
-	}
-	target += ".json"
 
 	q := url.Values{}
 	for k, vs := range extra {
@@ -155,31 +153,55 @@ func handleFeed(w http.ResponseWriter, r *http.Request) {
 	if after := r.URL.Query().Get("after"); after != "" {
 		q.Set("after", after)
 	}
-	target += "?" + q.Encode()
 
-	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, target, nil)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	req.Header.Set("User-Agent", userAgent)
-	req.Header.Set("Accept", "application/json")
-	if cookie := r.Header.Get("X-Reddit-Cookie"); cookie != "" {
-		req.Header.Set("Cookie", cookie)
+	var resp *http.Response
+	lastStatus := 0
+	lastBody := ""
+	for _, host := range feedHosts {
+		target := host
+		if path != "" {
+			target += path + "/"
+		}
+		target += ".json?" + q.Encode()
+
+		req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, target, nil)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		req.Header.Set("User-Agent", userAgent)
+		req.Header.Set("Accept", "application/json")
+		if cookie := r.Header.Get("X-Reddit-Cookie"); cookie != "" {
+			req.Header.Set("Cookie", cookie)
+		}
+
+		resp, err = httpClient.Do(req)
+		if err != nil {
+			http.Error(w, "reddit request failed: "+err.Error(), http.StatusBadGateway)
+			return
+		}
+		if resp.StatusCode == http.StatusOK {
+			break
+		}
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
+		resp.Body.Close()
+		lastStatus = resp.StatusCode
+		lastBody = strings.TrimSpace(string(body))
+		resp = nil
 	}
 
-	resp, err := httpClient.Do(req)
-	if err != nil {
-		http.Error(w, "reddit request failed: "+err.Error(), http.StatusBadGateway)
+	if resp == nil {
+		msg := fmt.Sprintf("reddit returned %d", lastStatus)
+		if strings.Contains(lastBody, "<") || lastBody == "" {
+			// reddit's block page is HTML; don't dump it at the user.
+			msg += " (request blocked by reddit). Tips: paste your browser's FULL Cookie header in settings, not just reddit_session — reddit fingerprints requests and partial cookies look like bots. Reddit also blocks many datacenter/VPS IPs; if this server runs in a cloud, try it from a residential connection."
+		} else {
+			msg += ": " + lastBody
+		}
+		http.Error(w, msg, http.StatusBadGateway)
 		return
 	}
 	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
-		http.Error(w, fmt.Sprintf("reddit returned %d: %s", resp.StatusCode, strings.TrimSpace(string(body))), http.StatusBadGateway)
-		return
-	}
 
 	var l listing
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 20<<20)).Decode(&l); err != nil {

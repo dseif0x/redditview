@@ -16,8 +16,15 @@ advancing; images advance after a configurable duration.
 ## Usage
 
 1. Open the app and click **⚙** to paste your reddit cookie (DevTools →
-   Network → any logged-in `reddit.com` request → copy the `Cookie` header)
-   and set the image duration.
+   Network → any logged-in `reddit.com` request → copy the **entire** `Cookie`
+   header — just `reddit_session` alone is usually rejected as a bot) and set
+   the image duration.
+
+   If reddit still returns 403: the backend already prefers `old.reddit.com`
+   (less aggressive anti-bot filtering), but reddit blocks most
+   datacenter/VPS IPs regardless of cookie — run the container somewhere with
+   a residential IP. `REDDIT_USER_AGENT` overrides the User-Agent the backend
+   sends; matching your own browser's UA (the one the cookie came from) helps.
 2. Enter a feed and press **Go**:
    - empty → your home feed (requires cookie)
    - `r/pics`, `r/pics/top?t=week`
