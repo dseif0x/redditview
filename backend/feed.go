@@ -21,6 +21,7 @@ type Post struct {
 	Images    []string `json:"images,omitempty"`
 	VideoHLS  string   `json:"videoHls,omitempty"`
 	VideoMP4  string   `json:"videoMp4,omitempty"`
+	RedgifsID string   `json:"redgifsId,omitempty"`
 	Poster    string   `json:"poster,omitempty"`
 	Duration  float64  `json:"duration,omitempty"`
 	Text      string   `json:"text,omitempty"`
@@ -275,6 +276,21 @@ func extractPost(d postData) (Post, bool) {
 	mediaURL := d.URLOverridden
 	if mediaURL == "" {
 		mediaURL = d.URL
+	}
+
+	// Redgifs: reddit's own transcode (reddit_video_preview) is always silent,
+	// so keep the gif id for the frontend to resolve against the redgifs API,
+	// with the silent transcode as fallback.
+	if id := redgifsID(mediaURL); id != "" {
+		p.Kind = "video"
+		p.RedgifsID = id
+		p.Poster = poster
+		if d.Preview != nil && d.Preview.RedditVideoPreview != nil {
+			p.VideoHLS = d.Preview.RedditVideoPreview.HLSURL
+			p.VideoMP4 = d.Preview.RedditVideoPreview.FallbackURL
+			p.Duration = d.Preview.RedditVideoPreview.Duration
+		}
+		return p, true
 	}
 
 	// Animated previews (e.g. imgur gifs reddit has transcoded).

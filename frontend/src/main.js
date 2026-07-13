@@ -81,7 +81,7 @@ feedInput.value = settings.lastFeed;
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-const PROXIED_HOSTS = ['redd.it', 'redditmedia.com', 'redditstatic.com', 'imgur.com'];
+const PROXIED_HOSTS = ['redd.it', 'redditmedia.com', 'redditstatic.com', 'imgur.com', 'redgifs.com'];
 
 // Route media through the backend proxy when it lives on a reddit/imgur CDN
 // (CORS + hotlinking); anything else loads directly.
@@ -338,75 +338,116 @@ function renderText(slide, post) {
   startTimer(settings.imageSeconds);
 }
 
+// Reddit's transcode of redgifs posts has no audio; ask the backend to
+// resolve the real (signed, expiring) redgifs mp4 first.
+async function resolveRedgifs(post) {
+  try {
+    const res = await fetch('/api/redgifs?id=' + encodeURIComponent(post.redgifsId));
+    if (res.ok) {
+      const data = await res.json();
+      if (data.mp4) {
+        post.redgifsMp4 = data.mp4;
+        if (!post.poster && data.poster) post.poster = data.poster;
+        return;
+      }
+    }
+  } catch {
+    /* fall through to reddit's silent transcode */
+  }
+  showToast('redgifs lookup failed — playing silent reddit preview');
+}
+
 function renderVideo(slide, post) {
+  if (post.redgifsId && !post.redgifsMp4 && !post.redgifsResolved) {
+    post.redgifsResolved = true;
+    const spinner = document.createElement('div');
+    spinner.className = 'loading';
+    spinner.textContent = 'loading…';
+    slide.appendChild(spinner);
+    resolveRedgifs(post).then(() => {
+      if (posts[idx] === post && slide.isConnected) {
+        slide.innerHTML = '';
+        renderVideo(slide, post);
+      }
+    });
+    return;
+  }
+
+  // Sources in preference order; on failure fall through to the next.
+  const sources = [];
+  if (post.redgifsMp4) sources.push({ type: 'mp4', url: post.redgifsMp4 });
+  if (post.videoHls) sources.push({ type: 'hls', url: post.videoHls });
+  if (post.videoMp4) sources.push({ type: 'mp4', url: post.videoMp4, silent: !!post.videoHls });
+  let si = -1;
+
   const video = document.createElement('video');
   video.playsInline = true;
   video.autoplay = true;
   video.muted = muted;
   if (post.poster) video.poster = mediaUrl(post.poster);
 
-  let triedMp4 = !post.videoMp4;
+  const attemptPlay = () => {
+    // Autoplay with sound is often blocked before user interaction: fall back
+    // to muted playback rather than stalling the feed.
+    video
+      .play()
+      .then(() => addUnmuteOverlay(slide, video))
+      .catch(() => {
+        if (!video.muted) {
+          video.muted = true;
+          updateMuteBtn();
+          video.play().catch(() => {});
+        }
+        addUnmuteOverlay(slide, video);
+      });
+  };
 
-  const fail = (why) => {
-    if (!triedMp4) {
-      triedMp4 = true;
-      if (hls) {
-        hls.destroy();
-        hls = null;
-      }
-      console.warn('HLS failed, using mp4 fallback:', why);
-      // reddit's fallback mp4 is video-only; tell the user why it's silent.
-      showToast('Video stream failed — using fallback (no audio)');
-      video.src = mediaUrl(post.videoMp4);
-      video.play().catch(() => {});
+  const loadNextSource = (why) => {
+    if (si >= 0) console.warn('video source failed:', sources[si]?.url, why);
+    si++;
+    const s = sources[si];
+    if (!s) {
+      showToast(`Video failed (${why}), skipping`);
+      setTimeout(next, 800);
       return;
     }
-    showToast(`Video failed (${why}), skipping`);
-    setTimeout(next, 800);
+    if (hls) {
+      hls.destroy();
+      hls = null;
+    }
+    if (s.type === 'hls') {
+      if (Hls.isSupported()) {
+        hls = new Hls({ maxBufferLength: 20 });
+        hls.on(Hls.Events.ERROR, (_ev, data) => {
+          if (data.fatal) loadNextSource(data.type);
+        });
+        hls.loadSource(mediaUrl(s.url));
+        hls.attachMedia(video);
+      } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+        video.src = mediaUrl(s.url);
+      } else {
+        loadNextSource('hls unsupported');
+        return;
+      }
+    } else {
+      // reddit's fallback mp4 is video-only; explain the silence.
+      if (s.silent) showToast('Video stream failed — using fallback (no audio)');
+      video.src = mediaUrl(s.url);
+    }
+    attemptPlay();
   };
 
   // Videos run to the end, then advance.
   video.addEventListener('ended', () => next());
-  video.addEventListener('error', () => fail('playback error'));
+  video.addEventListener('error', () => loadNextSource('playback error'));
   video.addEventListener('play', () => {
     if (paused) video.pause();
   });
-
-  const hlsSrc = post.videoHls ? mediaUrl(post.videoHls) : null;
-  if (hlsSrc && Hls.isSupported()) {
-    hls = new Hls({ maxBufferLength: 20 });
-    hls.on(Hls.Events.ERROR, (_ev, data) => {
-      if (data.fatal) fail(data.type);
-    });
-    hls.loadSource(hlsSrc);
-    hls.attachMedia(video);
-  } else if (hlsSrc && video.canPlayType('application/vnd.apple.mpegurl')) {
-    video.src = hlsSrc;
-  } else if (post.videoMp4) {
-    triedMp4 = true;
-    video.src = mediaUrl(post.videoMp4);
-  } else {
-    fail('no source');
-    return;
-  }
-
-  // Autoplay with sound is often blocked before user interaction: fall back
-  // to muted playback rather than stalling the feed.
-  video
-    .play()
-    .then(() => addUnmuteOverlay(slide, video))
-    .catch(() => {
-      if (!video.muted) {
-        video.muted = true;
-        updateMuteBtn();
-        video.play().catch(() => {});
-      }
-      addUnmuteOverlay(slide, video);
-    });
-
   video.addEventListener('click', () => togglePause());
+
   currentVideo = video;
   slide.appendChild(video);
+  loadNextSource('start');
 }
 
 // A prominent tap-for-sound button whenever a video is playing muted, since

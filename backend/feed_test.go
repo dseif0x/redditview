@@ -127,6 +127,54 @@ func TestRewritePlaylist(t *testing.T) {
 	}
 }
 
+func TestRedgifsID(t *testing.T) {
+	for in, want := range map[string]string{
+		"https://redgifs.com/watch/AbleSpiffyHorse": "ablespiffyhorse",
+		"https://www.redgifs.com/watch/somegif":     "somegif",
+		"https://v3.redgifs.com/watch/SomeGif123":   "somegif123",
+		"https://www.redgifs.com/ifr/somegif":       "somegif",
+		"https://i.redgifs.com/i/somegif.jpg":       "somegif",
+		"https://i.redd.it/x.jpg":                   "",
+		"https://example.com/watch/somegif":         "",
+		"https://notredgifs.com/watch/somegif":      "",
+		"https://fakeredgifs.com.evil.com/watch/x":  "",
+		"https://redgifs.com/users/someone":         "",
+	} {
+		if got := redgifsID(in); got != want {
+			t.Errorf("redgifsID(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestExtractPostRedgifs(t *testing.T) {
+	raw := `{
+		"id": "rg1", "title": "gif", "post_hint": "rich:video",
+		"url": "https://www.redgifs.com/watch/ablespiffyhorse",
+		"preview": {
+			"images": [{"source": {"url": "https://external-preview.redd.it/p.jpg"}}],
+			"reddit_video_preview": {
+				"hls_url": "https://v.redd.it/y/HLSPlaylist.m3u8",
+				"fallback_url": "https://v.redd.it/y/DASH_480.mp4",
+				"duration": 10
+			}
+		}
+	}`
+	var d postData
+	if err := json.Unmarshal([]byte(raw), &d); err != nil {
+		t.Fatal(err)
+	}
+	p, ok := extractPost(d)
+	if !ok || p.Kind != "video" {
+		t.Fatalf("got ok=%v kind=%q, want video", ok, p.Kind)
+	}
+	if p.RedgifsID != "ablespiffyhorse" {
+		t.Errorf("RedgifsID = %q", p.RedgifsID)
+	}
+	if p.VideoHLS == "" || p.VideoMP4 == "" {
+		t.Errorf("silent fallback sources missing: %+v", p)
+	}
+}
+
 func TestMediaHostAllowed(t *testing.T) {
 	for host, want := range map[string]bool{
 		"v.redd.it":                true,

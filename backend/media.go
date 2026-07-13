@@ -16,6 +16,7 @@ var allowedMediaHosts = []string{
 	"redditmedia.com",
 	"redditstatic.com",
 	"imgur.com",
+	"redgifs.com",
 }
 
 func mediaHostAllowed(host string) bool {
@@ -46,7 +47,13 @@ func handleMedia(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	req.Header.Set("User-Agent", userAgent)
-	req.Header.Set("Referer", "https://www.reddit.com/")
+	// Hotlink protection cuts both ways: redgifs 403s reddit referers and
+	// reddit CDNs expect a reddit-ish one, so match the referer to the host.
+	if h := strings.ToLower(target.Hostname()); h == "redgifs.com" || strings.HasSuffix(h, ".redgifs.com") {
+		req.Header.Set("Referer", "https://www.redgifs.com/")
+	} else {
+		req.Header.Set("Referer", "https://www.reddit.com/")
+	}
 	if rng := r.Header.Get("Range"); rng != "" {
 		req.Header.Set("Range", rng)
 	}
