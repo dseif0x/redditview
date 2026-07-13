@@ -561,6 +561,11 @@ button:hover {
   border-radius: 12px;
   padding: 1.5rem;
   width: min(28rem, 92vw);
+  /* stay clear of the iOS status bar and home indicator in PWA mode; the
+     dialog scrolls internally instead of growing past the safe areas */
+  max-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 3rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 #settings-modal::backdrop {
