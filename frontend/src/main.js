@@ -341,7 +341,9 @@ function goToFeed(path) {
   startFeed(path);
 }
 
+let lastPopstateAt = 0;
 window.addEventListener('popstate', (e) => {
+  lastPopstateAt = Date.now();
   const st = e.state;
   if (!st || typeof st.feed !== 'string') return;
   feedInput.value = st.feed;
@@ -1563,8 +1565,23 @@ document.addEventListener(
     const side = edgeSwipe.side;
     edgeSwipe = null;
     if (Math.abs(dx) < 60 || Math.abs(dx) <= Math.abs(dy) * 1.2) return;
-    if (side === 'left' && dx > 0) history.back();
-    else if (side === 'right' && dx < 0) history.forward();
+    // Newer iOS handles this gesture natively (a popstate arrives on its
+    // own); navigating here too would race it and bounce the feed back.
+    // Only act if no history navigation happens right after the swipe.
+    const marker = lastPopstateAt;
+    setTimeout(() => {
+      if (lastPopstateAt !== marker) return; // the platform already navigated
+      if (side === 'left' && dx > 0) history.back();
+      else if (side === 'right' && dx < 0) history.forward();
+    }, 350);
+  },
+  { passive: true, capture: true }
+);
+// WebKit converts touches to touchcancel when a system gesture takes over.
+document.addEventListener(
+  'touchcancel',
+  () => {
+    edgeSwipe = null;
   },
   { passive: true, capture: true }
 );
