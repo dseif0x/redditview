@@ -82,6 +82,9 @@ let resumeExemptName = null;
 // State
 // ---------------------------------------------------------------------------
 let posts = [];
+// Reddit's cursor pagination shifts on active feeds, so later pages can
+// re-serve posts already loaded; track what's in the feed and drop repeats.
+let loadedNames = new Set();
 let after = null;
 let exhausted = false;
 let loading = false;
@@ -241,10 +244,16 @@ async function fetchPage() {
       const data = await res.json();
       const cursorUsed = after || '';
       const added = data.posts.filter(
-        (p) => kindEnabled(p) && (!settings.skipSeen || !seenIds.has(p.id) || p.name === resumeExemptName)
+        (p) =>
+          kindEnabled(p) &&
+          !loadedNames.has(p.name || p.id) &&
+          (!settings.skipSeen || !seenIds.has(p.id) || p.name === resumeExemptName)
       );
       // Remember which cursor fetched each post so the feed can resume here.
-      for (const p of added) p._cursor = cursorUsed;
+      for (const p of added) {
+        p._cursor = cursorUsed;
+        loadedNames.add(p.name || p.id);
+      }
       posts.push(...added);
       after = data.after || null;
       if (!after) {
@@ -261,6 +270,7 @@ async function fetchPage() {
 async function startFeed(path, resume = null) {
   stopSlide();
   posts = [];
+  loadedNames = new Set();
   after = resume?.cursor || null;
   exhausted = false;
   idx = -1;
