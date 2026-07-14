@@ -1122,16 +1122,32 @@ function toggleFill() {
   applyFill();
 }
 
+// `muted` is the USER'S intent and only user actions change it. A video that
+// the browser force-muted (blocked unmuted autoplay) differs from the intent;
+// the button shows the actual state, and the next touch restores the intent.
 function toggleMute() {
-  muted = !muted;
+  const actual = currentVideo ? currentVideo.muted : muted;
+  muted = !actual;
   if (currentVideo) currentVideo.muted = muted;
   updateMuteBtn();
 }
 
 function updateMuteBtn() {
-  if (currentVideo) muted = currentVideo.muted;
-  muteBtn.textContent = muted ? '🔇' : '🔊';
+  const actual = currentVideo ? currentVideo.muted : muted;
+  muteBtn.textContent = actual ? '🔇' : '🔊';
 }
+
+// Any user gesture is a licence to lift a policy-forced mute.
+document.addEventListener(
+  'pointerdown',
+  () => {
+    if (currentVideo && currentVideo.muted && !muted) {
+      currentVideo.muted = false;
+      updateMuteBtn();
+    }
+  },
+  { capture: true, passive: true }
+);
 
 // ---------------------------------------------------------------------------
 // Wiring
@@ -1475,6 +1491,7 @@ settingsForm.addEventListener('submit', (e) => {
     settings.showText !== showTextInput.checked ||
     settings.skipSeen !== skipSeenInput.checked;
   const verticalChanged = settings.vertical !== verticalInput.checked;
+  const startMutedChanged = settings.startMuted !== startMutedInput.checked;
   const prevCookie = settings.cookie;
 
   // Saving selects the edited account as the active one.
@@ -1506,6 +1523,12 @@ settingsForm.addEventListener('submit', (e) => {
   applyFill();
   applyDirection();
   applyBarPos();
+  // Changing the mute default also resets the current intent.
+  if (startMutedChanged) {
+    muted = settings.startMuted;
+    if (currentVideo) currentVideo.muted = muted;
+    updateMuteBtn();
+  }
   // Mounted neighbor slides carry transforms for the old axis; re-place them.
   if (verticalChanged && activeKey && mounted.has(activeKey)) {
     showSlide(mounted.get(activeKey).pos, 0);
