@@ -457,6 +457,7 @@ function addTapHandlers(rec, single) {
   let lastTap = 0;
   rec.el.addEventListener('click', (e) => {
     if (!isActive(rec) || clickWasScrub() || pinch || Date.now() - lastPinchEnd < 400) return;
+    if (Date.now() - lastMouseDragEnd < 400) return; // drag, not a tap
     const now = Date.now();
     if (now - lastTap < DOUBLE_TAP_MS) {
       lastTap = 0;
@@ -1301,10 +1302,11 @@ function endPinch() {
   }, 300);
 }
 
-// Swipe gestures. Along the feed axis the whole slide window follows the
-// finger (the neighbor post peeks in); along the cross axis the active
-// gallery's strip follows the finger. Whichever axis dominates the first
-// significant movement wins for the rest of the gesture.
+// Swipe/drag gestures (touch fingers and mouse drags share this logic).
+// Along the feed axis the whole slide window follows the pointer (the
+// neighbor post peeks in); along the cross axis the active gallery's strip
+// follows it. Whichever axis dominates the first significant movement wins
+// for the rest of the gesture.
 let touchStartX = 0;
 let touchStartY = 0;
 let dragMode = null; // null | 'main' | 'gallery'
@@ -1314,6 +1316,65 @@ function dragGalleryStrip(rec, px, animate) {
   const g = rec.gallery;
   g.strip.classList.toggle('sliding', animate);
   g.strip.style.transform = `translate${crossAxisName()}(calc(${-g.idx * 100}% + ${px}px))`;
+}
+
+function gestureBegin(x, y, target) {
+  touchStartX = x;
+  touchStartY = y;
+  dragMode = null;
+  canDrag = settings.smoothScroll && mounted.size > 0 && !target.closest('.text-post');
+}
+
+function gestureMove(x, y) {
+  if (!canDrag) return;
+  const dx = x - touchStartX;
+  const dy = y - touchStartY;
+  const main = settings.vertical ? dy : dx;
+  const cross = settings.vertical ? dx : dy;
+  if (!dragMode && (Math.abs(main) > 10 || Math.abs(cross) > 10)) {
+    dragMode = Math.abs(main) >= Math.abs(cross) ? 'main' : activeGallery() ? 'gallery' : null;
+  }
+  if (dragMode === 'main') {
+    for (const rec of mounted.values()) placeRecord(rec, rec.baseOff, false, main);
+  } else if (dragMode === 'gallery') {
+    const rec = activeGallery();
+    if (rec) dragGalleryStrip(rec, cross, false);
+  }
+}
+
+// Returns true when the gesture engaged a drag (used to suppress the click
+// browsers fire after a mouse drag).
+function gestureEnd(x, y) {
+  const dx = x - touchStartX;
+  const dy = y - touchStartY;
+  const main = settings.vertical ? dy : dx;
+  const cross = settings.vertical ? dx : dy;
+  const mode = dragMode;
+  dragMode = null;
+  canDrag = false;
+
+  if (mode === 'gallery') {
+    const rec = activeGallery();
+    if (!rec) return true;
+    // Step if the swipe was far enough and the strip has room; else snap.
+    if (Math.abs(cross) < 60 || !galleryStep(cross < 0 ? 1 : -1)) {
+      updateGalleryTransform(rec, true);
+    }
+    return true;
+  }
+
+  const fired = Math.abs(main) >= 60 && Math.abs(main) >= Math.abs(cross) * 1.5;
+  if (mode === 'main') {
+    // Snap everything back; a completed swipe immediately re-targets the
+    // window from the dragged position, so the transition continues on.
+    for (const rec of mounted.values()) placeRecord(rec, rec.baseOff, true);
+  }
+  if (fired) {
+    // Swiping up/left pulls the next slide in; down/right goes back.
+    if (main < 0) next();
+    else prev();
+  }
+  return mode !== null;
 }
 
 viewer.addEventListener(
@@ -1332,10 +1393,7 @@ viewer.addEventListener(
       if (!pinch) beginPinch(e.touches);
       return;
     }
-    touchStartX = e.touches[0].clientX;
-    touchStartY = e.touches[0].clientY;
-    dragMode = null;
-    canDrag = settings.smoothScroll && mounted.size > 0 && !e.target.closest('.text-post');
+    gestureBegin(e.touches[0].clientX, e.touches[0].clientY, e.target);
   },
   { passive: true }
 );
@@ -1346,20 +1404,7 @@ viewer.addEventListener(
       if (e.touches.length >= 2) movePinch(e.touches);
       return;
     }
-    if (!canDrag) return;
-    const dx = e.touches[0].clientX - touchStartX;
-    const dy = e.touches[0].clientY - touchStartY;
-    const main = settings.vertical ? dy : dx;
-    const cross = settings.vertical ? dx : dy;
-    if (!dragMode && (Math.abs(main) > 10 || Math.abs(cross) > 10)) {
-      dragMode = Math.abs(main) >= Math.abs(cross) ? 'main' : activeGallery() ? 'gallery' : null;
-    }
-    if (dragMode === 'main') {
-      for (const rec of mounted.values()) placeRecord(rec, rec.baseOff, false, main);
-    } else if (dragMode === 'gallery') {
-      const rec = activeGallery();
-      if (rec) dragGalleryStrip(rec, cross, false);
-    }
+    gestureMove(e.touches[0].clientX, e.touches[0].clientY);
   },
   { passive: true }
 );
@@ -1371,48 +1416,45 @@ viewer.addEventListener(
       return;
     }
     if (Date.now() - lastPinchEnd < 300) return; // ignore the pinch's tail
-    const dx = e.changedTouches[0].clientX - touchStartX;
-    const dy = e.changedTouches[0].clientY - touchStartY;
-    const main = settings.vertical ? dy : dx;
-    const cross = settings.vertical ? dx : dy;
-    const mode = dragMode;
-    dragMode = null;
-    canDrag = false;
-
-    if (mode === 'gallery') {
-      const rec = activeGallery();
-      if (!rec) return;
-      // Step if the swipe was far enough and the strip has room; else snap.
-      if (Math.abs(cross) >= 60 && !galleryStep(cross < 0 ? 1 : -1)) {
-        updateGalleryTransform(rec, true);
-      } else if (Math.abs(cross) < 60) {
-        updateGalleryTransform(rec, true);
-      }
-      return;
-    }
-
-    const fired = Math.abs(main) >= 60 && Math.abs(main) >= Math.abs(cross) * 1.5;
-    if (mode === 'main') {
-      // Snap everything back; a completed swipe immediately re-targets the
-      // window from the dragged position, so the transition continues on.
-      for (const rec of mounted.values()) placeRecord(rec, rec.baseOff, true);
-    }
-    if (!fired) return;
-    // Swiping up/left pulls the next slide in; down/right goes back.
-    if (main < 0) next();
-    else prev();
+    gestureEnd(e.changedTouches[0].clientX, e.changedTouches[0].clientY);
   },
   { passive: true }
 );
 
-// Mouse wheel / trackpad: scroll down for next, up for previous.
+// Mouse drags navigate too (posts along the feed axis, galleries across it).
+let mouseDragging = false;
+let lastMouseDragEnd = 0;
+viewer.addEventListener('pointerdown', (e) => {
+  if (e.pointerType !== 'mouse' || e.button !== 0) return;
+  mouseDragging = true;
+  gestureBegin(e.clientX, e.clientY, e.target);
+});
+window.addEventListener('pointermove', (e) => {
+  if (!mouseDragging || e.pointerType !== 'mouse') return;
+  gestureMove(e.clientX, e.clientY);
+});
+window.addEventListener('pointerup', (e) => {
+  if (!mouseDragging || e.pointerType !== 'mouse') return;
+  mouseDragging = false;
+  if (gestureEnd(e.clientX, e.clientY)) lastMouseDragEnd = Date.now();
+});
+// Native image drag'n'drop would hijack mouse swipes on image slides.
+viewer.addEventListener('dragstart', (e) => e.preventDefault());
+
+// Mouse wheel / trackpad: vertical scroll moves between posts; horizontal
+// scroll steps through the active gallery (when the gallery is horizontal).
 let wheelLockUntil = 0;
 window.addEventListener(
   'wheel',
   (e) => {
-    if (settingsModal.open || Math.abs(e.deltaY) < 20) return;
+    if (settingsModal.open || commentsOpen) return;
     const now = Date.now();
     if (now < wheelLockUntil) return;
+    if (settings.vertical && Math.abs(e.deltaX) > Math.abs(e.deltaY) && Math.abs(e.deltaX) >= 20) {
+      if (galleryStep(e.deltaX > 0 ? 1 : -1)) wheelLockUntil = now + 400;
+      return;
+    }
+    if (Math.abs(e.deltaY) < 20) return;
     wheelLockUntil = now + 500;
     if (e.deltaY > 0) next();
     else prev();
