@@ -874,21 +874,46 @@ document.addEventListener(
 function renderMeta(post) {
   meta.hidden = false;
   metaTitle.textContent = post.title;
-  const parts = [
-    post.subreddit,
-    post.author ? `u/${post.author}` : null,
-    post.nsfw ? 'NSFW' : null,
-    post.kind === 'gallery' ? `${galleryIdx + 1}/${post.images.length}` : null,
-  ].filter(Boolean);
   metaSub.innerHTML = '';
-  const span = document.createElement('span');
-  span.textContent = parts.join(' · ') + ' · ';
+
+  // Clicking the subreddit or author jumps into that feed.
+  const addFeedLink = (label, feed) => {
+    const a = document.createElement('a');
+    a.href = '#';
+    a.className = 'meta-feed-link';
+    a.textContent = label;
+    a.addEventListener('click', (e) => {
+      e.preventDefault();
+      feedInput.value = feed;
+      updateBmBtn();
+      startFeed(feed);
+    });
+    metaSub.append(a);
+  };
+  const sep = () => metaSub.append(document.createTextNode(' · '));
+
+  if (post.subreddit) {
+    addFeedLink(post.subreddit, post.subreddit);
+    sep();
+  }
+  if (post.author) {
+    addFeedLink(`u/${post.author}`, `user/${post.author}/submitted`);
+    sep();
+  }
+  if (post.nsfw) {
+    metaSub.append(document.createTextNode('NSFW'));
+    sep();
+  }
+  if (post.kind === 'gallery') {
+    metaSub.append(document.createTextNode(`${galleryIdx + 1}/${post.images.length}`));
+    sep();
+  }
   const link = document.createElement('a');
   link.href = post.permalink;
   link.target = '_blank';
   link.rel = 'noopener';
   link.textContent = 'open ↗';
-  metaSub.append(span, link);
+  metaSub.append(link);
   updateActionButtons(post);
 }
 

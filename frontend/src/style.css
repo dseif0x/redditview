@@ -437,6 +437,17 @@ button:hover {
   color: #ff8b66;
 }
 
+#meta a.meta-feed-link {
+  color: #b5b5c2;
+  text-decoration: none;
+  border-bottom: 1px dotted #55555f;
+}
+
+#meta a.meta-feed-link:hover {
+  color: #fff;
+  border-bottom-color: #ff4500;
+}
+
 #meta-actions {
   display: flex;
   gap: 0.4rem;
