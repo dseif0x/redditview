@@ -300,6 +300,60 @@ async function startFeed(path, resume = null) {
   else next();
 }
 
+// ---------------------------------------------------------------------------
+// Feed history: every user-initiated feed change is a browser history entry
+// whose state carries the position in the feed being left, so back/forward
+// (browser buttons, browser gestures, and the in-app edge swipes) restore
+// both the feed and where you were in it.
+// ---------------------------------------------------------------------------
+function currentHistoryState() {
+  const p = posts[idx];
+  return { feed: feedPath, sort: settings.sort, cursor: p?._cursor || '', name: p?.name || null };
+}
+
+let histTimer = null;
+function stampHistoryEntry() {
+  clearTimeout(histTimer);
+  histTimer = setTimeout(() => {
+    try {
+      history.replaceState(currentHistoryState(), '');
+    } catch {
+      /* Safari throttles replaceState; the next slide will retry */
+    }
+  }, 400);
+}
+
+// User-initiated feed change: snapshot the feed being left, push a new entry.
+function goToFeed(path) {
+  try {
+    if (feedActive) {
+      clearTimeout(histTimer);
+      history.replaceState(currentHistoryState(), '');
+      history.pushState({ feed: path, sort: settings.sort }, '');
+    } else {
+      history.replaceState({ feed: path, sort: settings.sort }, '');
+    }
+  } catch {
+    /* history unavailable/throttled — navigation still works, just untracked */
+  }
+  feedInput.value = path;
+  updateBmBtn();
+  startFeed(path);
+}
+
+window.addEventListener('popstate', (e) => {
+  const st = e.state;
+  if (!st || typeof st.feed !== 'string') return;
+  feedInput.value = st.feed;
+  if (typeof st.sort === 'string') {
+    settings.sort = st.sort;
+    sortSelect.value = st.sort;
+    saveSettings();
+  }
+  updateBmBtn();
+  startFeed(st.feed, st.name ? { cursor: st.cursor || '', name: st.name } : null);
+});
+
 function maybePrefetch() {
   if (idx >= posts.length - 5 && !exhausted && !loading) {
     fetchPage().catch((err) => showToast('Failed to load more: ' + err.message));
@@ -509,6 +563,7 @@ function activateRecord(rec) {
   settings.resume = { path: feedPath, sort: settings.sort, cursor: rec.post._cursor || '', name: rec.post.name };
   saveSettings();
   markSeen(rec.post.id);
+  stampHistoryEntry();
   const fresh = currentVideo !== rec.video || !rec.video;
   if (rec.failed) {
     showToast('Media failed to load, skipping');
@@ -884,9 +939,7 @@ function renderMeta(post) {
     a.textContent = label;
     a.addEventListener('click', (e) => {
       e.preventDefault();
-      feedInput.value = feed;
-      updateBmBtn();
-      startFeed(feed);
+      goToFeed(feed);
     });
     metaSub.append(a);
   };
@@ -1242,12 +1295,10 @@ bookmarkSelect.addEventListener('change', () => {
   const b = settings.bookmarks[Number(bookmarkSelect.value)];
   bookmarkSelect.value = ''; // reset so the same feed can be re-picked
   if (!b) return;
-  feedInput.value = b.path;
   settings.sort = b.sort || '';
   sortSelect.value = settings.sort;
   saveSettings();
-  updateBmBtn();
-  startFeed(b.path);
+  goToFeed(b.path);
 });
 
 feedInput.addEventListener('input', updateBmBtn);
@@ -1263,7 +1314,7 @@ sortSelect.addEventListener('change', () => {
 feedForm.addEventListener('submit', (e) => {
   e.preventDefault();
   feedInput.blur();
-  startFeed(feedInput.value.trim());
+  goToFeed(feedInput.value.trim());
 });
 
 pauseBtn.addEventListener('click', toggleAutoscroll);
@@ -1353,11 +1404,16 @@ function dragGalleryStrip(rec, px, animate) {
   g.strip.style.transform = `translate${crossAxisName()}(calc(${-g.idx * 100}% + ${px}px))`;
 }
 
-function gestureBegin(x, y, target) {
+function gestureBegin(x, y, target, isTouch = false) {
   touchStartX = x;
   touchStartY = y;
   dragMode = null;
-  canDrag = settings.smoothScroll && mounted.size > 0 && !target.closest('.text-post');
+  canDrag =
+    settings.smoothScroll &&
+    mounted.size > 0 &&
+    !target.closest('.text-post') &&
+    // Touches starting at the screen edge belong to history back/forward.
+    !(isTouch && (x <= EDGE_SWIPE_PX || x >= window.innerWidth - EDGE_SWIPE_PX));
 }
 
 function gestureMove(x, y) {
@@ -1428,7 +1484,7 @@ viewer.addEventListener(
       if (!pinch) beginPinch(e.touches);
       return;
     }
-    gestureBegin(e.touches[0].clientX, e.touches[0].clientY, e.target);
+    gestureBegin(e.touches[0].clientX, e.touches[0].clientY, e.target, true);
   },
   { passive: true }
 );
@@ -1475,6 +1531,43 @@ window.addEventListener('pointerup', (e) => {
 });
 // Native image drag'n'drop would hijack mouse swipes on image slides.
 viewer.addEventListener('dragstart', (e) => e.preventDefault());
+
+// Swipe inward from the left/right screen edge for history back/forward
+// (iOS standalone PWAs don't provide the native browser gesture).
+const EDGE_SWIPE_PX = 28;
+let edgeSwipe = null;
+document.addEventListener(
+  'touchstart',
+  (e) => {
+    if (e.touches.length !== 1 || settingsModal.open || commentsOpen) {
+      edgeSwipe = null;
+      return;
+    }
+    const { clientX: x, clientY: y } = e.touches[0];
+    edgeSwipe =
+      x <= EDGE_SWIPE_PX
+        ? { side: 'left', x, y }
+        : x >= window.innerWidth - EDGE_SWIPE_PX
+          ? { side: 'right', x, y }
+          : null;
+  },
+  { passive: true, capture: true }
+);
+document.addEventListener(
+  'touchend',
+  (e) => {
+    if (!edgeSwipe) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - edgeSwipe.x;
+    const dy = t.clientY - edgeSwipe.y;
+    const side = edgeSwipe.side;
+    edgeSwipe = null;
+    if (Math.abs(dx) < 60 || Math.abs(dx) <= Math.abs(dy) * 1.2) return;
+    if (side === 'left' && dx > 0) history.back();
+    else if (side === 'right' && dx < 0) history.forward();
+  },
+  { passive: true, capture: true }
+);
 
 // Mouse wheel / trackpad: vertical scroll moves between posts; horizontal
 // scroll steps through the active gallery (when the gallery is horizontal).
