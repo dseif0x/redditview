@@ -484,6 +484,19 @@ button:hover {
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+  pointer-events: auto;
+}
+
+#meta-title.truncatable {
+  cursor: pointer;
+}
+
+/* tap a clamped title to read all of it (tap again to collapse) */
+#meta-title.expanded {
+  display: block;
+  -webkit-line-clamp: unset;
+  max-height: 40dvh;
+  overflow-y: auto;
 }
 
 #meta-sub {

@@ -617,9 +617,16 @@ function showSlide(pos, dir = 0) {
   }
 
   const animate = settings.smoothScroll && dir !== 0;
+  // Mounting a slide is expensive (media elements, hls, image decode); build
+  // off-screen neighbors after the transition so they don't make it stutter.
+  const deferred = [];
   for (const w of want) {
     let rec = mounted.get(keyOf(w.pos));
     if (!rec) {
+      if (animate && w.off !== 0) {
+        deferred.push(w);
+        continue;
+      }
       rec = buildRecord(w.pos);
       mounted.set(rec.key, rec);
       viewer.appendChild(rec.el);
@@ -627,6 +634,19 @@ function showSlide(pos, dir = 0) {
     } else {
       placeRecord(rec, w.off, animate);
     }
+  }
+  if (deferred.length) {
+    const forKey = keyOf(pos);
+    setTimeout(() => {
+      if (activeKey !== forKey) return; // moved on; the newer showSlide owns the window
+      for (const w of deferred) {
+        if (mounted.has(keyOf(w.pos)) || !posts[w.pos]) continue;
+        const rec = buildRecord(w.pos);
+        mounted.set(rec.key, rec);
+        viewer.appendChild(rec.el);
+        placeRecord(rec, w.off, false);
+      }
+    }, SLIDE_MS + 80);
   }
 
   activeKey = keyOf(pos);
@@ -694,6 +714,7 @@ function galleryStep(dir) {
 
 function buildImage(rec) {
   const img = document.createElement('img');
+  img.decoding = 'async';
   img.src = mediaUrl(rec.post.images[0]);
   img.alt = rec.post.title;
   img.addEventListener('error', () => {
@@ -713,6 +734,7 @@ function buildGallery(rec) {
     const cell = document.createElement('div');
     cell.className = 'gallery-cell';
     const img = document.createElement('img');
+    img.decoding = 'async';
     img.loading = j <= 1 ? 'eager' : 'lazy';
     img.src = mediaUrl(src);
     img.alt = rec.post.title;
@@ -931,6 +953,11 @@ document.addEventListener(
 function renderMeta(post) {
   meta.hidden = false;
   metaTitle.textContent = post.title;
+  metaTitle.classList.remove('expanded');
+  // Only clamped titles get the pointer affordance.
+  requestAnimationFrame(() => {
+    metaTitle.classList.toggle('truncatable', metaTitle.scrollHeight > metaTitle.clientHeight + 1);
+  });
   metaSub.innerHTML = '';
 
   // Clicking the subreddit or author jumps into that feed.
@@ -1320,6 +1347,9 @@ feedForm.addEventListener('submit', (e) => {
 });
 
 pauseBtn.addEventListener('click', toggleAutoscroll);
+metaTitle.addEventListener('click', () => {
+  metaTitle.classList.toggle('expanded');
+});
 muteBtn.addEventListener('click', toggleMute);
 fillBtn.addEventListener('click', toggleFill);
 nextZone.addEventListener('click', next);
