@@ -558,7 +558,7 @@ function spawnVoteBurst(x, y) {
   setTimeout(() => el.remove(), 900);
 }
 
-function activateRecord(rec) {
+function activateRecord(rec, animating = false) {
   idx = rec.pos;
   galleryIdx = rec.gallery ? rec.gallery.idx : 0;
   // Remember the position so reopening the app resumes here.
@@ -576,10 +576,18 @@ function activateRecord(rec) {
     currentVideo = rec.video;
     rec.video.muted = muted;
     rec.video.loop = !settings.autoscroll;
-    if (fresh && rec.video.currentTime > 0) rec.video.currentTime = 0;
     progressEl.classList.add('seekable');
     paintFill('0%');
-    attemptPlay(rec.video);
+    // Starting playback spins up the decoder and audio pipeline, which makes
+    // the slide transition stutter — let the (already decoded) first frame
+    // glide in and start playing once the animation settles.
+    const startPlayback = () => {
+      if (!isActive(rec)) return;
+      if (fresh && rec.video.currentTime > 0) rec.video.currentTime = 0;
+      attemptPlay(rec.video);
+    };
+    if (animating) setTimeout(startPlayback, SLIDE_MS);
+    else startPlayback();
   } else {
     currentVideo = null;
     progressEl.classList.remove('seekable');
@@ -650,7 +658,7 @@ function showSlide(pos, dir = 0) {
   }
 
   activeKey = keyOf(pos);
-  activateRecord(mounted.get(activeKey));
+  activateRecord(mounted.get(activeKey), animate);
   preloadUpcoming();
 }
 
