@@ -501,9 +501,16 @@ function takeVideo() {
 const SILENT_CLIP =
   'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA==';
 let poolUnlocked = false;
+let unlockAttempts = 0;
+let lastUnlockTry = 0;
 
 function unlockVideoPool() {
-  if (poolUnlocked) return;
+  // Bounded and throttled: a device where the silent clip fails must not
+  // re-run the whole unlock (4 plays + resets) on every gesture — that
+  // showed up as transition jank. Organic blessing via swipes covers it.
+  if (poolUnlocked || unlockAttempts >= 4 || Date.now() - lastUnlockTry < 3000) return;
+  unlockAttempts++;
+  lastUnlockTry = Date.now();
   poolUnlocked = true;
   while (videoPool.length < POOL_TARGET) videoPool.push(document.createElement('video'));
   let n = 0;
@@ -528,14 +535,52 @@ function unlockVideoPool() {
           /* ignore */
         }
       }, 1000);
-    }).catch(() => {
-      poolUnlocked = false; // didn't take; retry on the next gesture
+    }).catch((err) => {
+      alog(`unlock failed: ${err?.name}`);
+      poolUnlocked = false; // didn't take; bounded retry on a later gesture
     });
   }
   if (n) alog(`pool unlock: blessing ${n} elements`);
 }
 document.addEventListener('touchend', unlockVideoPool, { capture: true, passive: true });
 document.addEventListener('click', unlockVideoPool, { capture: true, passive: true });
+
+// ---------------------------------------------------------------------------
+// Keep the app off the lock screen / control center media widget: neuter the
+// media-session controls, and when the app backgrounds, pause playback and
+// clear the session (iOS otherwise keeps a stale now-playing card around).
+// Playback resumes when the app returns.
+// ---------------------------------------------------------------------------
+if ('mediaSession' in navigator) {
+  for (const action of ['play', 'pause', 'stop', 'seekbackward', 'seekforward', 'seekto', 'previoustrack', 'nexttrack']) {
+    try {
+      navigator.mediaSession.setActionHandler(action, null);
+    } catch {
+      /* action not supported here */
+    }
+  }
+}
+
+let pausedByHide = false;
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    if (currentVideo && !currentVideo.paused) {
+      currentVideo.pause();
+      pausedByHide = true;
+    }
+    if ('mediaSession' in navigator) {
+      try {
+        navigator.mediaSession.metadata = null;
+        navigator.mediaSession.playbackState = 'none';
+      } catch {
+        /* ignore */
+      }
+    }
+  } else if (pausedByHide) {
+    pausedByHide = false;
+    currentVideo?.play().catch(() => {});
+  }
+});
 
 function releaseVideo(rec) {
   const v = rec.video;
@@ -1445,8 +1490,12 @@ function perfLoop(ts) {
     return;
   }
   if (perfLast) {
-    frameDeltas.push(ts - perfLast);
-    if (frameDeltas.length > 120) frameDeltas.shift();
+    const d = ts - perfLast;
+    // Gaps of seconds are app suspension (screen lock, app switch), not jank.
+    if (d < 2000) {
+      frameDeltas.push(d);
+      if (frameDeltas.length > 120) frameDeltas.shift();
+    }
   }
   perfLast = ts;
   perfRafId = requestAnimationFrame(perfLoop);
@@ -1465,6 +1514,7 @@ function profileTransition(label) {
     if (ts - t0 < SLIDE_MS + 120) requestAnimationFrame(tick);
     else {
       const worst = Math.max(...deltas);
+      if (worst > 2000) return; // suspended mid-transition; not a real profile
       const janks = deltas.filter((d) => d > 32).length;
       lastTransitionProfile = `${label}: ${deltas.length}f, worst ${worst.toFixed(0)}ms, ${janks} jank`;
       if (janks) alog(`JANK ${lastTransitionProfile}`);
