@@ -480,10 +480,51 @@ function placeRecord(rec, offPct, animate, dragPx = 0) {
 // elements and everything after — gestureless or not — plays with sound.
 // ---------------------------------------------------------------------------
 const videoPool = [];
+const POOL_TARGET = 4;
 
 function takeVideo() {
   return videoPool.pop() || document.createElement('video');
 }
+
+// The canonical iOS unlock: on the first user gesture, top the pool up and
+// have every element play a tiny silent clip inside the gesture. That
+// permanently blesses them, so later (deferred/gestureless) playback starts
+// keep their sound. Zero-amplitude samples — nothing audible.
+const SILENT_CLIP =
+  'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA==';
+let poolUnlocked = false;
+
+function unlockVideoPool() {
+  if (poolUnlocked) return;
+  poolUnlocked = true;
+  while (videoPool.length < POOL_TARGET) videoPool.push(document.createElement('video'));
+  let n = 0;
+  for (const v of videoPool) {
+    if (v.__blessed) continue;
+    n++;
+    v.playsInline = true;
+    v.muted = false;
+    v.src = SILENT_CLIP;
+    const pr = v.play();
+    pr?.then(() => {
+      v.__blessed = true;
+      setTimeout(() => {
+        v.pause();
+        v.removeAttribute('src');
+        try {
+          v.load();
+        } catch {
+          /* ignore */
+        }
+      }, 60);
+    }).catch(() => {
+      poolUnlocked = false; // didn't take; retry on the next gesture
+    });
+  }
+  if (n) alog(`pool unlock: blessing ${n} elements`);
+}
+document.addEventListener('touchend', unlockVideoPool, { capture: true, passive: true });
+document.addEventListener('click', unlockVideoPool, { capture: true, passive: true });
 
 function releaseVideo(rec) {
   const v = rec.video;
@@ -626,26 +667,11 @@ function activateRecord(rec, animating = false) {
       if (fresh && rec.video.currentTime > 0) rec.video.currentTime = 0;
       attemptPlay(rec.video);
     };
-    // Confirmed on-device: play() deferred out of the gesture's call stack is
-    // rejected with NotAllowedError. Playback must start NOW, inside the
-    // gesture — but decoding during the animation stutters, so start with the
-    // media clock stopped (playbackRate 0: formally playing, nothing decodes)
-    // and let it run when the animation settles.
-    try {
-      rec.video.playbackRate = animating ? 0 : 1;
-    } catch {
-      /* rate 0 unsupported — plays immediately, slightly less smooth */
-    }
-    startPlayback();
-    if (animating) {
-      setTimeout(() => {
-        try {
-          rec.video.playbackRate = 1;
-        } catch {
-          /* ignore */
-        }
-      }, SLIDE_MS);
-    }
+    // Playback is deferred past the transition so decoder spin-up can't make
+    // it stutter. The blessed element pool is what keeps audio rights alive
+    // across this deferral (and across gestureless starts) on iOS.
+    if (animating) setTimeout(startPlayback, SLIDE_MS);
+    else startPlayback();
   } else {
     currentVideo = null;
     progressEl.classList.remove('seekable');
