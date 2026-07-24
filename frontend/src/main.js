@@ -77,7 +77,10 @@ function markSeen(id) {
     seenIds.delete(seenIds.values().next().value); // drop the oldest
   }
   clearTimeout(seenSaveTimer);
-  seenSaveTimer = setTimeout(() => localStorage.setItem(SEEN_KEY, JSON.stringify([...seenIds])), 500);
+  // Serializing thousands of ids isn't free; write when the thread is idle.
+  seenSaveTimer = setTimeout(() => {
+    (window.requestIdleCallback || setTimeout)(() => localStorage.setItem(SEEN_KEY, JSON.stringify([...seenIds])));
+  }, 1500);
 }
 
 // The post a resume is targeting must never be filtered as already-seen.
@@ -318,6 +321,7 @@ function currentHistoryState() {
 }
 
 let histTimer = null;
+let bookkeepTimer = null;
 function stampHistoryEntry() {
   clearTimeout(histTimer);
   histTimer = setTimeout(() => {
@@ -549,7 +553,9 @@ function releaseVideo(rec) {
 }
 
 function destroyRecord(rec) {
-  mounted.delete(rec.key);
+  // Deferred destruction can race a remount of the same position; only
+  // remove the map entry if it's still THIS record.
+  if (mounted.get(rec.key) === rec) mounted.delete(rec.key);
   rec.hls?.destroy();
   rec.hls = null;
   releaseVideo(rec);
@@ -596,14 +602,23 @@ function buildRecord(pos) {
 }
 
 // Single taps run their action after a short delay so a second tap within
-// the window becomes a double-tap upvote instead.
-const DOUBLE_TAP_MS = 300;
+// the window becomes a double-tap upvote instead. Detection uses pointer
+// events, not click: iOS delivers click with variable delay and sometimes
+// swallows the second tap's click entirely, making double-tap unreliable.
+const DOUBLE_TAP_MS = 320;
 function addTapHandlers(rec, single) {
   let tapTimer = null;
   let lastTap = 0;
-  rec.el.addEventListener('click', (e) => {
+  let downX = 0;
+  let downY = 0;
+  rec.el.addEventListener('pointerdown', (e) => {
+    downX = e.clientX;
+    downY = e.clientY;
+  });
+  rec.el.addEventListener('pointerup', (e) => {
+    if (Math.hypot(e.clientX - downX, e.clientY - downY) > 12) return; // a drag, not a tap
     if (!isActive(rec) || clickWasScrub() || pinch || Date.now() - lastPinchEnd < 400) return;
-    if (Date.now() - lastMouseDragEnd < 400) return; // drag, not a tap
+    if (Date.now() - lastMouseDragEnd < 400) return;
     const now = Date.now();
     if (now - lastTap < DOUBLE_TAP_MS) {
       lastTap = 0;
@@ -617,7 +632,7 @@ function addTapHandlers(rec, single) {
     tapTimer = setTimeout(() => {
       tapTimer = null;
       single(e);
-    }, DOUBLE_TAP_MS - 20);
+    }, DOUBLE_TAP_MS + 30);
   });
 }
 
@@ -641,11 +656,18 @@ function spawnVoteBurst(x, y) {
 function activateRecord(rec, animating = false) {
   idx = rec.pos;
   galleryIdx = rec.gallery ? rec.gallery.idx : 0;
-  // Remember the position so reopening the app resumes here.
-  settings.resume = { path: feedPath, sort: settings.sort, cursor: rec.post._cursor || '', name: rec.post.name };
-  saveSettings();
-  markSeen(rec.post.id);
-  stampHistoryEntry();
+  // Bookkeeping does synchronous localStorage/history writes (the settings
+  // JSON carries multi-KB cookies) — keep it off the transition frames.
+  clearTimeout(bookkeepTimer);
+  bookkeepTimer = setTimeout(
+    () => {
+      settings.resume = { path: feedPath, sort: settings.sort, cursor: rec.post._cursor || '', name: rec.post.name };
+      saveSettings();
+      markSeen(rec.post.id);
+      stampHistoryEntry();
+    },
+    animating ? SLIDE_MS + 200 : 50
+  );
   const fresh = currentVideo !== rec.video || !rec.video;
   if (rec.failed) {
     showToast('Media failed to load, skipping');
@@ -705,11 +727,19 @@ function showSlide(pos, dir = 0) {
   if (np != null) want.push({ pos: np, off: 100 });
   const wantKeys = new Set(want.map((w) => keyOf(w.pos)));
 
-  for (const rec of [...mounted.values()]) {
-    if (!wantKeys.has(rec.key)) destroyRecord(rec);
-  }
-
   const animate = settings.smoothScroll && dir !== 0;
+  for (const rec of [...mounted.values()]) {
+    if (wantKeys.has(rec.key)) continue;
+    if (animate) {
+      // Teardown (hls destroy, media element reset) is heavy; do it after
+      // the transition. The evicted slide is off-screen and silent already.
+      mounted.delete(rec.key);
+      deactivateRecord(rec);
+      setTimeout(() => destroyRecord(rec), SLIDE_MS + 200);
+    } else {
+      destroyRecord(rec);
+    }
+  }
   // Mounting a slide is expensive (media elements, hls, image decode); build
   // off-screen neighbors after the transition so they don't make it stutter.
   const deferred = [];
@@ -728,7 +758,7 @@ function showSlide(pos, dir = 0) {
       placeRecord(rec, w.off, animate);
     }
   }
-  if (deferred.length) {
+  if (deferred.length || animate) {
     const forKey = keyOf(pos);
     setTimeout(() => {
       if (activeKey !== forKey) return; // moved on; the newer showSlide owns the window
@@ -739,12 +769,13 @@ function showSlide(pos, dir = 0) {
         viewer.appendChild(rec.el);
         placeRecord(rec, w.off, false);
       }
+      preloadUpcoming();
     }, SLIDE_MS + 80);
   }
 
   activeKey = keyOf(pos);
   activateRecord(mounted.get(activeKey), animate);
-  preloadUpcoming();
+  if (!animate) preloadUpcoming();
 }
 
 function next() {
@@ -920,7 +951,25 @@ function buildVideo(rec) {
   video.preload = 'auto'; // buffer while still off-screen
   video.muted = true; // silent as preview; activation applies the real state
   video.loop = !settings.autoscroll;
-  if (post.poster) video.poster = mediaUrl(post.poster);
+  // The element's own poster is cleared the moment play() starts, leaving a
+  // black gap until the first frame decodes. Overlay the poster as an <img>
+  // and only drop it once frames are actually rendering.
+  if (post.poster) {
+    const posterImg = document.createElement('img');
+    posterImg.className = 'poster-overlay';
+    posterImg.decoding = 'async';
+    posterImg.src = mediaUrl(post.poster);
+    rec.el.appendChild(posterImg);
+    const dropPoster = () => posterImg.classList.add('gone');
+    video.addEventListener('playing', dropPoster, sig);
+    video.addEventListener(
+      'timeupdate',
+      () => {
+        if (video.currentTime > 0.05) dropPoster();
+      },
+      sig
+    );
+  }
 
   const loadNextSource = (why) => {
     if (si >= 0) {

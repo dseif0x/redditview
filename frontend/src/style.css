@@ -245,6 +245,22 @@ button:hover {
   object-fit: contain;
 }
 
+/* poster shown over a video until its first real frames render */
+.slide .poster-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  z-index: 2;
+  pointer-events: none;
+  transition: opacity 0.15s;
+}
+
+.slide .poster-overlay.gone {
+  opacity: 0;
+}
+
 /* fill-screen mode: crop media to cover the whole viewport */
 #viewer.fill .slide img,
 #viewer.fill .slide video {
