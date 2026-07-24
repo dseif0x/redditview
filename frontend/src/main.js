@@ -25,6 +25,7 @@ const DEFAULTS = {
   sort: '',
   bookmarks: [],
   skipSeen: false,
+  audioDebug: false,
 };
 
 let settings = { ...DEFAULTS };
@@ -133,6 +134,7 @@ const smoothScrollInput = $('#smooth-scroll-input');
 const moveBarInput = $('#move-bar-input');
 const barInvertInput = $('#bar-invert-input');
 const skipSeenInput = $('#skip-seen-input');
+const audioDebugInput = $('#audio-debug-input');
 const fillBtn = $('#fill-btn');
 const appEl = $('#app');
 const sortSelect = $('#sort-select');
@@ -580,6 +582,7 @@ function activateRecord(rec, animating = false) {
     currentVideo = rec.video;
     rec.video.muted = muted;
     rec.video.loop = !settings.autoscroll;
+    alog(`activate ${rec.key}: muted=${muted} animating=${animating}`);
     progressEl.classList.add('seekable');
     paintFill('0%');
     // Starting playback spins up the decoder and audio pipeline, which makes
@@ -604,6 +607,7 @@ function deactivateRecord(rec) {
   if (rec.video) {
     rec.video.pause();
     rec.video.muted = true; // previews never make sound
+    alog(`deactivate ${rec.key}: muted`);
   }
 }
 
@@ -799,10 +803,12 @@ async function resolveRedgifs(post) {
 function attemptPlay(video) {
   video.play().catch((err) => {
     console.warn('play() rejected:', err?.name, err?.message);
+    alog(`play rejected: ${err?.name}${currentVideo === video ? '' : ' (stale)'}`);
     if (err?.name !== 'NotAllowedError') return;
     if (currentVideo !== video) return; // slide changed while play was pending
     if (!video.muted) {
       video.muted = true; // policy fallback; the next gesture restores audio
+      alog('policy fallback: muted element');
       video.play().catch(() => {});
     }
   });
@@ -1257,12 +1263,42 @@ function toggleFill() {
   applyFill();
 }
 
+// ---------------------------------------------------------------------------
+// Audio debug: every event that can affect sound is logged; the opt-in
+// overlay (settings) shows the live element state plus the recent log, so
+// audio failures can be diagnosed on-device without an inspector.
+// ---------------------------------------------------------------------------
+const audioLog = [];
+function alog(msg) {
+  const t = new Date();
+  audioLog.push(`${String(t.getMinutes()).padStart(2, '0')}:${String(t.getSeconds()).padStart(2, '0')} ${msg}`);
+  if (audioLog.length > 9) audioLog.shift();
+}
+
+const audioDebugEl = document.createElement('div');
+audioDebugEl.id = 'audio-debug';
+audioDebugEl.hidden = true;
+document.body.appendChild(audioDebugEl);
+setInterval(() => {
+  if (!settings.audioDebug) {
+    audioDebugEl.hidden = true;
+    return;
+  }
+  audioDebugEl.hidden = false;
+  const v = currentVideo;
+  const state = v
+    ? `el: muted=${v.muted} paused=${v.paused} ready=${v.readyState} rate=${v.playbackRate} vol=${v.volume}`
+    : 'el: (no video)';
+  audioDebugEl.textContent = `intent: ${muted ? 'MUTED' : 'audio on'} | ${state}\n${audioLog.join('\n')}`;
+}, 500);
+
 // The mute button IS the persisted "play audio" setting: on = every video
 // with sound plays it, off = everything muted. It shows and flips only that
 // preference — never the element's momentary (possibly policy-forced) state,
 // which the gesture rescue below keeps converging to the preference.
 function toggleMute() {
   muted = !muted;
+  alog(`toggle -> ${muted ? 'muted' : 'audio on'}`);
   settings.audioOn = !muted;
   saveSettings();
   if (currentVideo) currentVideo.muted = muted;
@@ -1280,6 +1316,15 @@ function updateMuteBtn() {
 function rescueAudio() {
   if (currentVideo && currentVideo.muted && !muted) {
     currentVideo.muted = false;
+    alog('rescue: unmuted element');
+    // iOS can keep a video silent after unmuting when its playback began
+    // muted (stale audio session); a pause/play cycle inside the gesture
+    // re-engages it — the same thing the mute-button toggle does.
+    if (!currentVideo.paused) {
+      currentVideo.pause();
+      currentVideo.play().catch(() => {});
+      alog('rescue: pause/play cycle');
+    }
   }
 }
 document.addEventListener('pointerdown', rescueAudio, { capture: true, passive: true });
@@ -1713,6 +1758,7 @@ settingsBtn.addEventListener('click', () => {
   moveBarInput.checked = settings.moveBar;
   barInvertInput.checked = settings.barInvert;
   skipSeenInput.checked = settings.skipSeen;
+  audioDebugInput.checked = settings.audioDebug;
   showImagesInput.checked = settings.showImages;
   showVideosInput.checked = settings.showVideos;
   showTextInput.checked = settings.showText;
@@ -1752,6 +1798,7 @@ settingsForm.addEventListener('submit', (e) => {
   settings.moveBar = moveBarInput.checked;
   settings.barInvert = barInvertInput.checked;
   settings.skipSeen = skipSeenInput.checked;
+  settings.audioDebug = audioDebugInput.checked;
   settings.showImages = showImagesInput.checked;
   settings.showVideos = showVideosInput.checked;
   settings.showText = showTextInput.checked;
