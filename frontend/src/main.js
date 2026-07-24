@@ -516,6 +516,9 @@ function unlockVideoPool() {
     const pr = v.play();
     pr?.then(() => {
       v.__blessed = true;
+      v.__pooled = true; // unlock-seeded elements ARE pool elements
+      // The reset (load) is main-thread work; keep it clear of any swipe
+      // transition the unlocking gesture may have started.
       setTimeout(() => {
         v.pause();
         v.removeAttribute('src');
@@ -524,7 +527,7 @@ function unlockVideoPool() {
         } catch {
           /* ignore */
         }
-      }, 60);
+      }, 1000);
     }).catch(() => {
       poolUnlocked = false; // didn't take; retry on the next gesture
     });
@@ -739,7 +742,7 @@ function showSlide(pos, dir = 0) {
       // the transition. The evicted slide is off-screen and silent already.
       mounted.delete(rec.key);
       deactivateRecord(rec);
-      setTimeout(() => timed('destroy ' + rec.key, () => destroyRecord(rec)), SLIDE_MS + 200);
+      setTimeout(() => timed('destroy ' + rec.key, () => destroyRecord(rec)), SLIDE_MS + 700);
     } else {
       destroyRecord(rec);
     }
@@ -764,17 +767,25 @@ function showSlide(pos, dir = 0) {
   }
   if (deferred.length || animate) {
     const forKey = keyOf(pos);
-    setTimeout(() => {
+    // Building a neighbor (element setup, source attach, first-frame decode)
+    // is the profiled jank source when it lands near the animation — push it
+    // well past the settle and stagger: the likely-next neighbor first, the
+    // previous one later, image preloading last.
+    const mountOne = (w) => {
       if (activeKey !== forKey) return; // moved on; the newer showSlide owns the window
-      for (const w of deferred) {
-        if (mounted.has(keyOf(w.pos)) || !posts[w.pos]) continue;
-        const rec = timed('deferred build ' + keyOf(w.pos), () => buildRecord(w.pos));
-        mounted.set(rec.key, rec);
-        viewer.appendChild(rec.el);
-        placeRecord(rec, w.off, false);
-      }
-      preloadUpcoming();
-    }, SLIDE_MS + 80);
+      if (mounted.has(keyOf(w.pos)) || !posts[w.pos]) return;
+      const rec = timed('deferred build ' + keyOf(w.pos), () => buildRecord(w.pos));
+      mounted.set(rec.key, rec);
+      viewer.appendChild(rec.el);
+      placeRecord(rec, w.off, false);
+      // The prev neighbor is the less likely destination; don't buffer it.
+      if (w.off === -100 && rec.video) rec.video.preload = 'metadata';
+    };
+    deferred.sort((a, b) => b.off - a.off); // next (+100) before prev (-100)
+    deferred.forEach((w, i) => setTimeout(() => mountOne(w), SLIDE_MS + 250 + i * 350));
+    setTimeout(() => {
+      if (activeKey === forKey) preloadUpcoming();
+    }, SLIDE_MS + 250 + deferred.length * 350);
   }
 
   activeKey = keyOf(pos);
