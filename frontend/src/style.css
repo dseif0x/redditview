@@ -898,8 +898,8 @@ button:hover {
   display: none !important;
 }
 
-/* ---- audio debug overlay ---- */
-#audio-debug {
+/* ---- debug overlay ---- */
+#debug-overlay {
   position: fixed;
   top: calc(env(safe-area-inset-top) + 6rem);
   left: 0.5rem;

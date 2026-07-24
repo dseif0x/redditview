@@ -25,7 +25,7 @@ const DEFAULTS = {
   sort: '',
   bookmarks: [],
   skipSeen: false,
-  audioDebug: false,
+  debug: false,
 };
 
 let settings = { ...DEFAULTS };
@@ -34,6 +34,10 @@ try {
 } catch {
   /* corrupted storage -> defaults */
 }
+
+// Migrate the old audio-debug setting into the general debug setting.
+if (settings.audioDebug) settings.debug = true;
+delete settings.audioDebug;
 
 // Migrate the old start-muted setting into the play-audio setting.
 if (typeof settings.audioOn !== 'boolean') settings.audioOn = !settings.startMuted;
@@ -137,7 +141,7 @@ const smoothScrollInput = $('#smooth-scroll-input');
 const moveBarInput = $('#move-bar-input');
 const barInvertInput = $('#bar-invert-input');
 const skipSeenInput = $('#skip-seen-input');
-const audioDebugInput = $('#audio-debug-input');
+const debugInput = $('#debug-input');
 const fillBtn = $('#fill-btn');
 const appEl = $('#app');
 const sortSelect = $('#sort-select');
@@ -735,7 +739,7 @@ function showSlide(pos, dir = 0) {
       // the transition. The evicted slide is off-screen and silent already.
       mounted.delete(rec.key);
       deactivateRecord(rec);
-      setTimeout(() => destroyRecord(rec), SLIDE_MS + 200);
+      setTimeout(() => timed('destroy ' + rec.key, () => destroyRecord(rec)), SLIDE_MS + 200);
     } else {
       destroyRecord(rec);
     }
@@ -750,7 +754,7 @@ function showSlide(pos, dir = 0) {
         deferred.push(w);
         continue;
       }
-      rec = buildRecord(w.pos);
+      rec = timed('build ' + keyOf(w.pos), () => buildRecord(w.pos));
       mounted.set(rec.key, rec);
       viewer.appendChild(rec.el);
       placeRecord(rec, w.off, false); // fresh mounts appear in place
@@ -764,7 +768,7 @@ function showSlide(pos, dir = 0) {
       if (activeKey !== forKey) return; // moved on; the newer showSlide owns the window
       for (const w of deferred) {
         if (mounted.has(keyOf(w.pos)) || !posts[w.pos]) continue;
-        const rec = buildRecord(w.pos);
+        const rec = timed('deferred build ' + keyOf(w.pos), () => buildRecord(w.pos));
         mounted.set(rec.key, rec);
         viewer.appendChild(rec.el);
         placeRecord(rec, w.off, false);
@@ -774,7 +778,8 @@ function showSlide(pos, dir = 0) {
   }
 
   activeKey = keyOf(pos);
-  activateRecord(mounted.get(activeKey), animate);
+  if (animate) profileTransition('transition');
+  timed('activate', () => activateRecord(mounted.get(activeKey), animate));
   if (!animate) preloadUpcoming();
 }
 
@@ -1415,21 +1420,86 @@ function alog(msg) {
   if (audioLog.length > 9) audioLog.shift();
 }
 
-const audioDebugEl = document.createElement('div');
-audioDebugEl.id = 'audio-debug';
-audioDebugEl.hidden = true;
-document.body.appendChild(audioDebugEl);
-setInterval(() => {
-  if (!settings.audioDebug) {
-    audioDebugEl.hidden = true;
+// --- performance instrumentation (only runs while the overlay is on) ---
+const frameDeltas = [];
+let perfLast = 0;
+let perfRafId = null;
+let lastTransitionProfile = '';
+
+function perfLoop(ts) {
+  if (!settings.debug) {
+    perfRafId = null;
+    perfLast = 0;
+    frameDeltas.length = 0;
     return;
   }
-  audioDebugEl.hidden = false;
+  if (perfLast) {
+    frameDeltas.push(ts - perfLast);
+    if (frameDeltas.length > 120) frameDeltas.shift();
+  }
+  perfLast = ts;
+  perfRafId = requestAnimationFrame(perfLoop);
+}
+
+// Profiles one slide transition: frames rendered, worst frame gap, and how
+// many frames exceeded two vsyncs (visible jank).
+function profileTransition(label) {
+  if (!settings.debug) return;
+  const deltas = [];
+  const t0 = performance.now();
+  let last = t0;
+  const tick = (ts) => {
+    deltas.push(ts - last);
+    last = ts;
+    if (ts - t0 < SLIDE_MS + 120) requestAnimationFrame(tick);
+    else {
+      const worst = Math.max(...deltas);
+      const janks = deltas.filter((d) => d > 32).length;
+      lastTransitionProfile = `${label}: ${deltas.length}f, worst ${worst.toFixed(0)}ms, ${janks} jank`;
+      if (janks) alog(`JANK ${lastTransitionProfile}`);
+    }
+  };
+  requestAnimationFrame(tick);
+}
+
+// Times a known-heavy operation; anything blocking >8ms gets named in the log.
+function timed(name, fn) {
+  if (!settings.debug) return fn();
+  const t0 = performance.now();
+  const r = fn();
+  const dt = performance.now() - t0;
+  if (dt > 8) alog(`SLOW ${name}: ${dt.toFixed(0)}ms`);
+  return r;
+}
+
+const debugEl = document.createElement('div');
+debugEl.id = 'debug-overlay';
+debugEl.hidden = true;
+document.body.appendChild(debugEl);
+setInterval(() => {
+  if (!settings.debug) {
+    debugEl.hidden = true;
+    return;
+  }
+  debugEl.hidden = false;
+  if (perfRafId == null) perfRafId = requestAnimationFrame(perfLoop);
   const v = currentVideo;
-  const state = v
-    ? `el: muted=${v.muted} paused=${v.paused} ready=${v.readyState} rate=${v.playbackRate} vol=${v.volume}`
+  const audio = v
+    ? `el: muted=${v.muted} paused=${v.paused} ready=${v.readyState} rate=${v.playbackRate}`
     : 'el: (no video)';
-  audioDebugEl.textContent = `intent: ${muted ? 'MUTED' : 'audio on'} | ${state}\n${audioLog.join('\n')}`;
+  let fps = '';
+  if (frameDeltas.length > 10) {
+    const avg = frameDeltas.reduce((a, b) => a + b, 0) / frameDeltas.length;
+    const worst = Math.max(...frameDeltas);
+    fps = `fps ~${(1000 / avg).toFixed(0)}, worst frame ${worst.toFixed(0)}ms`;
+  }
+  debugEl.textContent = [
+    `${muted ? 'MUTED' : 'audio on'} | ${audio}`,
+    [fps, lastTransitionProfile].filter(Boolean).join(' | '),
+    ...audioLog,
+  ]
+    .filter(Boolean)
+    .join('\n');
 }, 500);
 
 // The mute button IS the persisted "play audio" setting: on = every video
@@ -1898,7 +1968,7 @@ settingsBtn.addEventListener('click', () => {
   moveBarInput.checked = settings.moveBar;
   barInvertInput.checked = settings.barInvert;
   skipSeenInput.checked = settings.skipSeen;
-  audioDebugInput.checked = settings.audioDebug;
+  debugInput.checked = settings.debug;
   showImagesInput.checked = settings.showImages;
   showVideosInput.checked = settings.showVideos;
   showTextInput.checked = settings.showText;
@@ -1938,7 +2008,7 @@ settingsForm.addEventListener('submit', (e) => {
   settings.moveBar = moveBarInput.checked;
   settings.barInvert = barInvertInput.checked;
   settings.skipSeen = skipSeenInput.checked;
-  settings.audioDebug = audioDebugInput.checked;
+  settings.debug = debugInput.checked;
   settings.showImages = showImagesInput.checked;
   settings.showVideos = showVideosInput.checked;
   settings.showText = showTextInput.checked;
