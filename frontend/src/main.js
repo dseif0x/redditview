@@ -590,24 +590,8 @@ function activateRecord(rec, animating = false) {
       if (fresh && rec.video.currentTime > 0) rec.video.currentTime = 0;
       attemptPlay(rec.video);
     };
-    // Smooth transitions AND audio: playback must begin inside the gesture's
-    // call stack for iOS to allow sound, but decoding during the animation
-    // makes it stutter. Start playback now with the media clock stopped
-    // (playbackRate 0 — formally playing, nothing decodes) and let it run
-    // once the animation settles.
-    if (animating) {
-      try {
-        rec.video.playbackRate = 0;
-      } catch {
-        /* rate 0 unsupported — plays immediately, slightly less smooth */
-      }
-      startPlayback();
-      setTimeout(() => {
-        rec.video.playbackRate = 1;
-      }, SLIDE_MS);
-    } else {
-      startPlayback();
-    }
+    if (animating) setTimeout(startPlayback, SLIDE_MS);
+    else startPlayback();
   } else {
     currentVideo = null;
     progressEl.classList.remove('seekable');
@@ -814,6 +798,7 @@ async function resolveRedgifs(post) {
 // start, and muting on those silenced videos for no reason.
 function attemptPlay(video) {
   video.play().catch((err) => {
+    console.warn('play() rejected:', err?.name, err?.message);
     if (err?.name !== 'NotAllowedError') return;
     if (currentVideo !== video) return; // slide changed while play was pending
     if (!video.muted) {
