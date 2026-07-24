@@ -471,14 +471,47 @@ function placeRecord(rec, offPct, animate, dragPx = 0) {
     offPct === 0 && !dragPx ? '' : `translate${axisName()}(calc(${offPct}% + ${dragPx}px))`;
 }
 
+// ---------------------------------------------------------------------------
+// Video element pool. WebKit grants playback-with-sound rights PER ELEMENT,
+// permanently, once the element has played inside a user gesture. A fresh
+// element per slide starts with no rights, so every gestureless playback
+// start (autoscroll advance, source fallback, redgifs resolution) was force-
+// muted. Recycling a small pool means the first few swipes bless the
+// elements and everything after — gestureless or not — plays with sound.
+// ---------------------------------------------------------------------------
+const videoPool = [];
+
+function takeVideo() {
+  return videoPool.pop() || document.createElement('video');
+}
+
+function releaseVideo(rec) {
+  const v = rec.video;
+  if (!v) return;
+  rec.video = null;
+  rec.videoAC?.abort(); // drop this record's listeners before reuse
+  rec.videoAC = null;
+  v.pause();
+  v.removeAttribute('src');
+  try {
+    v.load(); // fully detach the old source
+  } catch {
+    /* ignore */
+  }
+  v.muted = true;
+  v.loop = false;
+  v.playbackRate = 1;
+  v.removeAttribute('poster');
+  v.remove();
+  v.__pooled = true;
+  if (videoPool.length < 6) videoPool.push(v);
+}
+
 function destroyRecord(rec) {
   mounted.delete(rec.key);
   rec.hls?.destroy();
   rec.hls = null;
-  if (rec.video) {
-    rec.video.pause();
-    rec.video.removeAttribute('src');
-  }
+  releaseVideo(rec);
   rec.el.remove();
 }
 
@@ -853,7 +886,10 @@ function buildVideo(rec) {
   if (post.videoMp4) sources.push({ type: 'mp4', url: post.videoMp4, silent: !!post.videoHls });
   let si = -1;
 
-  const video = document.createElement('video');
+  const video = takeVideo(); // recycled elements keep their playback rights
+  alog(`${rec.key}: video el ${video.__pooled ? 'reused' : 'new'}`);
+  rec.videoAC = new AbortController();
+  const sig = { signal: rec.videoAC.signal };
   video.playsInline = true;
   video.preload = 'auto'; // buffer while still off-screen
   video.muted = true; // silent as preview; activation applies the real state
@@ -861,7 +897,10 @@ function buildVideo(rec) {
   if (post.poster) video.poster = mediaUrl(post.poster);
 
   const loadNextSource = (why) => {
-    if (si >= 0) console.warn('video source failed:', sources[si]?.url, why);
+    if (si >= 0) {
+      console.warn('video source failed:', sources[si]?.url, why);
+      alog(`${rec.key}: source fallback (${why})`);
+    }
     si++;
     const s = sources[si];
     if (!s) {
@@ -899,10 +938,14 @@ function buildVideo(rec) {
   };
 
   // With autoscroll on, videos run to the end, then advance (loop is off).
-  video.addEventListener('ended', () => {
-    if (isActive(rec) && settings.autoscroll && !commentsOpen) next();
-  });
-  video.addEventListener('error', () => loadNextSource('playback error'));
+  video.addEventListener(
+    'ended',
+    () => {
+      if (isActive(rec) && settings.autoscroll && !commentsOpen) next();
+    },
+    sig
+  );
+  video.addEventListener('error', () => loadNextSource('playback error'), sig);
   // A tap anywhere on the slide (not just the video itself) pauses/resumes.
   addTapHandlers(rec, () => {
     if (video.paused) video.play().catch(() => {});
@@ -910,10 +953,14 @@ function buildVideo(rec) {
   });
 
   // Playback progress in the bottom bar (only while this slide is active).
-  video.addEventListener('timeupdate', () => {
-    if (!isActive(rec) || !video.duration || scrubbing) return;
-    paintFill((video.currentTime / video.duration) * 100 + '%');
-  });
+  video.addEventListener(
+    'timeupdate',
+    () => {
+      if (!isActive(rec) || !video.duration || scrubbing) return;
+      paintFill((video.currentTime / video.duration) * 100 + '%');
+    },
+    sig
+  );
 
   rec.video = video;
   rec.el.appendChild(video);
