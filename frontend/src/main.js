@@ -593,8 +593,26 @@ function activateRecord(rec, animating = false) {
       if (fresh && rec.video.currentTime > 0) rec.video.currentTime = 0;
       attemptPlay(rec.video);
     };
-    if (animating) setTimeout(startPlayback, SLIDE_MS);
-    else startPlayback();
+    // Confirmed on-device: play() deferred out of the gesture's call stack is
+    // rejected with NotAllowedError. Playback must start NOW, inside the
+    // gesture — but decoding during the animation stutters, so start with the
+    // media clock stopped (playbackRate 0: formally playing, nothing decodes)
+    // and let it run when the animation settles.
+    try {
+      rec.video.playbackRate = animating ? 0 : 1;
+    } catch {
+      /* rate 0 unsupported — plays immediately, slightly less smooth */
+    }
+    startPlayback();
+    if (animating) {
+      setTimeout(() => {
+        try {
+          rec.video.playbackRate = 1;
+        } catch {
+          /* ignore */
+        }
+      }, SLIDE_MS);
+    }
   } else {
     currentVideo = null;
     progressEl.classList.remove('seekable');
@@ -1310,9 +1328,10 @@ function updateMuteBtn() {
   muteBtn.title = muted ? 'Audio off — click to play audio (m)' : 'Audio on — click to mute (m)';
 }
 
-// Any user gesture is a licence to lift a policy-forced mute. WebKit only
-// grants gesture rights at touchend/click (never pointerdown), so listen on
-// all of them; the check is idempotent.
+// Any user gesture is a licence to lift a policy-forced mute — but ONLY on
+// events WebKit treats as gesture-granting (touchend/click). Confirmed
+// on-device: running this on pointerdown made the cycle's play() reject and
+// left the video frozen.
 function rescueAudio() {
   if (currentVideo && currentVideo.muted && !muted) {
     currentVideo.muted = false;
@@ -1327,7 +1346,6 @@ function rescueAudio() {
     }
   }
 }
-document.addEventListener('pointerdown', rescueAudio, { capture: true, passive: true });
 document.addEventListener('touchend', rescueAudio, { capture: true, passive: true });
 document.addEventListener('click', rescueAudio, { capture: true, passive: true });
 
