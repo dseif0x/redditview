@@ -524,6 +524,13 @@ button:hover {
   background: linear-gradient(to left, rgba(0, 0, 0, 0.25), transparent);
 }
 
+/* Touch devices navigate by swiping; the click zones only steal edge taps. */
+@media (hover: none) and (pointer: coarse) {
+  .nav-zone {
+    display: none;
+  }
+}
+
 /* vertical navigation: zones become top/bottom strips */
 #app.vertical .nav-zone {
   left: 25%;
