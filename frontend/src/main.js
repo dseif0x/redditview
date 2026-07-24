@@ -590,21 +590,12 @@ function activateRecord(rec, animating = false) {
       if (fresh && rec.video.currentTime > 0) rec.video.currentTime = 0;
       attemptPlay(rec.video);
     };
-    if (animating) {
-      // WebKit grants audio rights only inside the gesture's call stack and a
-      // setTimeout leaves it — prime the element now (play+pause is silent)
-      // so the deferred play keeps permission to start with sound.
-      try {
-        const primed = rec.video.play();
-        primed?.catch(() => {});
-        rec.video.pause();
-      } catch {
-        /* priming is best-effort */
-      }
-      setTimeout(startPlayback, SLIDE_MS);
-    } else {
-      startPlayback();
-    }
+    // Deferring play() out of the gesture's call stack forfeits audio rights
+    // on iOS (no workaround sticks), so the smooth-transition deferral only
+    // applies when audio is off; with audio on, playback must start inside
+    // the gesture even if that costs some animation smoothness.
+    if (animating && muted) setTimeout(startPlayback, SLIDE_MS);
+    else startPlayback();
   } else {
     currentVideo = null;
     progressEl.classList.remove('seekable');
