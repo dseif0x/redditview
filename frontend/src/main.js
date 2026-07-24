@@ -10,7 +10,7 @@ const DEFAULTS = {
   accounts: [],
   activeAccount: 0,
   imageSeconds: 8,
-  startMuted: false,
+  audioOn: true,
   autoscroll: false,
   lastFeed: '',
   showImages: true,
@@ -33,6 +33,10 @@ try {
 } catch {
   /* corrupted storage -> defaults */
 }
+
+// Migrate the old start-muted setting into the play-audio setting.
+if (typeof settings.audioOn !== 'boolean') settings.audioOn = !settings.startMuted;
+delete settings.startMuted;
 
 // Migrate a pre-accounts cookie into the account list.
 if (!Array.isArray(settings.accounts)) settings.accounts = [];
@@ -93,7 +97,7 @@ let feedActive = false;
 
 let idx = -1;
 let galleryIdx = 0;
-let muted = settings.startMuted;
+let muted = !settings.audioOn;
 
 let timerId = null;
 let timerStartedAt = 0;
@@ -116,7 +120,7 @@ const settingsModal = $('#settings-modal');
 const settingsForm = $('#settings-form');
 const cookieInput = $('#cookie-input');
 const imageSecondsInput = $('#image-seconds-input');
-const startMutedInput = $('#start-muted-input');
+const audioInput = $('#audio-input');
 const accountSelect = $('#account-select');
 const accountNameInput = $('#account-name-input');
 const deleteAccountBtn = $('#delete-account-btn');
@@ -792,8 +796,7 @@ async function resolveRedgifs(post) {
 function attemptPlay(video) {
   video.play().catch(() => {
     if (!video.muted) {
-      video.muted = true;
-      updateMuteBtn();
+      video.muted = true; // policy fallback; the next gesture restores audio
       video.play().catch(() => {});
     }
   });
@@ -1248,19 +1251,21 @@ function toggleFill() {
   applyFill();
 }
 
-// `muted` is the USER'S intent and only user actions change it. A video that
-// the browser force-muted (blocked unmuted autoplay) differs from the intent;
-// the button shows the actual state, and the next touch restores the intent.
+// The mute button IS the persisted "play audio" setting: on = every video
+// with sound plays it, off = everything muted. It shows and flips only that
+// preference — never the element's momentary (possibly policy-forced) state,
+// which the gesture rescue below keeps converging to the preference.
 function toggleMute() {
-  const actual = currentVideo ? currentVideo.muted : muted;
-  muted = !actual;
+  muted = !muted;
+  settings.audioOn = !muted;
+  saveSettings();
   if (currentVideo) currentVideo.muted = muted;
   updateMuteBtn();
 }
 
 function updateMuteBtn() {
-  const actual = currentVideo ? currentVideo.muted : muted;
-  muteBtn.textContent = actual ? '🔇' : '🔊';
+  muteBtn.textContent = muted ? '🔇' : '🔊';
+  muteBtn.title = muted ? 'Audio off — click to play audio (m)' : 'Audio on — click to mute (m)';
 }
 
 // Any user gesture is a licence to lift a policy-forced mute.
@@ -1695,7 +1700,7 @@ settingsBtn.addEventListener('click', () => {
   populateAccountSelect();
   loadAccountFields();
   imageSecondsInput.value = settings.imageSeconds;
-  startMutedInput.checked = settings.startMuted;
+  audioInput.checked = settings.audioOn;
   fillScreenInput.checked = settings.fillScreen;
   verticalInput.checked = settings.vertical;
   smoothScrollInput.checked = settings.smoothScroll;
@@ -1716,7 +1721,7 @@ settingsForm.addEventListener('submit', (e) => {
     settings.showText !== showTextInput.checked ||
     settings.skipSeen !== skipSeenInput.checked;
   const verticalChanged = settings.vertical !== verticalInput.checked;
-  const startMutedChanged = settings.startMuted !== startMutedInput.checked;
+  const audioChanged = settings.audioOn !== audioInput.checked;
   const prevCookie = settings.cookie;
 
   // Saving selects the edited account as the active one.
@@ -1734,7 +1739,7 @@ settingsForm.addEventListener('submit', (e) => {
   settings.cookie = activeCookie();
 
   settings.imageSeconds = Math.max(1, parseFloat(imageSecondsInput.value) || DEFAULTS.imageSeconds);
-  settings.startMuted = startMutedInput.checked;
+  settings.audioOn = audioInput.checked;
   settings.fillScreen = fillScreenInput.checked;
   settings.vertical = verticalInput.checked;
   settings.smoothScroll = smoothScrollInput.checked;
@@ -1748,9 +1753,9 @@ settingsForm.addEventListener('submit', (e) => {
   applyFill();
   applyDirection();
   applyBarPos();
-  // Changing the mute default also resets the current intent.
-  if (startMutedChanged) {
-    muted = settings.startMuted;
+  // The checkbox and the mute button are the same setting.
+  if (audioChanged) {
+    muted = !settings.audioOn;
     if (currentVideo) currentVideo.muted = muted;
     updateMuteBtn();
   }
@@ -1905,7 +1910,7 @@ $('#import-btn').addEventListener('click', () => {
   populateAccountSelect();
   loadAccountFields();
   imageSecondsInput.value = settings.imageSeconds;
-  startMutedInput.checked = settings.startMuted;
+  audioInput.checked = settings.audioOn;
   fillScreenInput.checked = settings.fillScreen;
   verticalInput.checked = settings.vertical;
   smoothScrollInput.checked = settings.smoothScroll;
