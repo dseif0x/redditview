@@ -23,7 +23,8 @@ body {
 }
 
 :root {
-  --tabbar-h: calc(3.4rem + env(safe-area-inset-bottom));
+  /* fallback; JS measures the real rendered bar height into this variable */
+  --tabbar-h: calc(3.2rem + env(safe-area-inset-bottom));
 }
 
 #app {
@@ -952,12 +953,12 @@ button:hover {
   left: 0;
   right: 0;
   bottom: 0;
-  height: var(--tabbar-h);
+  /* content-sized: the bar is exactly its buttons plus the safe area */
   z-index: 18;
   display: flex;
   background: rgba(14, 14, 20, 0.96);
   border-top: 1px solid #26262f;
-  padding-bottom: env(safe-area-inset-bottom);
+  padding: 0 0 env(safe-area-inset-bottom);
 }
 
 #tabbar .tab {
@@ -966,18 +967,19 @@ button:hover {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.1rem;
+  gap: 0.15rem;
   border: none;
   border-radius: 0;
   background: transparent;
   color: #8a8a98;
-  font-size: 0.7rem;
-  padding: 0.3rem 0;
+  font-size: 0.65rem;
+  line-height: 1;
+  padding: 0.45rem 0 0.5rem;
 }
 
 #tabbar .tab .tab-icon {
-  font-size: 1.25rem;
-  line-height: 1.2;
+  font-size: 1.2rem;
+  line-height: 1;
 }
 
 #tabbar .tab.active {
