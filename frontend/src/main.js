@@ -18,6 +18,7 @@ const DEFAULTS = {
   fillScreen: false,
   vertical: false,
   smoothScroll: true,
+  showPauseIcon: true,
   moveBar: false,
   barPos: 'bottom',
   barInvert: false,
@@ -140,6 +141,7 @@ const showTextInput = $('#show-text-input');
 const fillScreenInput = $('#fill-screen-input');
 const verticalInput = $('#vertical-input');
 const smoothScrollInput = $('#smooth-scroll-input');
+const pauseIconInput = $('#pause-icon-input');
 const moveBarInput = $('#move-bar-input');
 const barInvertInput = $('#bar-invert-input');
 const skipSeenInput = $('#skip-seen-input');
@@ -762,6 +764,7 @@ function deactivateRecord(rec) {
     rec.video.muted = true; // previews never make sound
     alog(`deactivate ${rec.key}: muted`);
   }
+  if (rec.pauseIcon) rec.pauseIcon.hidden = true;
 }
 
 // Mount the window around pos and make pos the active slide.
@@ -1089,6 +1092,25 @@ function buildVideo(rec) {
     if (video.paused) video.play().catch(() => {});
     else video.pause();
   });
+
+  // A centered paused indicator so a stopped video is unmistakable. Only the
+  // playing->paused edge shows it, so activation (paused until the deferred
+  // play) never flashes it; deactivation hides it explicitly.
+  const pauseIcon = document.createElement('div');
+  pauseIcon.className = 'pause-indicator';
+  pauseIcon.hidden = true;
+  rec.el.appendChild(pauseIcon);
+  rec.pauseIcon = pauseIcon;
+  video.addEventListener(
+    'pause',
+    () => {
+      if (isActive(rec) && settings.showPauseIcon && !document.hidden && video.currentTime > 0) {
+        pauseIcon.hidden = false;
+      }
+    },
+    sig
+  );
+  video.addEventListener('play', () => (pauseIcon.hidden = true), sig);
 
   // Playback progress in the bottom bar (only while this slide is active).
   video.addEventListener(
@@ -2032,6 +2054,7 @@ function populateSettingsPage() {
   fillScreenInput.checked = settings.fillScreen;
   verticalInput.checked = settings.vertical;
   smoothScrollInput.checked = settings.smoothScroll;
+  pauseIconInput.checked = settings.showPauseIcon;
   moveBarInput.checked = settings.moveBar;
   barInvertInput.checked = settings.barInvert;
   skipSeenInput.checked = settings.skipSeen;
@@ -2095,6 +2118,8 @@ $('#settings-save').addEventListener('click', () => {
   settings.fillScreen = fillScreenInput.checked;
   settings.vertical = verticalInput.checked;
   settings.smoothScroll = smoothScrollInput.checked;
+  settings.showPauseIcon = pauseIconInput.checked;
+  if (!settings.showPauseIcon) document.querySelectorAll('.pause-indicator').forEach((el) => (el.hidden = true));
   settings.moveBar = moveBarInput.checked;
   settings.barInvert = barInvertInput.checked;
   settings.skipSeen = skipSeenInput.checked;
@@ -2265,6 +2290,7 @@ $('#import-btn').addEventListener('click', () => {
   fillScreenInput.checked = settings.fillScreen;
   verticalInput.checked = settings.vertical;
   smoothScrollInput.checked = settings.smoothScroll;
+  pauseIconInput.checked = settings.showPauseIcon;
   moveBarInput.checked = settings.moveBar;
   barInvertInput.checked = settings.barInvert;
   skipSeenInput.checked = settings.skipSeen;

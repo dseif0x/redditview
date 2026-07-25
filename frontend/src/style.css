@@ -249,6 +249,32 @@ button:hover {
   object-fit: contain;
 }
 
+/* centered indicator over a user-paused video */
+.pause-indicator {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 4.5rem;
+  height: 4.5rem;
+  border-radius: 50%;
+  background: rgba(10, 10, 14, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  z-index: 3;
+  pointer-events: none;
+}
+
+.pause-indicator::before,
+.pause-indicator::after {
+  content: '';
+  width: 0.65rem;
+  height: 1.8rem;
+  border-radius: 3px;
+  background: #fff;
+}
+
 /* poster shown over a video until its first real frames render */
 .slide .poster-overlay {
   position: absolute;
