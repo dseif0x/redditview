@@ -44,6 +44,7 @@ import {
   albumsOutline,
   settingsOutline,
   chevronExpandOutline,
+  eyeOutline,
 } from 'ionicons/icons';
 
 initialize({ mode: 'ios' });
@@ -82,6 +83,7 @@ const ICONS = {
   'albums-outline': albumsOutline,
   'settings-outline': settingsOutline,
   'chevron-expand-outline': chevronExpandOutline,
+  'eye-outline': eyeOutline,
 };
 for (const el of document.querySelectorAll('ion-icon[data-icon]')) el.icon = ICONS[el.dataset.icon];
 function setBtnIcon(btn, name) {
@@ -2199,12 +2201,29 @@ function populateAccountSelect() {
   accountSelect.value = editingAccount === -1 ? 'new' : String(editingAccount);
 }
 
+// The stored cookie is never shown on open — opening settings must not put
+// the credential on screen. A saved cookie renders as a masked row with a
+// Show button; the textarea (with the real value) appears only on demand.
+const cookieItem = $('#cookie-item');
+const cookieMaskedRow = $('#cookie-masked-row');
+const cookieNote = $('#cookie-note');
+
 function loadAccountFields() {
   const a = settings.accounts[editingAccount];
   accountNameInput.value = a ? a.name : '';
-  cookieInput.value = a ? a.cookie : '';
+  cookieInput.value = '';
+  const hasCookie = !!a?.cookie;
+  cookieItem.hidden = hasCookie;
+  cookieMaskedRow.hidden = !hasCookie;
+  if (hasCookie) cookieNote.textContent = `Reddit cookie saved (${a.cookie.length} chars)`;
   deleteAccountBtn.hidden = !a;
 }
+
+$('#cookie-reveal-btn').addEventListener('click', () => {
+  cookieInput.value = settings.accounts[editingAccount]?.cookie || '';
+  cookieItem.hidden = false;
+  cookieMaskedRow.hidden = true;
+});
 
 accountSelect.addEventListener('ionChange', () => {
   editingAccount = accountSelect.value === 'new' ? -1 : Number(accountSelect.value);
@@ -2247,10 +2266,11 @@ let settingsPausedPlayback = false;
 function showTab(tab) {
   settingsTabOpen = tab === 'settings';
   settingsPage.hidden = !settingsTabOpen;
+  // Highlight via class only — mutating ion-tab-button's `selected` prop
+  // makes Stencil re-render the host and strip foreign attributes (the
+  // element's id vanished mid-session). Classes survive re-renders.
   tabPosts.classList.toggle('active', !settingsTabOpen);
   tabSettings.classList.toggle('active', settingsTabOpen);
-  tabPosts.selected = !settingsTabOpen;
-  tabSettings.selected = settingsTabOpen;
   if (settingsTabOpen) {
     populateSettingsPage();
     // hold the feed while in settings
@@ -2310,7 +2330,11 @@ $('#settings-save').addEventListener('click', () => {
 
   // Saving selects the edited account as the active one.
   const name = accountNameInput.value.trim();
-  const cookie = cookieInput.value.trim();
+  // A masked (hidden) cookie field means "unchanged": keep the stored value.
+  // Once revealed, the field is authoritative — clearing it clears the cookie.
+  const cookie = cookieItem.hidden
+    ? settings.accounts[editingAccount]?.cookie || ''
+    : cookieInput.value.trim();
   if (editingAccount === -1) {
     if (name || cookie) {
       settings.accounts.push({ name: name || `Account ${settings.accounts.length + 1}`, cookie });

@@ -130,7 +130,7 @@
             <ion-item>
               <ion-input id="account-name-input" label="Account name" placeholder="e.g. main" autocomplete="off"></ion-input>
             </ion-item>
-            <ion-item>
+            <ion-item id="cookie-item">
               <ion-textarea
                 id="cookie-input"
                 label="Reddit cookie"
@@ -138,6 +138,13 @@
                 rows="4"
                 placeholder="Paste the FULL Cookie header from a logged-in reddit.com request (DevTools → Network → request headers). Just reddit_session usually gets blocked as a bot."
               ></ion-textarea>
+            </ion-item>
+            <ion-item id="cookie-masked-row" hidden>
+              <ion-label id="cookie-note">Reddit cookie saved</ion-label>
+              <ion-button id="cookie-reveal-btn" slot="end" fill="outline" size="small" color="medium">
+                <ion-icon slot="start" data-icon="eye-outline"></ion-icon>
+                Show
+              </ion-button>
             </ion-item>
             <ion-item lines="none">
               <ion-button id="delete-account-btn" slot="end" fill="clear" color="danger" size="small">
