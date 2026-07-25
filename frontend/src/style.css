@@ -657,7 +657,12 @@ body {
 }
 
 #comments-sort {
-  flex: 0 0 auto;
+  /* ion-select defaults to its container's full width; pin it to a compact
+     pill so it can't run past the sheet edge */
+  flex: 0 1 auto;
+  width: auto;
+  max-width: 9rem;
+  min-width: 0;
   min-height: 1.9rem;
   font-size: 0.85rem;
   border-radius: 8px;
@@ -667,6 +672,12 @@ body {
   --padding-end: 0.5rem;
   --padding-top: 0;
   --padding-bottom: 0;
+}
+
+#comments-sort::part(text) {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 #comments-close {
