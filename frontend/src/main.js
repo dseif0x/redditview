@@ -2086,6 +2086,19 @@ function showTab(tab) {
     resumeTimer();
   }
 }
+// The layout offsets (viewer, meta bar, progress dock, settings page) are
+// driven by the bar's REAL rendered height, so env()-math mismatches on iOS
+// can't open a gap.
+const tabbarEl = $('#tabbar');
+function syncTabbarHeight() {
+  const h = tabbarEl?.offsetHeight;
+  if (h) document.documentElement.style.setProperty('--tabbar-h', h + 'px');
+}
+window.addEventListener('load', syncTabbarHeight);
+window.addEventListener('resize', syncTabbarHeight);
+window.addEventListener('orientationchange', () => setTimeout(syncTabbarHeight, 300));
+syncTabbarHeight();
+
 tabPosts.addEventListener('click', () => showTab('posts'));
 tabSettings.addEventListener('click', () => showTab('settings'));
 $('#settings-cancel').addEventListener('click', () => showTab('posts'));
