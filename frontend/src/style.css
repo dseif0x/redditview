@@ -374,6 +374,9 @@ body {
 
 #progress.pos-bottom {
   bottom: var(--tabbar-h);
+  /* solid backing: the strip between meta and tab bar is chrome, so the
+     next post must not show through it while swiping */
+  background: #0e0e14;
 }
 
 #progress.pos-top {
@@ -454,7 +457,7 @@ body {
 /* ---- meta ---- */
 #meta {
   position: absolute;
-  bottom: calc(3px + var(--tabbar-h));
+  bottom: var(--tabbar-h); /* flush: no see-through slit above the tab bar */
   left: 0;
   right: 0;
   z-index: 11;
@@ -878,7 +881,8 @@ body {
   bottom: 0;
   /* content-sized: the bar is exactly its buttons plus the safe area */
   z-index: 18;
-  --background: rgba(14, 14, 20, 0.96);
+  /* fully opaque: slides swipe behind the bar and must not shine through */
+  --background: #0e0e14;
   --border: 1px solid #26262f;
   --color: #8a8a98;
   --color-selected: var(--ion-color-primary);
