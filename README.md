@@ -15,7 +15,8 @@ advancing; images advance after a configurable duration.
 
 ## Usage
 
-1. Open the app and click **⚙** to paste your reddit cookie (DevTools →
+1. Open the app and go to the **Settings tab** (bottom bar) to paste your
+   reddit cookie (DevTools →
    Network → any logged-in `reddit.com` request → copy the **entire** `Cookie`
    header — just `reddit_session` alone is usually rejected as a bot) and set
    the image duration.
@@ -54,6 +55,9 @@ screen edge you tap near: top/bottom span the full width, left/right become
 vertical bars over the middle 60% of the screen height, with a setting to
 invert whether they fill downwards or upwards. The bar stays seekable in
 every position.
+
+Every session starts muted; the first tap on the 🔊 button is the user
+interaction iOS requires and unlocks audio for the whole session.
 
 Autoscroll is off by default: videos loop and slides stay until you navigate.
 Turning it on (▶ button or `space`) advances images after the configured
