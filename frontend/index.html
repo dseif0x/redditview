@@ -59,7 +59,6 @@
           <button id="fill-btn" title="Fill screen (f)">⛶</button>
           <button id="pause-btn" title="Toggle autoscroll (space)">⏸</button>
           <button id="mute-btn" title="Toggle sound (m)">🔇</button>
-          <button id="settings-btn" title="Settings">⚙</button>
         </div>
       </header>
 
@@ -118,8 +117,8 @@
         </div>
       </div>
 
-      <dialog id="settings-modal">
-        <form method="dialog" id="settings-form">
+      <section id="settings-page" hidden>
+        <form id="settings-form">
           <h2>Settings</h2>
           <label>
             Account
@@ -143,10 +142,6 @@
           <label>
             Image duration (seconds)
             <input id="image-seconds-input" type="number" min="1" max="600" step="0.5" />
-          </label>
-          <label class="row">
-            <input id="audio-input" type="checkbox" />
-            Play audio (same toggle as the 🔊 button)
           </label>
           <label class="row">
             <input id="fill-screen-input" type="checkbox" />
@@ -202,11 +197,22 @@
             Export includes accounts and cookies — treat it like a password.
           </p>
           <div class="actions">
-            <button type="submit" value="cancel">Cancel</button>
-            <button type="submit" value="save" class="primary">Save</button>
+            <button type="button" id="settings-cancel">Cancel</button>
+            <button type="button" id="settings-save" class="primary">Save</button>
           </div>
         </form>
-      </dialog>
+      </section>
+
+      <nav id="tabbar">
+        <button id="tab-posts" class="tab active">
+          <span class="tab-icon">▦</span>
+          <span>Posts</span>
+        </button>
+        <button id="tab-settings" class="tab">
+          <span class="tab-icon">⚙</span>
+          <span>Settings</span>
+        </button>
+      </nav>
     </div>
     <script type="module" src="/src/main.js"></script>
   </body>

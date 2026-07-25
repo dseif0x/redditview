@@ -10,7 +10,6 @@ const DEFAULTS = {
   accounts: [],
   activeAccount: 0,
   imageSeconds: 8,
-  audioOn: true,
   autoscroll: false,
   lastFeed: '',
   showImages: true,
@@ -40,7 +39,7 @@ if (settings.audioDebug) settings.debug = true;
 delete settings.audioDebug;
 
 // Migrate the old start-muted setting into the play-audio setting.
-if (typeof settings.audioOn !== 'boolean') settings.audioOn = !settings.startMuted;
+delete settings.audioOn; // sessions now always start muted
 delete settings.startMuted;
 
 // Migrate a pre-accounts cookie into the account list.
@@ -105,7 +104,9 @@ let feedActive = false;
 
 let idx = -1;
 let galleryIdx = 0;
-let muted = !settings.audioOn;
+// Every session starts muted: the first unmute tap is the user interaction
+// that grants (and pool-blesses) audio playback rights.
+let muted = true;
 
 let timerId = null;
 let timerStartedAt = 0;
@@ -123,12 +124,13 @@ const feedForm = $('#feed-form');
 const feedInput = $('#feed-input');
 const pauseBtn = $('#pause-btn');
 const muteBtn = $('#mute-btn');
-const settingsBtn = $('#settings-btn');
-const settingsModal = $('#settings-modal');
+const settingsPage = $('#settings-page');
+const tabPosts = $('#tab-posts');
+const tabSettings = $('#tab-settings');
+let settingsTabOpen = false;
 const settingsForm = $('#settings-form');
 const cookieInput = $('#cookie-input');
 const imageSecondsInput = $('#image-seconds-input');
-const audioInput = $('#audio-input');
 const accountSelect = $('#account-select');
 const accountNameInput = $('#account-name-input');
 const deleteAccountBtn = $('#delete-account-btn');
@@ -1153,7 +1155,7 @@ const EDGE_BAND = 32;
 document.addEventListener(
   'click',
   (e) => {
-    if (!settings.moveBar || settingsModal.open) return;
+    if (!settings.moveBar || settingsTabOpen) return;
     if (e.target.closest('button:not(.nav-zone), input, select, textarea, a, dialog, #progress, #meta-actions')) return;
     let pos = null;
     // The top edge is mostly covered by the feed input on phones, so any tap
@@ -1570,9 +1572,14 @@ setInterval(() => {
 function toggleMute() {
   muted = !muted;
   alog(`toggle -> ${muted ? 'muted' : 'audio on'}`);
-  settings.audioOn = !muted;
-  saveSettings();
   if (currentVideo) currentVideo.muted = muted;
+  if (!muted) {
+    // The unmute tap is a definite gesture: (re)bless the pool with it.
+    poolUnlocked = false;
+    unlockAttempts = 0;
+    lastUnlockTry = 0;
+    unlockVideoPool();
+  }
   updateMuteBtn();
 }
 
@@ -1906,7 +1913,7 @@ let edgeSwipe = null;
 document.addEventListener(
   'touchstart',
   (e) => {
-    if (e.touches.length !== 1 || settingsModal.open || commentsOpen) {
+    if (e.touches.length !== 1 || settingsTabOpen || commentsOpen) {
       edgeSwipe = null;
       return;
     }
@@ -1957,7 +1964,7 @@ let wheelLockUntil = 0;
 window.addEventListener(
   'wheel',
   (e) => {
-    if (settingsModal.open || commentsOpen) return;
+    if (settingsTabOpen || commentsOpen) return;
     const now = Date.now();
     if (now < wheelLockUntil) return;
     if (settings.vertical && Math.abs(e.deltaX) > Math.abs(e.deltaY) && Math.abs(e.deltaX) >= 20) {
@@ -2017,12 +2024,11 @@ deleteAccountBtn.addEventListener('click', () => {
   if (prevCookie !== settings.cookie && feedActive) startFeed(feedPath);
 });
 
-settingsBtn.addEventListener('click', () => {
+function populateSettingsPage() {
   editingAccount = settings.accounts.length ? settings.activeAccount : -1;
   populateAccountSelect();
   loadAccountFields();
   imageSecondsInput.value = settings.imageSeconds;
-  audioInput.checked = settings.audioOn;
   fillScreenInput.checked = settings.fillScreen;
   verticalInput.checked = settings.vertical;
   smoothScrollInput.checked = settings.smoothScroll;
@@ -2033,18 +2039,42 @@ settingsBtn.addEventListener('click', () => {
   showImagesInput.checked = settings.showImages;
   showVideosInput.checked = settings.showVideos;
   showTextInput.checked = settings.showText;
-  settingsModal.showModal();
-});
+}
 
-settingsForm.addEventListener('submit', (e) => {
-  if (e.submitter?.value !== 'save') return;
+let settingsPausedPlayback = false;
+function showTab(tab) {
+  settingsTabOpen = tab === 'settings';
+  settingsPage.hidden = !settingsTabOpen;
+  tabPosts.classList.toggle('active', !settingsTabOpen);
+  tabSettings.classList.toggle('active', settingsTabOpen);
+  if (settingsTabOpen) {
+    populateSettingsPage();
+    // hold the feed while in settings
+    if (currentVideo && !currentVideo.paused) {
+      currentVideo.pause();
+      settingsPausedPlayback = true;
+    }
+    pauseTimer();
+  } else {
+    if (settingsPausedPlayback) {
+      settingsPausedPlayback = false;
+      currentVideo?.play().catch(() => {});
+    }
+    resumeTimer();
+  }
+}
+tabPosts.addEventListener('click', () => showTab('posts'));
+tabSettings.addEventListener('click', () => showTab('settings'));
+$('#settings-cancel').addEventListener('click', () => showTab('posts'));
+settingsForm.addEventListener('submit', (e) => e.preventDefault());
+
+$('#settings-save').addEventListener('click', () => {
   const filtersChanged =
     settings.showImages !== showImagesInput.checked ||
     settings.showVideos !== showVideosInput.checked ||
     settings.showText !== showTextInput.checked ||
     settings.skipSeen !== skipSeenInput.checked;
   const verticalChanged = settings.vertical !== verticalInput.checked;
-  const audioChanged = settings.audioOn !== audioInput.checked;
   const prevCookie = settings.cookie;
 
   // Saving selects the edited account as the active one.
@@ -2062,7 +2092,6 @@ settingsForm.addEventListener('submit', (e) => {
   settings.cookie = activeCookie();
 
   settings.imageSeconds = Math.max(1, parseFloat(imageSecondsInput.value) || DEFAULTS.imageSeconds);
-  settings.audioOn = audioInput.checked;
   settings.fillScreen = fillScreenInput.checked;
   settings.vertical = verticalInput.checked;
   settings.smoothScroll = smoothScrollInput.checked;
@@ -2077,12 +2106,6 @@ settingsForm.addEventListener('submit', (e) => {
   applyFill();
   applyDirection();
   applyBarPos();
-  // The checkbox and the mute button are the same setting.
-  if (audioChanged) {
-    muted = !settings.audioOn;
-    if (currentVideo) currentVideo.muted = muted;
-    updateMuteBtn();
-  }
   // Mounted neighbor slides carry transforms for the old axis; re-place them.
   if (verticalChanged && activeKey && mounted.has(activeKey)) {
     showSlide(mounted.get(activeKey).pos, 0);
@@ -2095,10 +2118,15 @@ settingsForm.addEventListener('submit', (e) => {
   }
   // Reload if the account or the type filters changed what the feed contains.
   if ((filtersChanged || prevCookie !== settings.cookie) && feedActive) startFeed(feedPath);
+  showTab('posts');
 });
 
 document.addEventListener('keydown', (e) => {
-  if (settingsModal.open || document.activeElement === feedInput) return;
+  if (document.activeElement === feedInput) return;
+  if (settingsTabOpen) {
+    if (e.key === 'Escape') showTab('posts');
+    return;
+  }
   if (commentsOpen) {
     if (e.key === 'Escape' || e.key === 'c') closeComments();
     return; // don't navigate the feed under the panel
@@ -2234,7 +2262,6 @@ $('#import-btn').addEventListener('click', () => {
   populateAccountSelect();
   loadAccountFields();
   imageSecondsInput.value = settings.imageSeconds;
-  audioInput.checked = settings.audioOn;
   fillScreenInput.checked = settings.fillScreen;
   verticalInput.checked = settings.vertical;
   smoothScrollInput.checked = settings.smoothScroll;

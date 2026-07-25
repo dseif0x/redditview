@@ -22,6 +22,10 @@ body {
   touch-action: pan-y;
 }
 
+:root {
+  --tabbar-h: calc(3.4rem + env(safe-area-inset-bottom));
+}
+
 #app {
   position: fixed;
   inset: 0;
@@ -168,7 +172,7 @@ button:hover {
 /* ---- viewer ---- */
 #viewer {
   position: absolute;
-  inset: 0;
+  inset: 0 0 var(--tabbar-h) 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -350,7 +354,7 @@ button:hover {
 }
 
 #progress.pos-bottom {
-  bottom: env(safe-area-inset-bottom);
+  bottom: var(--tabbar-h);
 }
 
 #progress.pos-top {
@@ -431,7 +435,7 @@ button:hover {
 /* ---- meta ---- */
 #meta {
   position: absolute;
-  bottom: calc(3px + env(safe-area-inset-bottom));
+  bottom: calc(3px + var(--tabbar-h));
   left: 0;
   right: 0;
   z-index: 11;
@@ -581,7 +585,7 @@ button:hover {
 
 #app.vertical #next-zone {
   top: auto;
-  bottom: calc(5rem + env(safe-area-inset-bottom));
+  bottom: calc(5rem + var(--tabbar-h));
 }
 
 #app.vertical #next-zone:hover {
@@ -605,7 +609,7 @@ button:hover {
   position: absolute;
   left: 0;
   right: 0;
-  bottom: 0;
+  bottom: 0; /* covers the tab bar, like a modal sheet */
   height: min(78dvh, 100dvh - env(safe-area-inset-top) - 3rem);
   display: flex;
   flex-direction: column;
@@ -778,25 +782,24 @@ button:hover {
 }
 
 /* ---- settings modal ---- */
-#settings-modal {
-  background: #16161e;
-  color: #e8e8ee;
-  border: 1px solid #33333f;
-  border-radius: 12px;
-  padding: 1.5rem;
-  width: min(28rem, 92vw);
-  /* stay clear of the iOS status bar and home indicator in PWA mode; the
-     dialog scrolls internally instead of growing past the safe areas */
-  max-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 3rem);
+/* settings as a full page (tab), scrolling under the top safe area */
+#settings-page {
+  position: absolute;
+  inset: 0 0 var(--tabbar-h) 0;
+  z-index: 20;
+  background: #0e0e14;
   overflow-y: auto;
   overscroll-behavior: contain;
+  touch-action: pan-y;
+  padding: calc(env(safe-area-inset-top) + 1rem) 1rem 2rem;
 }
 
-#settings-modal::backdrop {
-  background: rgba(0, 0, 0, 0.6);
+#settings-page #settings-form {
+  max-width: 30rem;
+  margin: 0 auto;
 }
 
-#settings-modal h2 {
+#settings-page h2 {
   margin-top: 0;
 }
 
@@ -914,4 +917,47 @@ button:hover {
   background: rgba(0, 0, 0, 0.65);
   border-radius: 8px;
   padding: 0.4rem 0.6rem;
+}
+
+
+/* ---- bottom tab bar ---- */
+#tabbar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: var(--tabbar-h);
+  z-index: 18;
+  display: flex;
+  background: rgba(14, 14, 20, 0.96);
+  border-top: 1px solid #26262f;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+#tabbar .tab {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.1rem;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: #8a8a98;
+  font-size: 0.7rem;
+  padding: 0.3rem 0;
+}
+
+#tabbar .tab .tab-icon {
+  font-size: 1.25rem;
+  line-height: 1.2;
+}
+
+#tabbar .tab.active {
+  color: #ff4500;
+}
+
+#tabbar .tab:hover {
+  border: none;
 }
