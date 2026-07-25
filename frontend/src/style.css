@@ -74,7 +74,9 @@ body {
   display: flex;
   gap: 0.3rem;
   align-items: center;
-  flex: 0 0 auto;
+  /* grows so the sort pill can stretch across the row up to the controls */
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 #feed-input {
@@ -118,11 +120,14 @@ body {
   margin: 0;
 }
 
-/* the sort button is a pill chip like the selects */
+/* the sort button is a pill chip that fills the row up to the controls;
+   zero flex-basis + inline-size containment so a long label can never
+   push the controls onto their own row */
 #sort-btn {
-  flex: 0 0 auto;
+  flex: 1 1 0px;
+  contain: inline-size;
+  min-width: 4.5rem;
   min-height: 2.1rem;
-  max-width: 9.5rem;
   border-radius: 999px;
   border: 1px solid rgba(255, 255, 255, 0.14);
   background: rgba(22, 22, 30, 0.82);
@@ -135,7 +140,13 @@ body {
   -webkit-backdrop-filter: blur(8px);
 }
 
+#sort-btn::part(native) {
+  width: 100%;
+}
+
 #sort-btn span {
+  flex: 1 1 auto;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
