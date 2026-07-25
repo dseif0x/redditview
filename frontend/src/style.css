@@ -2,6 +2,21 @@
   box-sizing: border-box;
 }
 
+/* ---- Ionic theme: match the app's dark palette ----
+   :root.ios too: the always-dark palette scopes its vars there, which
+   out-specifies a bare :root override. */
+:root,
+:root.ios {
+  --ion-background-color: #0b0b0f;
+  --ion-background-color-rgb: 11, 11, 15;
+  --ion-text-color: #e8e8ee;
+  --ion-text-color-rgb: 232, 232, 238;
+  --ion-item-background: #1e1e28;
+  --ion-toolbar-background: rgba(14, 14, 20, 0.96);
+  /* fallback; JS measures the real rendered bar height into this variable */
+  --tabbar-h: calc(3.2rem + env(safe-area-inset-bottom));
+}
+
 html,
 body {
   margin: 0;
@@ -22,11 +37,6 @@ body {
   touch-action: pan-y;
 }
 
-:root {
-  /* fallback; JS measures the real rendered bar height into this variable */
-  --tabbar-h: calc(3.2rem + env(safe-area-inset-bottom));
-}
-
 #app {
   position: fixed;
   inset: 0;
@@ -43,7 +53,7 @@ body {
   z-index: 10;
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
+  gap: 0.4rem;
   align-items: center;
   /* keep clear of the iOS status bar / notch in standalone PWA mode */
   padding: calc(0.5rem + env(safe-area-inset-top)) calc(0.75rem + env(safe-area-inset-right)) 0.5rem
@@ -53,7 +63,8 @@ body {
 
 #feed-form {
   display: flex;
-  gap: 0.4rem;
+  gap: 0.3rem;
+  align-items: center;
   /* Shrinks to wrap the other rows onto their own line on narrow screens. */
   flex: 1 1 14rem;
   max-width: 30rem;
@@ -61,113 +72,93 @@ body {
 
 #feed-tools {
   display: flex;
-  gap: 0.4rem;
+  gap: 0.3rem;
+  align-items: center;
   flex: 0 0 auto;
 }
 
 #feed-input {
   flex: 1;
   min-width: 0;
-  padding: 0.45rem 0.7rem;
+  padding: 0.45rem 0.9rem;
   border-radius: 999px;
-  border: 1px solid #33333f;
-  background: rgba(20, 20, 28, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(22, 22, 30, 0.82);
   color: inherit;
   font-size: 0.9rem;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
 
 #feed-input:focus {
   outline: none;
-  border-color: #ff4500;
+  border-color: var(--ion-color-primary);
 }
 
-#bookmark-select {
+/* the topbar selects render as translucent pill chips */
+#topbar ion-select {
   flex: 0 0 auto;
-  max-width: 5.5rem;
-  padding: 0.45rem 0.4rem;
+  min-height: 2.1rem;
+  max-width: 7rem;
   border-radius: 999px;
-  border: 1px solid #33333f;
-  background: rgba(20, 20, 28, 0.9);
-  color: inherit;
-  font-size: 0.85rem;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(22, 22, 30, 0.82);
+  font-size: 0.82rem;
+  --padding-start: 0.8rem;
+  --padding-end: 0.6rem;
+  --padding-top: 0;
+  --padding-bottom: 0;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
 
-#bm-btn {
+#topbar ion-button,
+#meta-actions ion-button {
+  --color: #fff;
+  margin: 0;
+}
+
+#topbar .controls ion-button::part(native),
+#bm-btn::part(native) {
+  border-radius: 999px;
+}
+
+#topbar ion-icon {
+  font-size: 1.35rem;
+}
+
+#go-btn {
   flex: 0 0 auto;
-  width: 2.4rem;
-  padding: 0.45rem 0;
-  text-align: center;
-}
-
-#bm-btn.active {
-  border-color: #ffd635;
-  color: #ffd635;
-}
-
-#sort-select {
-  flex: 0 0 auto;
-  max-width: 6.5rem;
-  padding: 0.45rem 0.5rem;
-  border-radius: 999px;
-  border: 1px solid #33333f;
-  background: rgba(20, 20, 28, 0.9);
-  color: inherit;
-  font-size: 0.85rem;
-}
-
-button {
-  cursor: pointer;
-  border: 1px solid #33333f;
-  background: rgba(20, 20, 28, 0.9);
-  color: inherit;
-  border-radius: 999px;
-  padding: 0.45rem 0.8rem;
-  font-size: 0.9rem;
-}
-
-button:hover {
-  border-color: #ff4500;
+  --border-radius: 999px;
 }
 
 .controls {
   margin-left: auto;
   display: flex;
-  gap: 0.4rem;
+  gap: 0.1rem;
+  align-items: center;
   flex-shrink: 0;
 }
 
-.controls button {
-  width: 2.4rem;
-  padding: 0.45rem 0;
-  text-align: center;
+#topbar ion-button.active {
+  --color: var(--ion-color-primary);
+}
+
+#bm-btn.active {
+  --color: #ffd635;
 }
 
 @media (max-width: 480px) {
   #topbar {
     padding: calc(0.4rem + env(safe-area-inset-top)) calc(0.5rem + env(safe-area-inset-right)) 0.4rem
       calc(0.5rem + env(safe-area-inset-left));
-    gap: 0.35rem;
-  }
-
-  #feed-input,
-  #feed-form button {
-    font-size: 0.85rem;
-    padding: 0.4rem 0.6rem;
-  }
-
-  .controls {
     gap: 0.3rem;
   }
 
-  .controls button {
-    width: 2.2rem;
-    padding: 0.4rem 0;
+  #feed-input {
+    font-size: 0.85rem;
+    padding: 0.4rem 0.75rem;
   }
-}
-
-#pause-btn.active {
-  border-color: #ff4500;
-  color: #ff4500;
 }
 
 /* ---- viewer ---- */
@@ -300,11 +291,6 @@ button:hover {
   object-fit: cover;
 }
 
-#fill-btn.active {
-  border-color: #ff4500;
-  color: #ff4500;
-}
-
 .text-post {
   max-width: 44rem;
   max-height: 80%;
@@ -326,6 +312,12 @@ button:hover {
 .loading {
   text-align: center;
   padding: 2rem;
+  color: #9a9aa8;
+}
+
+.loading ion-spinner {
+  width: 2.2rem;
+  height: 2.2rem;
   color: #9a9aa8;
 }
 
@@ -359,7 +351,7 @@ button:hover {
   position: absolute;
   left: 0;
   top: 0;
-  background: #ff4500;
+  background: var(--ion-color-primary);
 }
 
 /* video playback: the bar becomes a seek control with a bigger hit area */
@@ -468,8 +460,8 @@ button:hover {
   z-index: 11;
   display: flex;
   align-items: flex-end;
-  gap: 0.75rem;
-  padding: 2.5rem calc(1rem + env(safe-area-inset-right)) 0.8rem calc(1rem + env(safe-area-inset-left));
+  gap: 0.5rem;
+  padding: 2.5rem calc(0.6rem + env(safe-area-inset-right)) 0.5rem calc(1rem + env(safe-area-inset-left));
   background: linear-gradient(rgba(11, 11, 15, 0), rgba(11, 11, 15, 0.85));
   pointer-events: none;
 }
@@ -492,36 +484,30 @@ button:hover {
 
 #meta a.meta-feed-link:hover {
   color: #fff;
-  border-bottom-color: #ff4500;
+  border-bottom-color: var(--ion-color-primary);
 }
 
 #meta-actions {
   display: flex;
-  gap: 0.4rem;
+  gap: 0;
   pointer-events: auto;
   flex-shrink: 0;
 }
 
-#meta-actions button {
-  width: 2.6rem;
-  padding: 0.5rem 0;
-  text-align: center;
-  font-size: 1rem;
+#meta-actions ion-icon {
+  font-size: 1.55rem;
 }
 
 #up-btn.active-up {
-  border-color: #ff4500;
-  color: #ff4500;
+  --color: #ff4500;
 }
 
 #down-btn.active-down {
-  border-color: #7193ff;
-  color: #7193ff;
+  --color: #7193ff;
 }
 
 #save-btn.active-save {
-  border-color: #ffd635;
-  color: #ffd635;
+  --color: #ffd635;
 }
 
 #meta-title {
@@ -560,7 +546,7 @@ button:hover {
   width: 4.5rem;
   z-index: 9;
   border: none;
-  border-radius: 0;
+  cursor: pointer;
   background: transparent;
   color: transparent;
   font-size: 3rem;
@@ -569,7 +555,6 @@ button:hover {
 .nav-zone:hover {
   color: rgba(255, 255, 255, 0.6);
   background: linear-gradient(to right, rgba(0, 0, 0, 0.25), transparent);
-  border: none;
 }
 
 #prev-zone {
@@ -659,7 +644,7 @@ button:hover {
   display: flex;
   align-items: center;
   gap: 0.6rem;
-  padding: 0.75rem 1rem;
+  padding: 0.55rem 0.75rem 0.55rem 1rem;
   border-bottom: 1px solid #26262f;
 }
 
@@ -669,19 +654,21 @@ button:hover {
 }
 
 #comments-sort {
-  padding: 0.35rem 0.5rem;
+  flex: 0 0 auto;
+  min-height: 1.9rem;
+  font-size: 0.85rem;
   border-radius: 8px;
   border: 1px solid #33333f;
   background: #0b0b0f;
-  color: inherit;
-  font-size: 0.85rem;
+  --padding-start: 0.6rem;
+  --padding-end: 0.5rem;
+  --padding-top: 0;
+  --padding-bottom: 0;
 }
 
 #comments-close {
-  width: 2.2rem;
-  padding: 0.35rem 0;
-  text-align: center;
-  border-radius: 8px;
+  --color: #e8e8ee;
+  margin: 0;
 }
 
 #comments-list {
@@ -793,110 +780,53 @@ button:hover {
   }
 }
 
-/* ---- toast ---- */
-#toast {
-  position: absolute;
-  top: 4rem;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 20;
-  background: rgba(30, 30, 40, 0.95);
-  border: 1px solid #44445a;
-  border-radius: 8px;
-  padding: 0.6rem 1rem;
-  font-size: 0.85rem;
-  max-width: 90%;
-}
-
-/* ---- settings modal ---- */
-/* settings as a full page (tab), scrolling under the top safe area */
+/* ---- settings page (tab) ---- */
 #settings-page {
   position: absolute;
   inset: 0 0 var(--tabbar-h) 0;
   z-index: 20;
-  background: #0e0e14;
+  background: var(--ion-background-color);
   overflow-y: auto;
   overscroll-behavior: contain;
   touch-action: pan-y;
-  padding: calc(env(safe-area-inset-top) + 1rem) 1rem 2rem;
+  padding: calc(env(safe-area-inset-top) + 0.75rem) 0 2rem;
 }
 
 #settings-page #settings-form {
-  max-width: 30rem;
+  max-width: 34rem;
   margin: 0 auto;
 }
 
 #settings-page h2 {
-  margin-top: 0;
+  margin: 0.25rem 1.25rem 0.5rem;
+  font-size: 1.5rem;
 }
 
-#settings-form label {
-  display: block;
+#settings-page ion-list {
   margin-bottom: 1rem;
-  font-size: 0.9rem;
 }
 
-#settings-form label.row {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
+#settings-page ion-list-header {
+  font-size: 1rem;
+  min-height: 2rem;
 }
 
-#settings-form fieldset.kinds {
-  border: 1px solid #33333f;
-  border-radius: 8px;
-  margin: 0 0 1rem;
-  padding: 0.5rem 0.75rem 0.25rem;
-}
-
-#settings-form fieldset.kinds legend {
-  font-size: 0.85rem;
-  color: #9a9aa8;
-  padding: 0 0.3rem;
-}
-
-#settings-form .account-actions {
-  margin: -0.5rem 0 1rem;
-}
-
-#settings-form .account-actions button {
-  font-size: 0.8rem;
-  border-radius: 8px;
-  color: #ff7a66;
-}
-
-#settings-form select,
-#settings-form textarea,
-#settings-form input[type='text'],
-#settings-form input[type='number'] {
-  display: block;
-  width: 100%;
-  margin-top: 0.35rem;
-  padding: 0.5rem;
-  border-radius: 8px;
-  border: 1px solid #33333f;
-  background: #0b0b0f;
-  color: inherit;
-  font-family: inherit;
-  font-size: 0.85rem;
-  resize: vertical;
+/* long option labels wrap instead of truncating */
+#settings-page ion-toggle::part(label),
+#settings-page ion-checkbox::part(label) {
+  white-space: normal;
 }
 
 #settings-form .settings-io {
   display: flex;
   gap: 0.5rem;
-  margin-bottom: 0.75rem;
-}
-
-#settings-form .settings-io button {
-  font-size: 0.8rem;
-  border-radius: 8px;
+  margin: 0 1rem 0.75rem;
 }
 
 #settings-form #io-text {
   display: block;
-  width: 100%;
-  margin-bottom: 1rem;
+  width: calc(100% - 2rem);
+  margin: 0 1rem 1rem;
   padding: 0.5rem;
   border-radius: 8px;
   border: 1px solid #33333f;
@@ -907,21 +837,15 @@ button:hover {
   resize: vertical;
 }
 
+#settings-form .hint {
+  margin: 0 1.25rem 1rem;
+}
+
 #settings-form .actions {
   display: flex;
   justify-content: flex-end;
   gap: 0.5rem;
-  margin-top: 1rem;
-}
-
-#settings-form button {
-  border-radius: 8px;
-}
-
-#settings-form button.primary {
-  background: #ff4500;
-  border-color: #ff4500;
-  color: #fff;
+  margin: 1rem 1rem 0;
 }
 
 [hidden] {
@@ -946,7 +870,6 @@ button:hover {
   padding: 0.4rem 0.6rem;
 }
 
-
 /* ---- bottom tab bar ---- */
 #tabbar {
   position: absolute;
@@ -955,37 +878,26 @@ button:hover {
   bottom: 0;
   /* content-sized: the bar is exactly its buttons plus the safe area */
   z-index: 18;
-  display: flex;
-  background: rgba(14, 14, 20, 0.96);
-  border-top: 1px solid #26262f;
-  padding: 0 0 env(safe-area-inset-bottom);
+  --background: rgba(14, 14, 20, 0.96);
+  --border: 1px solid #26262f;
+  --color: #8a8a98;
+  --color-selected: var(--ion-color-primary);
+  padding-bottom: env(safe-area-inset-bottom);
+  height: auto;
+  contain: none;
 }
 
-#tabbar .tab {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 0.15rem;
-  border: none;
-  border-radius: 0;
-  background: transparent;
-  color: #8a8a98;
+#tabbar ion-tab-button {
   font-size: 0.65rem;
-  line-height: 1;
-  padding: 0.45rem 0 0.5rem;
+  --padding-start: 0;
+  --padding-end: 0;
 }
 
-#tabbar .tab .tab-icon {
-  font-size: 1.2rem;
-  line-height: 1;
+#tabbar ion-tab-button ion-icon {
+  font-size: 1.35rem;
 }
 
-#tabbar .tab.active {
-  color: #ff4500;
-}
-
-#tabbar .tab:hover {
-  border: none;
+#tabbar ion-tab-button.active {
+  --color: var(--ion-color-primary);
+  color: var(--ion-color-primary);
 }
