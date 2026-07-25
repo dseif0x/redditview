@@ -43,6 +43,7 @@ import {
   closeOutline,
   albumsOutline,
   settingsOutline,
+  chevronExpandOutline,
 } from 'ionicons/icons';
 
 initialize({ mode: 'ios' });
@@ -80,6 +81,7 @@ const ICONS = {
   'close-outline': closeOutline,
   'albums-outline': albumsOutline,
   'settings-outline': settingsOutline,
+  'chevron-expand-outline': chevronExpandOutline,
 };
 for (const el of document.querySelectorAll('ion-icon[data-icon]')) el.icon = ICONS[el.dataset.icon];
 function setBtnIcon(btn, name) {
@@ -235,7 +237,8 @@ const skipSeenInput = $('#skip-seen-input');
 const debugInput = $('#debug-input');
 const fillBtn = $('#fill-btn');
 const appEl = $('#app');
-const sortSelect = $('#sort-select');
+const sortBtn = $('#sort-btn');
+const sortLabelEl = $('#sort-label');
 const prevZone = $('#prev-zone');
 const nextZone = $('#next-zone');
 const progressEl = $('#progress');
@@ -457,7 +460,7 @@ window.addEventListener('popstate', (e) => {
   feedInput.value = st.feed;
   if (typeof st.sort === 'string') {
     settings.sort = st.sort;
-    sortSelect.value = st.sort;
+    updateSortBtn();
     saveSettings();
   }
   updateBmBtn();
@@ -1789,7 +1792,7 @@ bookmarkSelect.addEventListener('ionChange', () => {
   bookmarkSelect.value = null; // reset so the same feed can be re-picked
   if (!b) return;
   settings.sort = b.sort || '';
-  sortSelect.value = settings.sort;
+  updateSortBtn();
   saveSettings();
   goToFeed(b.path);
 });
@@ -1798,17 +1801,87 @@ feedInput.addEventListener('input', updateBmBtn);
 populateBookmarks();
 
 // Titles for the action sheets the selects open.
-sortSelect.interfaceOptions = { header: 'Sort' };
 bookmarkSelect.interfaceOptions = { header: 'Saved feeds' };
 commentsSort.interfaceOptions = { header: 'Sort comments' };
 accountSelect.interfaceOptions = { header: 'Account' };
 
-sortSelect.value = settings.sort;
-sortSelect.addEventListener('ionChange', () => {
-  settings.sort = sortSelect.value || '';
+// ---------------------------------------------------------------------------
+// Sort picker: two SHORT action sheets (sort, then time range for top/
+// controversial) instead of one 15-option sheet. A sheet that needs
+// scrolling is a trap on iOS — releasing the scroll can fire the tap on
+// whatever ends up under the finger; keeping every sheet short avoids
+// scrolling entirely.
+// ---------------------------------------------------------------------------
+const SORT_BASES = [
+  { text: 'Default', value: '' },
+  { text: 'Hot', value: 'hot' },
+  { text: 'New', value: 'new' },
+  { text: 'Rising', value: 'rising' },
+  { text: 'Top…', value: 'top' },
+  { text: 'Controversial…', value: 'controversial' },
+];
+const SORT_TIMES = [
+  { text: 'Past hour', value: 'hour' },
+  { text: 'Past day', value: 'day' },
+  { text: 'Past week', value: 'week' },
+  { text: 'Past month', value: 'month' },
+  { text: 'Past year', value: 'year' },
+  { text: 'All time', value: 'all' },
+];
+
+// Resolves with the chosen option's value, or undefined on cancel/backdrop.
+function presentActionSheet(header, options, current) {
+  return new Promise((resolve) => {
+    const sheet = document.createElement('ion-action-sheet');
+    sheet.header = header;
+    sheet.buttons = options
+      .map((o) => ({
+        text: o.text,
+        data: { value: o.value },
+        cssClass: o.value === current ? 'sheet-current' : undefined,
+      }))
+      .concat([{ text: 'Cancel', role: 'cancel' }]);
+    sheet.addEventListener('didDismiss', (e) => {
+      sheet.remove();
+      const role = e.detail?.role;
+      resolve(role === 'cancel' || role === 'backdrop' ? undefined : e.detail?.data?.value);
+    });
+    document.body.appendChild(sheet);
+    sheet.present();
+  });
+}
+
+function sortLabel(s) {
+  if (!s) return 'Sort';
+  const [b, t] = s.split(':');
+  const cap = b.charAt(0).toUpperCase() + b.slice(1);
+  return t ? `${cap} · ${t === 'all' ? 'all time' : t}` : cap;
+}
+
+function updateSortBtn() {
+  sortLabelEl.textContent = sortLabel(settings.sort);
+  sortBtn.classList.toggle('active', !!settings.sort);
+}
+
+async function openSortPicker() {
+  const [curBase, curTime] = (settings.sort || '').split(':');
+  const base = await presentActionSheet('Sort', SORT_BASES, curBase || '');
+  if (base === undefined) return;
+  let sort = base;
+  if (base === 'top' || base === 'controversial') {
+    const t = await presentActionSheet('Time range', SORT_TIMES, base === curBase ? curTime : undefined);
+    if (t === undefined) return;
+    sort = `${base}:${t}`;
+  }
+  if (sort === settings.sort) return;
+  settings.sort = sort;
   saveSettings();
+  updateSortBtn();
   if (feedActive) startFeed(feedInput.value.trim() || settings.lastFeed);
-});
+}
+
+sortBtn.addEventListener('click', openSortPicker);
+updateSortBtn();
 
 feedForm.addEventListener('submit', (e) => {
   e.preventDefault();
@@ -2403,7 +2476,7 @@ $('#import-btn').addEventListener('click', () => {
   applyDirection();
   applyBarPos();
   updateAutoscrollBtn();
-  sortSelect.value = settings.sort || '';
+  updateSortBtn();
   populateBookmarks();
   editingAccount = settings.accounts.length ? settings.activeAccount : -1;
   populateAccountSelect();
@@ -2431,7 +2504,7 @@ $('#import-btn').addEventListener('click', () => {
     feedInput.value = r.path;
     if (typeof r.sort === 'string') {
       settings.sort = r.sort;
-      sortSelect.value = r.sort;
+      updateSortBtn();
     }
     updateBmBtn();
     startFeed(r.path, r);

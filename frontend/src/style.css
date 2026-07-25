@@ -118,6 +118,39 @@ body {
   margin: 0;
 }
 
+/* the sort button is a pill chip like the selects */
+#sort-btn {
+  flex: 0 0 auto;
+  min-height: 2.1rem;
+  max-width: 9.5rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(22, 22, 30, 0.82);
+  font-size: 0.82rem;
+  font-weight: 400;
+  --color: #e8e8ee;
+  --padding-start: 0.8rem;
+  --padding-end: 0.6rem;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+#sort-btn span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#sort-btn ion-icon {
+  font-size: 0.95rem;
+  color: #8a8a98;
+}
+
+/* the option matching the current sort in the picker sheets */
+.action-sheet-button.sheet-current {
+  font-weight: 700;
+}
+
 #topbar .controls ion-button::part(native),
 #bm-btn::part(native) {
   border-radius: 999px;

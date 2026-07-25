@@ -39,23 +39,10 @@
           <ion-button id="bm-btn" fill="clear" size="small" title="Bookmark this feed">
             <ion-icon slot="icon-only" data-icon="star-outline"></ion-icon>
           </ion-button>
-          <ion-select id="sort-select" interface="action-sheet" placeholder="Sort" title="Sort">
-            <ion-select-option value="">Default</ion-select-option>
-            <ion-select-option value="hot">Hot</ion-select-option>
-            <ion-select-option value="new">New</ion-select-option>
-            <ion-select-option value="rising">Rising</ion-select-option>
-            <ion-select-option value="top:hour">Top · hour</ion-select-option>
-            <ion-select-option value="top:day">Top · day</ion-select-option>
-            <ion-select-option value="top:week">Top · week</ion-select-option>
-            <ion-select-option value="top:month">Top · month</ion-select-option>
-            <ion-select-option value="top:year">Top · year</ion-select-option>
-            <ion-select-option value="top:all">Top · all time</ion-select-option>
-            <ion-select-option value="controversial:day">Controversial · day</ion-select-option>
-            <ion-select-option value="controversial:week">Controversial · week</ion-select-option>
-            <ion-select-option value="controversial:month">Controversial · month</ion-select-option>
-            <ion-select-option value="controversial:year">Controversial · year</ion-select-option>
-            <ion-select-option value="controversial:all">Controversial · all time</ion-select-option>
-          </ion-select>
+          <ion-button id="sort-btn" fill="clear" size="small" title="Sort">
+            <span id="sort-label">Sort</span>
+            <ion-icon slot="end" data-icon="chevron-expand-outline"></ion-icon>
+          </ion-button>
         </div>
         <div class="controls">
           <ion-button id="fill-btn" fill="clear" size="small" title="Fill screen (f)">
