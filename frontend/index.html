@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" mode="ios">
   <head>
     <meta charset="UTF-8" />
     <meta
@@ -26,39 +26,47 @@
             spellcheck="false"
             placeholder="r/pics · user/name/m/multi · saved · upvoted · empty = home"
           />
-          <button type="submit" title="Load feed">Go</button>
+          <ion-button id="go-btn" type="submit" size="small" shape="round" title="Load feed">Go</ion-button>
         </form>
         <div id="feed-tools">
-          <select id="bookmark-select" title="Saved feeds" hidden>
-            <option value="">★ Feeds</option>
-          </select>
-          <button type="button" id="bm-btn" title="Bookmark this feed">☆</button>
-          <select id="sort-select" title="Sort">
-            <option value="">Sort</option>
-            <option value="hot">Hot</option>
-            <option value="new">New</option>
-            <option value="rising">Rising</option>
-            <optgroup label="Top">
-              <option value="top:hour">Top · hour</option>
-              <option value="top:day">Top · day</option>
-              <option value="top:week">Top · week</option>
-              <option value="top:month">Top · month</option>
-              <option value="top:year">Top · year</option>
-              <option value="top:all">Top · all time</option>
-            </optgroup>
-            <optgroup label="Controversial">
-              <option value="controversial:day">Controversial · day</option>
-              <option value="controversial:week">Controversial · week</option>
-              <option value="controversial:month">Controversial · month</option>
-              <option value="controversial:year">Controversial · year</option>
-              <option value="controversial:all">Controversial · all time</option>
-            </optgroup>
-          </select>
+          <ion-select
+            id="bookmark-select"
+            interface="action-sheet"
+            placeholder="★ Feeds"
+            title="Saved feeds"
+            hidden
+          ></ion-select>
+          <ion-button id="bm-btn" fill="clear" size="small" title="Bookmark this feed">
+            <ion-icon slot="icon-only" data-icon="star-outline"></ion-icon>
+          </ion-button>
+          <ion-select id="sort-select" interface="action-sheet" placeholder="Sort" title="Sort">
+            <ion-select-option value="">Default</ion-select-option>
+            <ion-select-option value="hot">Hot</ion-select-option>
+            <ion-select-option value="new">New</ion-select-option>
+            <ion-select-option value="rising">Rising</ion-select-option>
+            <ion-select-option value="top:hour">Top · hour</ion-select-option>
+            <ion-select-option value="top:day">Top · day</ion-select-option>
+            <ion-select-option value="top:week">Top · week</ion-select-option>
+            <ion-select-option value="top:month">Top · month</ion-select-option>
+            <ion-select-option value="top:year">Top · year</ion-select-option>
+            <ion-select-option value="top:all">Top · all time</ion-select-option>
+            <ion-select-option value="controversial:day">Controversial · day</ion-select-option>
+            <ion-select-option value="controversial:week">Controversial · week</ion-select-option>
+            <ion-select-option value="controversial:month">Controversial · month</ion-select-option>
+            <ion-select-option value="controversial:year">Controversial · year</ion-select-option>
+            <ion-select-option value="controversial:all">Controversial · all time</ion-select-option>
+          </ion-select>
         </div>
         <div class="controls">
-          <button id="fill-btn" title="Fill screen (f)">⛶</button>
-          <button id="pause-btn" title="Toggle autoscroll (space)">⏸</button>
-          <button id="mute-btn" title="Toggle sound (m)">🔇</button>
+          <ion-button id="fill-btn" fill="clear" size="small" title="Fill screen (f)">
+            <ion-icon slot="icon-only" data-icon="expand-outline"></ion-icon>
+          </ion-button>
+          <ion-button id="pause-btn" fill="clear" size="small" title="Toggle autoscroll (space)">
+            <ion-icon slot="icon-only" data-icon="play-outline"></ion-icon>
+          </ion-button>
+          <ion-button id="mute-btn" fill="clear" size="small" title="Toggle sound (m)">
+            <ion-icon slot="icon-only" data-icon="volume-mute-outline"></ion-icon>
+          </ion-button>
         </div>
       </header>
 
@@ -67,7 +75,7 @@
           <h1>redditview</h1>
           <p>Enter any reddit feed above and press <strong>Go</strong>.</p>
           <p class="hint">
-            Set your reddit cookie in <strong>⚙ settings</strong> for the home
+            Set your reddit cookie in the <strong>Settings</strong> tab for the home
             feed, private multireddits, and your own listings: type
             <strong>saved</strong>, <strong>upvoted</strong>,
             <strong>downvoted</strong>, or <strong>hidden</strong>.
@@ -86,32 +94,40 @@
           <div id="meta-sub"></div>
         </div>
         <div id="meta-actions">
-          <button id="up-btn" title="Upvote (a)">▲</button>
-          <button id="down-btn" title="Downvote (z)">▼</button>
-          <button id="save-btn" title="Save (s)">☆</button>
-          <button id="comments-btn" title="Comments (c)">💬</button>
+          <ion-button id="up-btn" fill="clear" title="Upvote (a)">
+            <ion-icon slot="icon-only" data-icon="arrow-up-circle-outline"></ion-icon>
+          </ion-button>
+          <ion-button id="down-btn" fill="clear" title="Downvote (z)">
+            <ion-icon slot="icon-only" data-icon="arrow-down-circle-outline"></ion-icon>
+          </ion-button>
+          <ion-button id="save-btn" fill="clear" title="Save (s)">
+            <ion-icon slot="icon-only" data-icon="star-outline"></ion-icon>
+          </ion-button>
+          <ion-button id="comments-btn" fill="clear" title="Comments (c)">
+            <ion-icon slot="icon-only" data-icon="chatbubble-outline"></ion-icon>
+          </ion-button>
         </div>
       </footer>
 
       <button id="prev-zone" class="nav-zone" title="Previous (←)">‹</button>
       <button id="next-zone" class="nav-zone" title="Next (→)">›</button>
 
-      <div id="toast" hidden></div>
-
       <div id="comments-panel" hidden>
         <div id="comments-backdrop"></div>
         <div id="comments-sheet">
           <header id="comments-header">
             <span id="comments-title">Comments</span>
-            <select id="comments-sort" title="Comment sort">
-              <option value="confidence">Best</option>
-              <option value="top">Top</option>
-              <option value="new">New</option>
-              <option value="controversial">Controversial</option>
-              <option value="old">Old</option>
-              <option value="qa">Q&amp;A</option>
-            </select>
-            <button id="comments-close" title="Close (Esc)">✕</button>
+            <ion-select id="comments-sort" interface="action-sheet" value="confidence" title="Comment sort">
+              <ion-select-option value="confidence">Best</ion-select-option>
+              <ion-select-option value="top">Top</ion-select-option>
+              <ion-select-option value="new">New</ion-select-option>
+              <ion-select-option value="controversial">Controversial</ion-select-option>
+              <ion-select-option value="old">Old</ion-select-option>
+              <ion-select-option value="qa">Q&amp;A</ion-select-option>
+            </ion-select>
+            <ion-button id="comments-close" fill="clear" size="small" title="Close (Esc)">
+              <ion-icon slot="icon-only" data-icon="close-outline"></ion-icon>
+            </ion-button>
           </header>
           <div id="comments-list"></div>
         </div>
@@ -120,79 +136,60 @@
       <section id="settings-page" hidden>
         <form id="settings-form">
           <h2>Settings</h2>
-          <label>
-            Account
-            <select id="account-select"></select>
-          </label>
-          <label>
-            Account name
-            <input id="account-name-input" type="text" autocomplete="off" placeholder="e.g. main" />
-          </label>
-          <label>
-            Reddit cookie
-            <textarea
-              id="cookie-input"
-              rows="4"
-              placeholder="Paste the FULL Cookie header from a logged-in reddit.com request (DevTools → Network → request headers). Just reddit_session usually gets blocked as a bot."
-            ></textarea>
-          </label>
-          <div class="account-actions">
-            <button type="button" id="delete-account-btn">Delete this account</button>
-          </div>
-          <label>
-            Image duration (seconds)
-            <input id="image-seconds-input" type="number" min="1" max="600" step="0.5" />
-          </label>
-          <label class="row">
-            <input id="fill-screen-input" type="checkbox" />
-            Fill screen (crop media to fill the viewport)
-          </label>
-          <label class="row">
-            <input id="vertical-input" type="checkbox" />
-            Vertical navigation (swipe up/down)
-          </label>
-          <label class="row">
-            <input id="smooth-scroll-input" type="checkbox" />
-            Smooth scrolling (slide transitions)
-          </label>
-          <label class="row">
-            <input id="pause-icon-input" type="checkbox" />
-            Show a paused indicator on paused videos
-          </label>
-          <label class="row">
-            <input id="move-bar-input" type="checkbox" />
-            Movable progress bar (tap near a screen edge to dock it there)
-          </label>
-          <label class="row">
-            <input id="bar-invert-input" type="checkbox" />
-            Left/right progress bar fills upwards
-          </label>
-          <label class="row">
-            <input id="skip-seen-input" type="checkbox" />
-            Skip posts you've already seen
-          </label>
-          <label class="row">
-            <input id="debug-input" type="checkbox" />
-            Debug overlay (audio + performance)
-          </label>
-          <fieldset class="kinds">
-            <legend>Show post types</legend>
-            <label class="row">
-              <input id="show-images-input" type="checkbox" />
-              Images &amp; galleries
-            </label>
-            <label class="row">
-              <input id="show-videos-input" type="checkbox" />
-              Videos
-            </label>
-            <label class="row">
-              <input id="show-text-input" type="checkbox" />
-              Text posts
-            </label>
-          </fieldset>
+          <ion-list inset>
+            <ion-item>
+              <ion-select id="account-select" label="Account" interface="action-sheet"></ion-select>
+            </ion-item>
+            <ion-item>
+              <ion-input id="account-name-input" label="Account name" placeholder="e.g. main" autocomplete="off"></ion-input>
+            </ion-item>
+            <ion-item>
+              <ion-textarea
+                id="cookie-input"
+                label="Reddit cookie"
+                label-placement="stacked"
+                rows="4"
+                placeholder="Paste the FULL Cookie header from a logged-in reddit.com request (DevTools → Network → request headers). Just reddit_session usually gets blocked as a bot."
+              ></ion-textarea>
+            </ion-item>
+            <ion-item lines="none">
+              <ion-button id="delete-account-btn" slot="end" fill="clear" color="danger" size="small">
+                Delete this account
+              </ion-button>
+            </ion-item>
+          </ion-list>
+
+          <ion-list inset>
+            <ion-item>
+              <ion-input
+                id="image-seconds-input"
+                label="Image duration (seconds)"
+                type="number"
+                min="1"
+                max="600"
+                step="0.5"
+              ></ion-input>
+            </ion-item>
+            <ion-item><ion-toggle id="fill-screen-input">Fill screen (crop to fill)</ion-toggle></ion-item>
+            <ion-item><ion-toggle id="vertical-input">Vertical navigation (swipe up/down)</ion-toggle></ion-item>
+            <ion-item><ion-toggle id="smooth-scroll-input">Smooth scrolling</ion-toggle></ion-item>
+            <ion-item><ion-toggle id="pause-icon-input">Paused indicator on videos</ion-toggle></ion-item>
+            <ion-item><ion-toggle id="move-bar-input">Movable progress bar (tap near an edge)</ion-toggle></ion-item>
+            <ion-item><ion-toggle id="bar-invert-input">Left/right progress bar fills upwards</ion-toggle></ion-item>
+            <ion-item><ion-toggle id="skip-seen-input">Skip posts you've already seen</ion-toggle></ion-item>
+            <ion-item><ion-toggle id="debug-input">Debug overlay (audio + performance)</ion-toggle></ion-item>
+          </ion-list>
+
+          <ion-list inset>
+            <ion-list-header><ion-label>Show post types</ion-label></ion-list-header>
+            <ion-item><ion-checkbox id="show-images-input">Images &amp; galleries</ion-checkbox></ion-item>
+            <ion-item><ion-checkbox id="show-videos-input">Videos</ion-checkbox></ion-item>
+            <ion-item><ion-checkbox id="show-text-input">Text posts</ion-checkbox></ion-item>
+          </ion-list>
+
           <div class="settings-io">
-            <button type="button" id="export-btn">Export settings</button>
-            <button type="button" id="import-btn">Import settings</button>
+            <ion-button id="export-btn" fill="outline" size="small" color="medium">Export settings</ion-button>
+            <ion-button id="import-btn" fill="outline" size="small" color="medium">Import settings</ion-button>
           </div>
           <textarea id="io-text" rows="3" hidden placeholder="Exported settings JSON appears here — or paste JSON and press Import again"></textarea>
           <p class="hint">
@@ -201,22 +198,22 @@
             Export includes accounts and cookies — treat it like a password.
           </p>
           <div class="actions">
-            <button type="button" id="settings-cancel">Cancel</button>
-            <button type="button" id="settings-save" class="primary">Save</button>
+            <ion-button id="settings-cancel" fill="outline" color="medium">Cancel</ion-button>
+            <ion-button id="settings-save">Save</ion-button>
           </div>
         </form>
       </section>
 
-      <nav id="tabbar">
-        <button id="tab-posts" class="tab active">
-          <span class="tab-icon">▦</span>
-          <span>Posts</span>
-        </button>
-        <button id="tab-settings" class="tab">
-          <span class="tab-icon">⚙</span>
-          <span>Settings</span>
-        </button>
-      </nav>
+      <ion-tab-bar id="tabbar">
+        <ion-tab-button id="tab-posts" class="tab">
+          <ion-icon data-icon="albums-outline"></ion-icon>
+          <ion-label>Posts</ion-label>
+        </ion-tab-button>
+        <ion-tab-button id="tab-settings" class="tab">
+          <ion-icon data-icon="settings-outline"></ion-icon>
+          <ion-label>Settings</ion-label>
+        </ion-tab-button>
+      </ion-tab-bar>
     </div>
     <script type="module" src="/src/main.js"></script>
   </body>

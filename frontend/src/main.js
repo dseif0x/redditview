@@ -1,5 +1,92 @@
 import Hls from 'hls.js';
+// The custom-elements build (not the lazy loader) so Vite bundles every
+// component statically — the lazy loader fetches per-component chunks at
+// runtime that a Vite build never emits.
+import { initialize } from '@ionic/core/components';
+import { defineCustomElement as defineIonButton } from '@ionic/core/components/ion-button.js';
+import { defineCustomElement as defineIonSelect } from '@ionic/core/components/ion-select.js';
+import { defineCustomElement as defineIonSelectOption } from '@ionic/core/components/ion-select-option.js';
+import { defineCustomElement as defineIonActionSheet } from '@ionic/core/components/ion-action-sheet.js';
+import { defineCustomElement as defineIonInput } from '@ionic/core/components/ion-input.js';
+import { defineCustomElement as defineIonTextarea } from '@ionic/core/components/ion-textarea.js';
+import { defineCustomElement as defineIonToggle } from '@ionic/core/components/ion-toggle.js';
+import { defineCustomElement as defineIonCheckbox } from '@ionic/core/components/ion-checkbox.js';
+import { defineCustomElement as defineIonList } from '@ionic/core/components/ion-list.js';
+import { defineCustomElement as defineIonListHeader } from '@ionic/core/components/ion-list-header.js';
+import { defineCustomElement as defineIonItem } from '@ionic/core/components/ion-item.js';
+import { defineCustomElement as defineIonLabel } from '@ionic/core/components/ion-label.js';
+import { defineCustomElement as defineIonTabBar } from '@ionic/core/components/ion-tab-bar.js';
+import { defineCustomElement as defineIonTabButton } from '@ionic/core/components/ion-tab-button.js';
+import { defineCustomElement as defineIonToast } from '@ionic/core/components/ion-toast.js';
+import { defineCustomElement as defineIonSpinner } from '@ionic/core/components/ion-spinner.js';
+import { defineCustomElement as defineIonIcon } from 'ionicons/components/ion-icon.js';
+import '@ionic/core/css/ionic.bundle.css';
+import '@ionic/core/css/palettes/dark.always.css';
 import './style.css';
+
+// Ionicons are bundled as data-URI strings and wired up via the icon
+// property (never name), so the app stays fully self-contained — no CDN
+// fetches at runtime.
+import {
+  playOutline,
+  pauseOutline,
+  volumeMuteOutline,
+  volumeHighOutline,
+  expandOutline,
+  star,
+  starOutline,
+  arrowUpCircle,
+  arrowUpCircleOutline,
+  arrowDownCircle,
+  arrowDownCircleOutline,
+  chatbubbleOutline,
+  closeOutline,
+  albumsOutline,
+  settingsOutline,
+} from 'ionicons/icons';
+
+initialize({ mode: 'ios' });
+defineIonButton();
+defineIonSelect();
+defineIonSelectOption();
+defineIonActionSheet();
+defineIonInput();
+defineIonTextarea();
+defineIonToggle();
+defineIonCheckbox();
+defineIonList();
+defineIonListHeader();
+defineIonItem();
+defineIonLabel();
+defineIonTabBar();
+defineIonTabButton();
+defineIonToast();
+defineIonSpinner();
+defineIonIcon();
+
+const ICONS = {
+  'play-outline': playOutline,
+  'pause-outline': pauseOutline,
+  'volume-mute-outline': volumeMuteOutline,
+  'volume-high-outline': volumeHighOutline,
+  'expand-outline': expandOutline,
+  star,
+  'star-outline': starOutline,
+  'arrow-up-circle': arrowUpCircle,
+  'arrow-up-circle-outline': arrowUpCircleOutline,
+  'arrow-down-circle': arrowDownCircle,
+  'arrow-down-circle-outline': arrowDownCircleOutline,
+  'chatbubble-outline': chatbubbleOutline,
+  'close-outline': closeOutline,
+  'albums-outline': albumsOutline,
+  'settings-outline': settingsOutline,
+};
+for (const el of document.querySelectorAll('ion-icon[data-icon]')) el.icon = ICONS[el.dataset.icon];
+function setBtnIcon(btn, name) {
+  const i = btn.querySelector('ion-icon');
+  if (i && ICONS[name]) i.icon = ICONS[name];
+}
+const LOADING_HTML = '<div class="loading"><ion-spinner name="crescent"></ion-spinner></div>';
 
 // ---------------------------------------------------------------------------
 // Settings (localStorage only)
@@ -159,7 +246,6 @@ const metaSub = $('#meta-sub');
 const upBtn = $('#up-btn');
 const downBtn = $('#down-btn');
 const saveBtn = $('#save-btn');
-const toast = $('#toast');
 
 feedInput.value = settings.lastFeed;
 
@@ -182,12 +268,16 @@ function mediaUrl(u) {
   return u;
 }
 
-let toastTimer = null;
+let activeToast = null;
 function showToast(msg, ms = 4000) {
-  toast.textContent = msg;
-  toast.hidden = false;
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => (toast.hidden = true), ms);
+  activeToast?.dismiss().catch(() => {});
+  const t = document.createElement('ion-toast');
+  t.message = msg;
+  t.duration = ms;
+  t.position = 'top';
+  document.body.appendChild(t); // ion-toast removes itself after dismissing
+  t.present();
+  activeToast = t;
 }
 
 // ---------------------------------------------------------------------------
@@ -297,7 +387,7 @@ async function startFeed(path, resume = null) {
   saveSettings();
 
   emptyState?.remove();
-  viewer.innerHTML = '<div class="loading">loading…</div>';
+  viewer.innerHTML = LOADING_HTML;
   meta.hidden = true;
   resumeExemptName = resume?.name || null;
 
@@ -855,7 +945,7 @@ function next() {
     } else {
       // Next page still loading; retry shortly.
       stopSlide();
-      viewer.innerHTML = '<div class="loading">loading…</div>';
+      viewer.innerHTML = LOADING_HTML;
       setTimeout(() => {
         if (nextPosOf(idx) != null) next();
         else if (exhausted) viewer.innerHTML = '<div class="loading">End of feed.</div>';
@@ -992,7 +1082,7 @@ function buildVideo(rec) {
   const post = rec.post;
   if (post.redgifsId && !post.redgifsMp4 && !post.redgifsResolved) {
     post.redgifsResolved = true;
-    rec.el.innerHTML = '<div class="loading">loading…</div>';
+    rec.el.innerHTML = LOADING_HTML;
     resolveRedgifs(post).then(() => {
       if (mounted.get(rec.key) !== rec) return;
       rec.el.innerHTML = '';
@@ -1178,7 +1268,14 @@ document.addEventListener(
   'click',
   (e) => {
     if (!settings.moveBar || settingsTabOpen) return;
-    if (e.target.closest('button:not(.nav-zone), input, select, textarea, a, dialog, #progress, #meta-actions')) return;
+    if (
+      e.target.closest(
+        'button:not(.nav-zone), input, select, textarea, a, dialog, #progress, #meta-actions, ' +
+          'ion-button, ion-select, ion-input, ion-textarea, ion-toggle, ion-checkbox, ion-tab-bar, ' +
+          'ion-action-sheet, ion-alert, ion-toast'
+      )
+    )
+      return;
     let pos = null;
     // The top edge is mostly covered by the feed input on phones, so any tap
     // on the top bar's empty background counts as the top edge too.
@@ -1314,7 +1411,7 @@ function renderComment(c, depth) {
 }
 
 async function loadComments() {
-  commentsList.innerHTML = '<div class="loading">loading…</div>';
+  commentsList.innerHTML = LOADING_HTML;
   const post = commentsPost;
   try {
     const headers = {};
@@ -1362,7 +1459,7 @@ function closeComments() {
 $('#comments-btn').addEventListener('click', openComments);
 $('#comments-close').addEventListener('click', closeComments);
 $('#comments-backdrop').addEventListener('click', closeComments);
-commentsSort.addEventListener('change', () => {
+commentsSort.addEventListener('ionChange', () => {
   if (commentsOpen) loadComments();
 });
 
@@ -1371,9 +1468,11 @@ commentsSort.addEventListener('change', () => {
 // ---------------------------------------------------------------------------
 function updateActionButtons(post) {
   upBtn.classList.toggle('active-up', post.likes === true);
+  setBtnIcon(upBtn, post.likes === true ? 'arrow-up-circle' : 'arrow-up-circle-outline');
   downBtn.classList.toggle('active-down', post.likes === false);
+  setBtnIcon(downBtn, post.likes === false ? 'arrow-down-circle' : 'arrow-down-circle-outline');
   saveBtn.classList.toggle('active-save', !!post.saved);
-  saveBtn.textContent = post.saved ? '★' : '☆';
+  setBtnIcon(saveBtn, post.saved ? 'star' : 'star-outline');
 }
 
 function actionHeaders() {
@@ -1387,7 +1486,7 @@ function requireCookieAndPost() {
   const post = posts[idx];
   if (!post || !post.name) return null;
   if (!settings.cookie.trim()) {
-    showToast('Set your reddit cookie in ⚙ settings to vote/save');
+    showToast('Set your reddit cookie in the Settings tab to vote/save');
     return null;
   }
   return post;
@@ -1449,7 +1548,7 @@ function preloadUpcoming() {
 // Autoscroll / mute
 // ---------------------------------------------------------------------------
 function updateAutoscrollBtn() {
-  pauseBtn.textContent = settings.autoscroll ? '⏸' : '▶';
+  setBtnIcon(pauseBtn, settings.autoscroll ? 'pause-outline' : 'play-outline');
   pauseBtn.classList.toggle('active', settings.autoscroll);
   pauseBtn.title = settings.autoscroll ? 'Autoscroll on — click to stop (space)' : 'Autoscroll off — click to start (space)';
 }
@@ -1606,7 +1705,8 @@ function toggleMute() {
 }
 
 function updateMuteBtn() {
-  muteBtn.textContent = muted ? '🔇' : '🔊';
+  setBtnIcon(muteBtn, muted ? 'volume-mute-outline' : 'volume-high-outline');
+  muteBtn.classList.toggle('active', !muted);
   muteBtn.title = muted ? 'Audio off — click to play audio (m)' : 'Audio on — click to mute (m)';
 }
 
@@ -1648,9 +1748,9 @@ function bookmarkLabel(b) {
 
 function populateBookmarks() {
   if (!Array.isArray(settings.bookmarks)) settings.bookmarks = [];
-  bookmarkSelect.innerHTML = '<option value="">★ Feeds</option>';
+  bookmarkSelect.innerHTML = '';
   settings.bookmarks.forEach((b, i) => {
-    const opt = document.createElement('option');
+    const opt = document.createElement('ion-select-option');
     opt.value = String(i);
     opt.textContent = bookmarkLabel(b);
     bookmarkSelect.appendChild(opt);
@@ -1666,7 +1766,7 @@ function currentBookmarkIndex() {
 
 function updateBmBtn() {
   const marked = currentBookmarkIndex() >= 0;
-  bmBtn.textContent = marked ? '★' : '☆';
+  setBtnIcon(bmBtn, marked ? 'star' : 'star-outline');
   bmBtn.classList.toggle('active', marked);
   bmBtn.title = marked ? 'Remove this feed from bookmarks' : 'Bookmark this feed';
 }
@@ -1684,9 +1784,9 @@ bmBtn.addEventListener('click', () => {
   populateBookmarks();
 });
 
-bookmarkSelect.addEventListener('change', () => {
+bookmarkSelect.addEventListener('ionChange', () => {
   const b = settings.bookmarks[Number(bookmarkSelect.value)];
-  bookmarkSelect.value = ''; // reset so the same feed can be re-picked
+  bookmarkSelect.value = null; // reset so the same feed can be re-picked
   if (!b) return;
   settings.sort = b.sort || '';
   sortSelect.value = settings.sort;
@@ -1697,9 +1797,15 @@ bookmarkSelect.addEventListener('change', () => {
 feedInput.addEventListener('input', updateBmBtn);
 populateBookmarks();
 
+// Titles for the action sheets the selects open.
+sortSelect.interfaceOptions = { header: 'Sort' };
+bookmarkSelect.interfaceOptions = { header: 'Saved feeds' };
+commentsSort.interfaceOptions = { header: 'Sort comments' };
+accountSelect.interfaceOptions = { header: 'Account' };
+
 sortSelect.value = settings.sort;
-sortSelect.addEventListener('change', () => {
-  settings.sort = sortSelect.value;
+sortSelect.addEventListener('ionChange', () => {
+  settings.sort = sortSelect.value || '';
   saveSettings();
   if (feedActive) startFeed(feedInput.value.trim() || settings.lastFeed);
 });
@@ -2008,12 +2114,12 @@ let editingAccount = 0;
 function populateAccountSelect() {
   accountSelect.innerHTML = '';
   settings.accounts.forEach((a, i) => {
-    const opt = document.createElement('option');
+    const opt = document.createElement('ion-select-option');
     opt.value = String(i);
     opt.textContent = (a.name || `Account ${i + 1}`) + (i === settings.activeAccount ? ' (active)' : '');
     accountSelect.appendChild(opt);
   });
-  const add = document.createElement('option');
+  const add = document.createElement('ion-select-option');
   add.value = 'new';
   add.textContent = '+ Add account…';
   accountSelect.appendChild(add);
@@ -2027,7 +2133,7 @@ function loadAccountFields() {
   deleteAccountBtn.hidden = !a;
 }
 
-accountSelect.addEventListener('change', () => {
+accountSelect.addEventListener('ionChange', () => {
   editingAccount = accountSelect.value === 'new' ? -1 : Number(accountSelect.value);
   loadAccountFields();
 });
@@ -2070,6 +2176,8 @@ function showTab(tab) {
   settingsPage.hidden = !settingsTabOpen;
   tabPosts.classList.toggle('active', !settingsTabOpen);
   tabSettings.classList.toggle('active', settingsTabOpen);
+  tabPosts.selected = !settingsTabOpen;
+  tabSettings.selected = settingsTabOpen;
   if (settingsTabOpen) {
     populateSettingsPage();
     // hold the feed while in settings
@@ -2101,6 +2209,7 @@ syncTabbarHeight();
 
 tabPosts.addEventListener('click', () => showTab('posts'));
 tabSettings.addEventListener('click', () => showTab('settings'));
+showTab('posts');
 $('#settings-cancel').addEventListener('click', () => showTab('posts'));
 settingsForm.addEventListener('submit', (e) => e.preventDefault());
 
