@@ -839,20 +839,30 @@ body {
 }
 
 /* ---- settings page (tab) ---- */
+/* The page itself never scrolls: its safe-area padding is a solid mask
+   under the iOS status bar. The form inside is the scroll container, so
+   scrolled content clips below the mask instead of sliding over the clock. */
 #settings-page {
   position: absolute;
   inset: 0 0 var(--tabbar-h) 0;
   z-index: 20;
   background: var(--ion-background-color);
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  touch-action: pan-y;
-  padding: calc(env(safe-area-inset-top) + 0.75rem) 0 2rem;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  padding-top: calc(env(safe-area-inset-top) + 0.25rem);
 }
 
 #settings-page #settings-form {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  width: 100%;
   max-width: 34rem;
   margin: 0 auto;
+  padding: 0.5rem 0 2rem;
 }
 
 #settings-page h2 {

@@ -2278,6 +2278,19 @@ function syncTabbarHeight() {
 window.addEventListener('load', syncTabbarHeight);
 window.addEventListener('resize', syncTabbarHeight);
 window.addEventListener('orientationchange', () => setTimeout(syncTabbarHeight, 300));
+// The bar grows when Ionic hydrates it (icons/labels render in) — a
+// load-time measurement can be stale, leaving the layout overlapping the
+// bar. Track the real rendered size continuously instead.
+if (typeof ResizeObserver !== 'undefined') {
+  const ro = new ResizeObserver(syncTabbarHeight);
+  try {
+    // border-box: the bar's height includes safe-area padding, which a
+    // content-box observation would miss.
+    ro.observe(tabbarEl, { box: 'border-box' });
+  } catch {
+    ro.observe(tabbarEl);
+  }
+}
 syncTabbarHeight();
 
 tabPosts.addEventListener('click', () => showTab('posts'));
