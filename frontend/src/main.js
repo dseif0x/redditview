@@ -226,17 +226,21 @@ const imageSecondsInput = $('#image-seconds-input');
 const accountSelect = $('#account-select');
 const accountNameInput = $('#account-name-input');
 const deleteAccountBtn = $('#delete-account-btn');
-const showImagesInput = $('#show-images-input');
-const showVideosInput = $('#show-videos-input');
-const showTextInput = $('#show-text-input');
-const fillScreenInput = $('#fill-screen-input');
-const verticalInput = $('#vertical-input');
-const smoothScrollInput = $('#smooth-scroll-input');
-const pauseIconInput = $('#pause-icon-input');
-const moveBarInput = $('#move-bar-input');
-const barInvertInput = $('#bar-invert-input');
-const skipSeenInput = $('#skip-seen-input');
-const debugInput = $('#debug-input');
+// Each boolean setting and the toggle/checkbox that edits it; the settings
+// form is populated and saved by looping over this map.
+const boolInputs = {
+  fillScreen: $('#fill-screen-input'),
+  vertical: $('#vertical-input'),
+  smoothScroll: $('#smooth-scroll-input'),
+  showPauseIcon: $('#pause-icon-input'),
+  moveBar: $('#move-bar-input'),
+  barInvert: $('#bar-invert-input'),
+  skipSeen: $('#skip-seen-input'),
+  debug: $('#debug-input'),
+  showImages: $('#show-images-input'),
+  showVideos: $('#show-videos-input'),
+  showText: $('#show-text-input'),
+};
 const fillBtn = $('#fill-btn');
 const appEl = $('#app');
 const sortBtn = $('#sort-btn');
@@ -273,6 +277,26 @@ function mediaUrl(u) {
   return u;
 }
 
+// Backend API fetch: attaches the reddit cookie, POSTs a JSON body when one
+// is given, and turns error responses into thrown Errors.
+async function api(url, body) {
+  const headers = {};
+  if (settings.cookie.trim()) headers['X-Reddit-Cookie'] = settings.cookie.trim();
+  let init = { headers };
+  if (body !== undefined) {
+    headers['Content-Type'] = 'application/json';
+    init = { method: 'POST', headers, body: JSON.stringify(body) };
+  }
+  const res = await fetch(url, init);
+  if (!res.ok) throw new Error((await res.text()).slice(0, 200) || `HTTP ${res.status}`);
+  return res.json();
+}
+
+// Full-screen status/error message in the viewer area.
+const viewerMsg = (html, error = false) => {
+  viewer.innerHTML = `<div class="loading${error ? ' error' : ''}">${html}</div>`;
+};
+
 let activeToast = null;
 function showToast(msg, ms = 4000) {
   activeToast?.dismiss().catch(() => {});
@@ -285,9 +309,6 @@ function showToast(msg, ms = 4000) {
   activeToast = t;
 }
 
-// ---------------------------------------------------------------------------
-// Feed loading
-// ---------------------------------------------------------------------------
 // ---------------------------------------------------------------------------
 // Sort. Rewrites the feed path for the selected sort mode: listing feeds
 // (home/subreddit/multi) take the sort as a trailing path segment, user pages
@@ -346,14 +367,7 @@ async function fetchPage() {
     for (let attempts = 0; attempts < 5; attempts++) {
       const params = new URLSearchParams({ path: applySort(feedPath) });
       if (after) params.set('after', after);
-      const headers = {};
-      if (settings.cookie.trim()) headers['X-Reddit-Cookie'] = settings.cookie.trim();
-
-      const res = await fetch('/api/feed?' + params.toString(), { headers });
-      if (!res.ok) {
-        throw new Error((await res.text()).slice(0, 200) || `HTTP ${res.status}`);
-      }
-      const data = await res.json();
+      const data = await api('/api/feed?' + params.toString());
       const cursorUsed = after || '';
       const added = data.posts.filter(
         (p) =>
@@ -399,11 +413,11 @@ async function startFeed(path, resume = null) {
   try {
     await fetchPage();
   } catch (err) {
-    viewer.innerHTML = `<div class="loading error">Failed to load feed:<br>${escapeHtml(String(err.message || err))}</div>`;
+    viewerMsg(`Failed to load feed:<br>${escapeHtml(String(err.message || err))}`, true);
     return;
   }
   if (posts.length === 0) {
-    viewer.innerHTML = '<div class="loading">No viewable posts in this feed.</div>';
+    viewerMsg('No viewable posts in this feed.');
     return;
   }
   // When resuming, jump straight to the remembered post if it's still there.
@@ -945,7 +959,7 @@ function next() {
     maybePrefetch();
     if (exhausted) {
       stopSlide();
-      viewer.innerHTML = '<div class="loading">End of feed.</div>';
+      viewerMsg('End of feed.');
       meta.hidden = true;
     } else {
       // Next page still loading; retry shortly.
@@ -953,7 +967,7 @@ function next() {
       viewer.innerHTML = LOADING_HTML;
       setTimeout(() => {
         if (nextPosOf(idx) != null) next();
-        else if (exhausted) viewer.innerHTML = '<div class="loading">End of feed.</div>';
+        else if (exhausted) viewerMsg('End of feed.');
         else setTimeout(next, 700);
       }, 700);
     }
@@ -978,10 +992,13 @@ function activeGallery() {
   return rec?.gallery ? rec : null;
 }
 
-function updateGalleryTransform(rec, animate) {
+// Position a gallery strip at its current image, optionally shifted by a
+// drag delta in px, optionally animating there (mirrors placeRecord).
+function placeGalleryStrip(rec, animate, dragPx = 0) {
   const g = rec.gallery;
   g.strip.classList.toggle('sliding', animate);
-  g.strip.style.transform = g.idx === 0 ? '' : `translate${crossAxisName()}(${-g.idx * 100}%)`;
+  g.strip.style.transform =
+    g.idx === 0 && !dragPx ? '' : `translate${crossAxisName()}(calc(${-g.idx * 100}% + ${dragPx}px))`;
 }
 
 function galleryStep(dir) {
@@ -991,7 +1008,7 @@ function galleryStep(dir) {
   if (ni < 0 || ni >= rec.gallery.count) return false;
   rec.gallery.idx = ni;
   galleryIdx = ni;
-  updateGalleryTransform(rec, settings.smoothScroll);
+  placeGalleryStrip(rec, settings.smoothScroll);
   renderMeta(rec.post);
   if (settings.autoscroll) startTimer(settings.imageSeconds); // each image gets the full duration
   return true;
@@ -1028,7 +1045,7 @@ function buildGallery(rec) {
   });
   rec.gallery = { idx: 0, count: rec.post.images.length, strip };
   rec.el.appendChild(strip);
-  updateGalleryTransform(rec, false);
+  placeGalleryStrip(rec, false);
 }
 
 function buildText(rec) {
@@ -1049,14 +1066,11 @@ function buildText(rec) {
 // resolve the real (signed, expiring) redgifs mp4 first.
 async function resolveRedgifs(post) {
   try {
-    const res = await fetch('/api/redgifs?id=' + encodeURIComponent(post.redgifsId));
-    if (res.ok) {
-      const data = await res.json();
-      if (data.mp4) {
-        post.redgifsMp4 = data.mp4;
-        if (!post.poster && data.poster) post.poster = data.poster;
-        return;
-      }
+    const data = await api('/api/redgifs?id=' + encodeURIComponent(post.redgifsId));
+    if (data.mp4) {
+      post.redgifsMp4 = data.mp4;
+      if (!post.poster && data.poster) post.poster = data.poster;
+      return;
     }
   } catch {
     /* fall through to reddit's silent transcode */
@@ -1419,11 +1433,7 @@ async function loadComments() {
   commentsList.innerHTML = LOADING_HTML;
   const post = commentsPost;
   try {
-    const headers = {};
-    if (settings.cookie.trim()) headers['X-Reddit-Cookie'] = settings.cookie.trim();
-    const res = await fetch(`/api/comments?id=${encodeURIComponent(post.id)}&sort=${commentsSort.value}`, { headers });
-    if (!res.ok) throw new Error((await res.text()).slice(0, 200) || `HTTP ${res.status}`);
-    const data = await res.json();
+    const data = await api(`/api/comments?id=${encodeURIComponent(post.id)}&sort=${commentsSort.value}`);
     if (commentsPost !== post || !commentsOpen) return; // user moved on
     commentsList.innerHTML = '';
     if (!data.comments.length) {
@@ -1480,13 +1490,6 @@ function updateActionButtons(post) {
   setBtnIcon(saveBtn, post.saved ? 'star' : 'star-outline');
 }
 
-function actionHeaders() {
-  return {
-    'Content-Type': 'application/json',
-    'X-Reddit-Cookie': settings.cookie.trim(),
-  };
-}
-
 function requireCookieAndPost() {
   const post = posts[idx];
   if (!post || !post.name) return null;
@@ -1506,12 +1509,7 @@ async function vote(dir) {
   post.likes = target === 1 ? true : target === -1 ? false : null;
   updateActionButtons(post);
   try {
-    const res = await fetch('/api/vote', {
-      method: 'POST',
-      headers: actionHeaders(),
-      body: JSON.stringify({ id: post.name, dir: target }),
-    });
-    if (!res.ok) throw new Error((await res.text()).slice(0, 150));
+    await api('/api/vote', { id: post.name, dir: target });
   } catch (err) {
     post.likes = prev;
     if (posts[idx] === post) updateActionButtons(post);
@@ -1526,12 +1524,7 @@ async function toggleSave() {
   post.saved = !prev;
   updateActionButtons(post);
   try {
-    const res = await fetch('/api/save', {
-      method: 'POST',
-      headers: actionHeaders(),
-      body: JSON.stringify({ id: post.name, save: post.saved }),
-    });
-    if (!res.ok) throw new Error((await res.text()).slice(0, 150));
+    await api('/api/save', { id: post.name, save: post.saved });
     showToast(post.saved ? 'Saved' : 'Unsaved', 1500);
   } catch (err) {
     post.saved = prev;
@@ -1590,6 +1583,17 @@ function toggleFill() {
   settings.fillScreen = !settings.fillScreen;
   saveSettings();
   applyFill();
+}
+
+// Re-render everything that reflects settings (startup, settings save, import).
+function applySettings() {
+  applyFill();
+  applyDirection();
+  applyBarPos();
+  updateAutoscrollBtn();
+  updateMuteBtn();
+  updateSortBtn();
+  populateBookmarks();
 }
 
 // ---------------------------------------------------------------------------
@@ -1737,9 +1741,6 @@ document.addEventListener('touchend', rescueAudio, { capture: true, passive: tru
 document.addEventListener('click', rescueAudio, { capture: true, passive: true });
 
 // ---------------------------------------------------------------------------
-// Wiring
-// ---------------------------------------------------------------------------
-// ---------------------------------------------------------------------------
 // Feed bookmarks: star the current feed (with its sort) and re-open it from
 // the quick-pick dropdown.
 // ---------------------------------------------------------------------------
@@ -1800,7 +1801,6 @@ bookmarkSelect.addEventListener('ionChange', () => {
 });
 
 feedInput.addEventListener('input', updateBmBtn);
-populateBookmarks();
 
 // Titles for the action sheets the selects open.
 bookmarkSelect.interfaceOptions = { header: 'Saved feeds' };
@@ -1883,7 +1883,6 @@ async function openSortPicker() {
 }
 
 sortBtn.addEventListener('click', openSortPicker);
-updateSortBtn();
 
 feedForm.addEventListener('submit', (e) => {
   e.preventDefault();
@@ -1975,12 +1974,6 @@ let touchStartY = 0;
 let dragMode = null; // null | 'main' | 'gallery'
 let canDrag = false;
 
-function dragGalleryStrip(rec, px, animate) {
-  const g = rec.gallery;
-  g.strip.classList.toggle('sliding', animate);
-  g.strip.style.transform = `translate${crossAxisName()}(calc(${-g.idx * 100}% + ${px}px))`;
-}
-
 function gestureBegin(x, y, target, isTouch = false) {
   touchStartX = x;
   touchStartY = y;
@@ -2006,7 +1999,7 @@ function gestureMove(x, y) {
     for (const rec of mounted.values()) placeRecord(rec, rec.baseOff, false, main);
   } else if (dragMode === 'gallery') {
     const rec = activeGallery();
-    if (rec) dragGalleryStrip(rec, cross, false);
+    if (rec) placeGalleryStrip(rec, false, cross);
   }
 }
 
@@ -2026,7 +2019,7 @@ function gestureEnd(x, y) {
     if (!rec) return true;
     // Step if the swipe was far enough and the strip has room; else snap.
     if (Math.abs(cross) < 60 || !galleryStep(cross < 0 ? 1 : -1)) {
-      updateGalleryTransform(rec, true);
+      placeGalleryStrip(rec, true);
     }
     return true;
   }
@@ -2054,7 +2047,7 @@ viewer.addEventListener(
         for (const rec of mounted.values()) placeRecord(rec, rec.baseOff, true);
       } else if (dragMode === 'gallery') {
         const rec = activeGallery();
-        if (rec) updateGalleryTransform(rec, true);
+        if (rec) placeGalleryStrip(rec, true);
       }
       dragMode = null;
       canDrag = false;
@@ -2249,17 +2242,7 @@ function populateSettingsPage() {
   populateAccountSelect();
   loadAccountFields();
   imageSecondsInput.value = settings.imageSeconds;
-  fillScreenInput.checked = settings.fillScreen;
-  verticalInput.checked = settings.vertical;
-  smoothScrollInput.checked = settings.smoothScroll;
-  pauseIconInput.checked = settings.showPauseIcon;
-  moveBarInput.checked = settings.moveBar;
-  barInvertInput.checked = settings.barInvert;
-  skipSeenInput.checked = settings.skipSeen;
-  debugInput.checked = settings.debug;
-  showImagesInput.checked = settings.showImages;
-  showVideosInput.checked = settings.showVideos;
-  showTextInput.checked = settings.showText;
+  for (const [key, el] of Object.entries(boolInputs)) el.checked = settings[key];
 }
 
 let settingsPausedPlayback = false;
@@ -2320,12 +2303,9 @@ $('#settings-cancel').addEventListener('click', () => showTab('posts'));
 settingsForm.addEventListener('submit', (e) => e.preventDefault());
 
 $('#settings-save').addEventListener('click', () => {
-  const filtersChanged =
-    settings.showImages !== showImagesInput.checked ||
-    settings.showVideos !== showVideosInput.checked ||
-    settings.showText !== showTextInput.checked ||
-    settings.skipSeen !== skipSeenInput.checked;
-  const verticalChanged = settings.vertical !== verticalInput.checked;
+  const changed = (key) => settings[key] !== boolInputs[key].checked;
+  const filtersChanged = ['showImages', 'showVideos', 'showText', 'skipSeen'].some(changed);
+  const verticalChanged = changed('vertical');
   const prevCookie = settings.cookie;
 
   // Saving selects the edited account as the active one.
@@ -2347,22 +2327,10 @@ $('#settings-save').addEventListener('click', () => {
   settings.cookie = activeCookie();
 
   settings.imageSeconds = Math.max(1, parseFloat(imageSecondsInput.value) || DEFAULTS.imageSeconds);
-  settings.fillScreen = fillScreenInput.checked;
-  settings.vertical = verticalInput.checked;
-  settings.smoothScroll = smoothScrollInput.checked;
-  settings.showPauseIcon = pauseIconInput.checked;
+  for (const [key, el] of Object.entries(boolInputs)) settings[key] = el.checked;
   if (!settings.showPauseIcon) document.querySelectorAll('.pause-indicator').forEach((el) => (el.hidden = true));
-  settings.moveBar = moveBarInput.checked;
-  settings.barInvert = barInvertInput.checked;
-  settings.skipSeen = skipSeenInput.checked;
-  settings.debug = debugInput.checked;
-  settings.showImages = showImagesInput.checked;
-  settings.showVideos = showVideosInput.checked;
-  settings.showText = showTextInput.checked;
   saveSettings();
-  applyFill();
-  applyDirection();
-  applyBarPos();
+  applySettings();
   // Mounted neighbor slides carry transforms for the old axis; re-place them.
   if (verticalChanged && activeKey && mounted.has(activeKey)) {
     showSlide(mounted.get(activeKey).pos, 0);
@@ -2444,11 +2412,7 @@ function escapeHtml(s) {
   return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 }
 
-applyFill();
-applyDirection();
-applyBarPos();
-updateMuteBtn();
-updateAutoscrollBtn();
+applySettings();
 
 // iOS scrolls the document when the on-screen keyboard opens and doesn't
 // always scroll back when it closes. The app is position-fixed so nothing
@@ -2509,26 +2473,8 @@ $('#import-btn').addEventListener('click', () => {
   settings.cookie = activeCookie();
   saveSettings();
   // Refresh everything driven by settings.
-  applyFill();
-  applyDirection();
-  applyBarPos();
-  updateAutoscrollBtn();
-  updateSortBtn();
-  populateBookmarks();
-  editingAccount = settings.accounts.length ? settings.activeAccount : -1;
-  populateAccountSelect();
-  loadAccountFields();
-  imageSecondsInput.value = settings.imageSeconds;
-  fillScreenInput.checked = settings.fillScreen;
-  verticalInput.checked = settings.vertical;
-  smoothScrollInput.checked = settings.smoothScroll;
-  pauseIconInput.checked = settings.showPauseIcon;
-  moveBarInput.checked = settings.moveBar;
-  barInvertInput.checked = settings.barInvert;
-  skipSeenInput.checked = settings.skipSeen;
-  showImagesInput.checked = settings.showImages;
-  showVideosInput.checked = settings.showVideos;
-  showTextInput.checked = settings.showText;
+  applySettings();
+  populateSettingsPage();
   ioText.hidden = true;
   showToast('Settings imported');
   if (feedActive) startFeed(feedInput.value.trim());
