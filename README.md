@@ -90,6 +90,29 @@ docker build -t redditview .
 docker run -p 8080:8080 redditview
 ```
 
+## iOS app (sideload)
+
+`.github/workflows/ios.yml` builds an **unsigned** `.ipa` on every push to
+`main` that touches the frontend (artifact on the workflow run). The app is a
+Capacitor shell — a native webview that loads your deployed instance — so all
+`/api` calls, the media proxy, and HLS rewriting work exactly as in the
+browser.
+
+Setup:
+
+1. Set the **`IOS_SERVER_URL`** repository variable (Settings → Secrets and
+   variables → Actions → Variables) to the public `https://` URL of your
+   deployed instance, e.g. `https://redditview.example.com`.
+2. Merge to `main` (or run the workflow manually) and download the
+   `redditview-ios-unsigned-*` artifact.
+3. Install the `.ipa` by sideloading — AltStore, Sideloadly, etc. re-sign it
+   with your own (free) Apple ID. Proper distribution signing would need an
+   Apple Developer account and cert secrets wired into the workflow.
+
+The native project is generated in CI (`npx cap add ios`) and not checked in;
+`frontend/capacitor.config.json` and the icon/splash sources in
+`frontend/assets/` are the only tracked iOS files.
+
 ## Kubernetes (Helm)
 
 The chart in `charts/redditview` is published to GitHub Pages by
