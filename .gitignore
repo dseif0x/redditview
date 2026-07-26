@@ -4,6 +4,9 @@ frontend/ios/
 frontend/build/
 mobile/.expo/
 mobile/dist/
+mobile/ios/
+mobile/android/
+mobile/build/
 backend/redditview
 *.log
 .DS_Store

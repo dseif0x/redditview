@@ -1,0 +1,93 @@
+name: RN preview builds
+
+# Preview builds for the React Native spike branch ONLY: an unsigned .ipa of
+# the Expo app (mobile/) and a ghcr image tagged :rn — never :latest, which
+# production deployments track. If the spike graduates and merges, fold these
+# into the main workflows (or delete this file).
+
+on:
+  push:
+    branches: [claude/expo-spike]
+  workflow_dispatch:
+
+jobs:
+  ipa:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - name: Install dependencies
+        working-directory: mobile
+        run: npm ci
+
+      # Generates ios/ (redditview.xcodeproj + shared scheme) and runs
+      # pod install, producing ios/redditview.xcworkspace.
+      - name: Generate iOS project
+        working-directory: mobile
+        env:
+          CI: '1'
+        run: npx expo prebuild --platform ios
+
+      - name: Allow plain-http backends (ATS)
+        working-directory: mobile
+        run: /usr/libexec/PlistBuddy -c "Set :NSAppTransportSecurity:NSAllowsArbitraryLoads true" ios/redditview/Info.plist
+
+      - name: Archive (unsigned)
+        working-directory: mobile
+        run: |
+          xcodebuild -workspace ios/redditview.xcworkspace \
+            -scheme redditview \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$PWD/build/App.xcarchive" \
+            CURRENT_PROJECT_VERSION=${{ github.run_number }} \
+            CODE_SIGNING_ALLOWED=NO \
+            archive
+
+      - name: Package IPA
+        working-directory: mobile
+        run: |
+          mkdir -p build/Payload
+          cp -R build/App.xcarchive/Products/Applications/*.app build/Payload/
+          (cd build && zip -qry redditview-rn.ipa Payload)
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: redditview-rn-ipa-${{ github.run_number }}
+          path: mobile/build/redditview-rn.ipa
+          if-no-files-found: error
+
+  docker:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-qemu-action@v3
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push :rn
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ghcr.io/${{ github.repository }}:rn
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
