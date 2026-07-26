@@ -2,6 +2,8 @@ node_modules/
 frontend/dist/
 frontend/ios/
 frontend/build/
+mobile/.expo/
+mobile/dist/
 backend/redditview
 *.log
 .DS_Store

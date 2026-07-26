@@ -108,6 +108,10 @@ The native project is generated in CI (`npx cap add ios`) and not checked in;
 `frontend/capacitor.config.json` and the icon/splash sources in
 `frontend/assets/` are the only tracked iOS files.
 
+There is also a fully native (React Native / Expo) proof-of-concept in
+`mobile/` — native video player, native paging — runnable on an iPhone via
+Expo Go without a Mac; see `mobile/README.md`.
+
 ## Kubernetes (Helm)
 
 The chart in `charts/redditview` is published to GitHub Pages by
