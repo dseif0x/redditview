@@ -95,8 +95,14 @@ const LOADING_HTML = '<div class="loading"><ion-spinner name="crescent"></ion-sp
 // ---------------------------------------------------------------------------
 // Settings (localStorage only)
 // ---------------------------------------------------------------------------
+// Running inside the Capacitor iOS shell (bundled assets, capacitor://
+// scheme). The native app has no same-origin backend, so it needs the
+// backend server URL setting.
+const IS_NATIVE = location.protocol === 'capacitor:';
+
 const SETTINGS_KEY = 'redditview.settings';
 const DEFAULTS = {
+  serverUrl: '',
   cookie: '',
   accounts: [],
   activeAccount: 0,
@@ -222,6 +228,7 @@ const tabSettings = $('#tab-settings');
 let settingsTabOpen = false;
 const settingsForm = $('#settings-form');
 const cookieInput = $('#cookie-input');
+const serverUrlInput = $('#server-url-input');
 const imageSecondsInput = $('#image-seconds-input');
 const accountSelect = $('#account-select');
 const accountNameInput = $('#account-name-input');
@@ -263,13 +270,22 @@ feedInput.value = settings.lastFeed;
 // ---------------------------------------------------------------------------
 const PROXIED_HOSTS = ['redd.it', 'redditmedia.com', 'redditstatic.com', 'imgur.com', 'redgifs.com'];
 
+// Base URL of the backend serving /api. Empty = same origin (the normal
+// web app); the native shell and remote dev setups point it elsewhere via
+// the server URL setting.
+function apiBase() {
+  return String(settings.serverUrl || '')
+    .trim()
+    .replace(/\/+$/, '');
+}
+
 // Route media through the backend proxy when it lives on a reddit/imgur CDN
 // (CORS + hotlinking); anything else loads directly.
 function mediaUrl(u) {
   try {
     const host = new URL(u).hostname.toLowerCase();
     if (PROXIED_HOSTS.some((d) => host === d || host.endsWith('.' + d))) {
-      return '/api/media?u=' + encodeURIComponent(u);
+      return apiBase() + '/api/media?u=' + encodeURIComponent(u);
     }
   } catch {
     /* relative or malformed -> use as-is */
@@ -280,6 +296,10 @@ function mediaUrl(u) {
 // Backend API fetch: attaches the reddit cookie, POSTs a JSON body when one
 // is given, and turns error responses into thrown Errors.
 async function api(url, body) {
+  const base = apiBase();
+  if (IS_NATIVE && !base) {
+    throw new Error('Set your backend server URL in the Settings tab');
+  }
   const headers = {};
   if (settings.cookie.trim()) headers['X-Reddit-Cookie'] = settings.cookie.trim();
   let init = { headers };
@@ -287,7 +307,7 @@ async function api(url, body) {
     headers['Content-Type'] = 'application/json';
     init = { method: 'POST', headers, body: JSON.stringify(body) };
   }
-  const res = await fetch(url, init);
+  const res = await fetch(base + url, init);
   if (!res.ok) throw new Error((await res.text()).slice(0, 200) || `HTTP ${res.status}`);
   return res.json();
 }
@@ -2241,6 +2261,7 @@ function populateSettingsPage() {
   editingAccount = settings.accounts.length ? settings.activeAccount : -1;
   populateAccountSelect();
   loadAccountFields();
+  serverUrlInput.value = settings.serverUrl;
   imageSecondsInput.value = settings.imageSeconds;
   for (const [key, el] of Object.entries(boolInputs)) el.checked = settings[key];
 }
@@ -2307,6 +2328,7 @@ $('#settings-save').addEventListener('click', () => {
   const filtersChanged = ['showImages', 'showVideos', 'showText', 'skipSeen'].some(changed);
   const verticalChanged = changed('vertical');
   const prevCookie = settings.cookie;
+  const prevServer = apiBase();
 
   // Saving selects the edited account as the active one.
   const name = accountNameInput.value.trim();
@@ -2326,6 +2348,7 @@ $('#settings-save').addEventListener('click', () => {
   }
   settings.cookie = activeCookie();
 
+  settings.serverUrl = serverUrlInput.value.trim();
   settings.imageSeconds = Math.max(1, parseFloat(imageSecondsInput.value) || DEFAULTS.imageSeconds);
   for (const [key, el] of Object.entries(boolInputs)) settings[key] = el.checked;
   if (!settings.showPauseIcon) document.querySelectorAll('.pause-indicator').forEach((el) => (el.hidden = true));
@@ -2341,8 +2364,10 @@ $('#settings-save').addEventListener('click', () => {
   } else {
     showToast('Settings saved');
   }
-  // Reload if the account or the type filters changed what the feed contains.
-  if ((filtersChanged || prevCookie !== settings.cookie) && feedActive) startFeed(feedPath);
+  // Reload if the account, server, or type filters changed what the feed contains.
+  if ((filtersChanged || prevCookie !== settings.cookie || apiBase() !== prevServer) && feedActive) {
+    startFeed(feedPath);
+  }
   showTab('posts');
 });
 
@@ -2413,6 +2438,7 @@ function escapeHtml(s) {
 }
 
 applySettings();
+if (IS_NATIVE) $('#native-hint')?.removeAttribute('hidden');
 
 // iOS scrolls the document when the on-screen keyboard opens and doesn't
 // always scroll back when it closes. The app is position-fixed so nothing

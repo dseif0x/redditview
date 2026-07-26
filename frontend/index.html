@@ -68,6 +68,10 @@
             <strong>downvoted</strong>, or <strong>hidden</strong>.
           </p>
           <p class="hint">← / → navigate · space toggles autoscroll · m toggles sound</p>
+          <p class="hint" id="native-hint" hidden>
+            This app needs a redditview server: set its URL in the
+            <strong>Settings</strong> tab first.
+          </p>
         </div>
       </main>
 
@@ -154,6 +158,18 @@
           </ion-list>
 
           <ion-list inset>
+            <ion-item>
+              <ion-input
+                id="server-url-input"
+                label="Backend server URL"
+                label-placement="stacked"
+                type="url"
+                inputmode="url"
+                autocomplete="off"
+                autocapitalize="off"
+                placeholder="Empty = this server. Required in the iOS app, e.g. https://redditview.example.com"
+              ></ion-input>
+            </ion-item>
             <ion-item>
               <ion-input
                 id="image-seconds-input"

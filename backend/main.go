@@ -36,7 +36,27 @@ func main() {
 	mux.Handle("GET /", spaHandler(staticDir))
 
 	log.Printf("redditview listening on %s (static: %s)", addr, staticDir)
-	log.Fatal(http.ListenAndServe(addr, mux))
+	log.Fatal(http.ListenAndServe(addr, withCORS(mux)))
+}
+
+// withCORS lets the native app (a capacitor:// webview with no same-origin
+// backend) call the API cross-origin. The API holds no server-side state or
+// credentials — the reddit cookie always arrives from the client per
+// request — so a wildcard origin doesn't expose anything a direct request
+// couldn't already reach. Handles preflight before the mux so OPTIONS
+// doesn't 405 against the method-specific routes.
+func withCORS(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		if r.Method == http.MethodOptions {
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST")
+			w.Header().Set("Access-Control-Allow-Headers", "X-Reddit-Cookie, Content-Type, Range")
+			w.Header().Set("Access-Control-Max-Age", "86400")
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		h.ServeHTTP(w, r)
+	})
 }
 
 // spaHandler serves the built frontend, falling back to index.html for
