@@ -31,7 +31,6 @@
     { key: 'vertical', label: 'Vertical navigation (swipe up/down)' },
     { key: 'smoothScroll', label: 'Smooth scrolling' },
     { key: 'showPauseIcon', label: 'Paused indicator on videos' },
-    { key: 'moveBar', label: 'Movable progress bar (tap near an edge)' },
     { key: 'barInvert', label: 'Left/right progress bar fills upwards' },
     { key: 'skipSeen', label: "Skip posts you've already seen" },
     { key: 'debug', label: 'Debug overlay (audio + performance)' },
@@ -189,6 +188,30 @@
   function rowToggle(e, key) {
     if (e.target.closest('[data-switch-root], [data-checkbox-root]')) return;
     applyToggle(key, !settings[key]);
+  }
+
+  // -------------------------------------------------------------------------
+  // Progress bar position: fixed to one side, or automatic (tap near a
+  // screen edge to dock it there).
+  // -------------------------------------------------------------------------
+  const BAR_MODES = [
+    { text: 'Bottom', value: 'bottom' },
+    { text: 'Top', value: 'top' },
+    { text: 'Left', value: 'left' },
+    { text: 'Right', value: 'right' },
+    { text: 'Automatic (tap near an edge)', value: 'auto' },
+  ];
+  const barModeLabel = $derived(
+    settings.barMode === 'auto'
+      ? 'Automatic'
+      : BAR_MODES.find((m) => m.value === settings.barMode)?.text || 'Bottom'
+  );
+
+  async function pickBarMode() {
+    const v = await presentActionSheet('Progress bar position', BAR_MODES, settings.barMode);
+    if (v === undefined || v === settings.barMode) return;
+    settings.barMode = v;
+    saveSettings();
   }
 
   // -------------------------------------------------------------------------
@@ -392,6 +415,10 @@
           bind:value={imageSeconds}
           onchange={commitImageSeconds}
         />
+      </div>
+      <div class="item">
+        <span class="item-label">Progress bar position</span>
+        <button type="button" class="pill bar-mode-pill" onclick={pickBarMode}>{barModeLabel}</button>
       </div>
       {#each TOGGLES as t (t.key)}
         <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
