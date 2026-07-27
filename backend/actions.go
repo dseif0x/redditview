@@ -117,6 +117,36 @@ func handleSave(w http.ResponseWriter, r *http.Request) {
 	doRedditAction(w, r, endpoint, url.Values{"id": {in.ID}})
 }
 
+// Subreddit or profile-subreddit name: subscribing to u_<name> IS following
+// the user on reddit.
+var srNameRe = regexp.MustCompile(`^(u_)?[A-Za-z0-9][A-Za-z0-9_-]{1,49}$`)
+
+func handleSubscribe(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Name      string `json:"name"`
+		Subscribe bool   `json:"subscribe"`
+	}
+	if err := json.NewDecoder(io.LimitReader(r.Body, 4096)).Decode(&in); err != nil {
+		http.Error(w, "bad request body", http.StatusBadRequest)
+		return
+	}
+	if !srNameRe.MatchString(in.Name) {
+		http.Error(w, "invalid subreddit/user name", http.StatusBadRequest)
+		return
+	}
+	action := "sub"
+	if !in.Subscribe {
+		action = "unsub"
+	}
+	form := url.Values{
+		"action":  {action},
+		"sr_name": {in.Name},
+		// subscribing must not also reset the account to reddit's defaults
+		"skip_initial_defaults": {"true"},
+	}
+	doRedditAction(w, r, "https://old.reddit.com/api/subscribe", form)
+}
+
 func doRedditAction(w http.ResponseWriter, r *http.Request, endpoint string, form url.Values) {
 	cookie := r.Header.Get("X-Reddit-Cookie")
 	if cookie == "" {
