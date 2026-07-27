@@ -9,8 +9,15 @@
   --item-bg: #1e1e28;
   --primary: #428cff;
   --danger: #ff4961;
+  /* Bottom space the system already withholds from the layout viewport,
+     measured by JS (syncBottomLetterbox). iOS 26 standalone web apps hold
+     the viewport above the home indicator while env(safe-area-inset-bottom)
+     still reports the inset — padding with raw env() then doubles the dead
+     space, so every bottom inset in the app uses --safe-bottom instead. */
+  --bottom-letterbox: 0px;
+  --safe-bottom: max(0px, calc(env(safe-area-inset-bottom, 0px) - var(--bottom-letterbox)));
   /* fallback; JS measures the real rendered bar height into this variable */
-  --tabbar-h: calc(3.2rem + env(safe-area-inset-bottom));
+  --tabbar-h: calc(3.2rem + var(--safe-bottom));
 }
 
 html,
@@ -861,7 +868,7 @@ h2.comments-title,
   overflow-y: auto;
   overscroll-behavior: contain;
   touch-action: pan-y;
-  padding: 0.5rem 0.75rem calc(0.75rem + env(safe-area-inset-bottom));
+  padding: 0.5rem 0.75rem calc(0.75rem + var(--safe-bottom));
 }
 
 .comment {
@@ -984,7 +991,7 @@ h2.comments-title,
   gap: 0.5rem;
   max-width: 28rem;
   margin: 0 auto;
-  padding: 0.5rem calc(0.5rem + env(safe-area-inset-right)) calc(0.5rem + env(safe-area-inset-bottom))
+  padding: 0.5rem calc(0.5rem + env(safe-area-inset-right)) calc(0.5rem + var(--safe-bottom))
     calc(0.5rem + env(safe-area-inset-left));
   animation: sheet-up 0.25s ease-out;
   outline: none;
@@ -1316,7 +1323,7 @@ h2.as-header,
   /* fully opaque: slides swipe behind the bar and must not shine through */
   background: #0e0e14;
   border-top: 1px solid #26262f;
-  padding-bottom: env(safe-area-inset-bottom);
+  padding-bottom: var(--safe-bottom);
 }
 
 .tabbar-list {

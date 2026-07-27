@@ -1200,9 +1200,36 @@ export function registerFeedInput(el) {
   feedInputEl = el;
 }
 
+// iOS 26 standalone web apps hold the layout viewport above the home
+// indicator (a system letterbox painted with the page background) while
+// env(safe-area-inset-bottom) still reports the inset — so padding with raw
+// env() doubles the dead space under the tab bar. Measure how much bottom
+// space the system already withholds and publish it for the CSS to subtract
+// (--safe-bottom). On a healthy edge-to-edge viewport this measures 0 and
+// nothing changes. iOS reports screen dimensions portrait-fixed, so compare
+// against the axis that currently runs vertically.
+function syncBottomLetterbox() {
+  let gap = 0;
+  const standalone =
+    navigator.standalone === true || window.matchMedia?.('(display-mode: standalone)')?.matches;
+  if (standalone && window.screen) {
+    const landscape = window.innerWidth > window.innerHeight;
+    const screenH = landscape
+      ? Math.min(screen.width, screen.height)
+      : Math.max(screen.width, screen.height);
+    gap = Math.max(0, screenH - window.innerHeight);
+  }
+  document.documentElement.style.setProperty('--bottom-letterbox', gap + 'px');
+}
+
 export function initPlayer() {
   if (initialized) return;
   initialized = true;
+
+  syncBottomLetterbox();
+  window.addEventListener('resize', syncBottomLetterbox);
+  window.visualViewport?.addEventListener('resize', syncBottomLetterbox);
+  window.addEventListener('orientationchange', () => setTimeout(syncBottomLetterbox, 300));
 
   document.addEventListener('touchend', unlockVideoPool, { capture: true, passive: true });
   document.addEventListener('click', unlockVideoPool, { capture: true, passive: true });
