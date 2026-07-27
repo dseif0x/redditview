@@ -15,8 +15,10 @@
   import { showToast } from '../lib/toast.svelte.js';
   import { presentActionSheet } from '../lib/sheet.svelte.js';
   import Icon from './Icon.svelte';
+  import SearchSuggest from './SearchSuggest.svelte';
 
   let inputEl = $state(null);
+  let searchFocused = $state(false);
   $effect(() => {
     registerFeedInput(inputEl);
   });
@@ -119,9 +121,15 @@
       autocomplete="off"
       spellcheck="false"
       placeholder="r/pics · user/name/m/multi · saved · upvoted · empty = home"
+      onfocus={() => (searchFocused = true)}
+      onblur={() => (searchFocused = false)}
+      onkeydown={(e) => {
+        if (e.key === 'Escape') inputEl?.blur();
+      }}
     />
     <button id="go-btn" class="btn-solid" type="submit" title="Load feed">Go</button>
   </form>
+  <SearchSuggest open={searchFocused} query={P.feedInput} onpick={() => inputEl?.blur()} />
   <div id="feed-tools">
     <button
       id="bm-btn"

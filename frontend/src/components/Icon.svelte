@@ -17,6 +17,8 @@
   import ArrowDownWideNarrow from '@lucide/svelte/icons/arrow-down-wide-narrow';
   import Layers from '@lucide/svelte/icons/layers';
   import Eye from '@lucide/svelte/icons/eye';
+  import Users from '@lucide/svelte/icons/users';
+  import Newspaper from '@lucide/svelte/icons/newspaper';
 
   const ICONS = {
     play: Play,
@@ -34,6 +36,8 @@
     sort: ArrowDownWideNarrow,
     layers: Layers,
     eye: Eye,
+    users: Users,
+    newspaper: Newspaper,
   };
 </script>
 
