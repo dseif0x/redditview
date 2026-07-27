@@ -261,8 +261,8 @@ button {
 
 /* the sort pill fills the row up to the controls (zero flex-basis +
    inline-size containment so a long label can never push the controls
-   onto their own row), but its content stays grouped: the chevron sits
-   right next to the label instead of being pinned to the far edge */
+   onto their own row); the label stretches so the chevron is pinned to
+   the pill's right edge, like a select */
 #sort-btn {
   flex: 1 1 0px;
   contain: inline-size;
@@ -284,7 +284,7 @@ button {
 }
 
 #sort-btn span {
-  flex: 0 1 auto;
+  flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
