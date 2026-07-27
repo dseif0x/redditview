@@ -255,7 +255,8 @@ export function registerProgress(rootEl, fillEl) {
   progressFill = fillEl;
 }
 
-export const effectiveBarPos = () => (settings.moveBar ? settings.barPos : 'bottom');
+export const effectiveBarPos = () =>
+  settings.barMode === 'auto' ? settings.barPos : settings.barMode;
 export const barIsVertical = () => effectiveBarPos() === 'left' || effectiveBarPos() === 'right';
 const fillProp = () => (barIsVertical() ? 'height' : 'width');
 
@@ -1312,14 +1313,14 @@ export function initPlayer() {
     if (gestureEnd(e.clientX, e.clientY)) lastMouseDragEnd = Date.now();
   });
 
-  // With the movable-bar option on, a tap near a screen edge docks the
-  // progress bar there. Runs in the capture phase and swallows the tap so
-  // the slide's pause handler and the nav zones don't also react; real
-  // controls (topbar buttons, vote/save, the bar itself) keep priority.
+  // In automatic bar mode, a tap near a screen edge docks the progress bar
+  // there. Runs in the capture phase and swallows the tap so the slide's
+  // pause handler and the nav zones don't also react; real controls
+  // (topbar buttons, vote/save, the bar itself) keep priority.
   document.addEventListener(
     'click',
     (e) => {
-      if (!settings.moveBar || P.tab === 'settings') return;
+      if (settings.barMode !== 'auto' || P.tab === 'settings') return;
       if (
         e.target.closest(
           'button:not(.nav-zone), input, select, textarea, a, dialog, #progress, #meta-actions, ' +

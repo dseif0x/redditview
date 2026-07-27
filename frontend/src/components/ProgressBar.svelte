@@ -12,7 +12,7 @@
   let rootEl = $state(null);
   let fillEl = $state(null);
 
-  const pos = $derived(settings.moveBar ? settings.barPos : 'bottom');
+  const pos = $derived(settings.barMode === 'auto' ? settings.barPos : settings.barMode);
 
   $effect(() => {
     if (rootEl && fillEl) registerProgress(rootEl, fillEl);

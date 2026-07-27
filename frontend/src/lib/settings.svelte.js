@@ -17,7 +17,9 @@ export const DEFAULTS = {
   vertical: false,
   smoothScroll: true,
   showPauseIcon: true,
-  moveBar: false,
+  // Progress bar position: bottom | top | left | right | auto (tap near a
+  // screen edge to dock it there). barPos remembers auto's last dock.
+  barMode: 'bottom',
   barPos: 'bottom',
   barInvert: false,
   sort: '',
@@ -26,10 +28,22 @@ export const DEFAULTS = {
   debug: false,
 };
 
+// Migrations that must see the RAW stored object (before DEFAULTS fill in
+// missing keys). Also applied to imported/synced settings from older builds.
+function migrateStored(raw) {
+  if (!raw || typeof raw !== 'object') return {};
+  // The movable-bar boolean became the barMode select.
+  if (raw.barMode === undefined && raw.moveBar !== undefined) {
+    raw.barMode = raw.moveBar ? 'auto' : 'bottom';
+  }
+  delete raw.moveBar;
+  return raw;
+}
+
 function loadSettings() {
   let s = { ...DEFAULTS };
   try {
-    s = { ...DEFAULTS, ...JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}') };
+    s = { ...DEFAULTS, ...migrateStored(JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}')) };
   } catch {
     /* corrupted storage -> defaults */
   }
@@ -94,7 +108,7 @@ export function saveSettings() {
 
 // Wholesale replacement (settings import): validates shape like the original.
 export function replaceSettings(parsed) {
-  const next = { ...DEFAULTS, ...parsed };
+  const next = { ...DEFAULTS, ...migrateStored(parsed) };
   if (!Array.isArray(next.accounts)) next.accounts = [];
   if (!Array.isArray(next.bookmarks)) next.bookmarks = [];
   if (typeof next.activeAccount !== 'number' || !next.accounts[next.activeAccount]) {
