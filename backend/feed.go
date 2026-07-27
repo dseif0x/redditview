@@ -21,6 +21,7 @@ type Post struct {
 	Subreddit   string   `json:"subreddit"`
 	Permalink   string   `json:"permalink"`
 	NSFW        bool     `json:"nsfw"`
+	Score       int      `json:"score"`
 	NumComments int      `json:"numComments"`
 	Kind        string   `json:"kind"` // image | gallery | video | text
 	Images      []string `json:"images,omitempty"`
@@ -80,6 +81,7 @@ type postData struct {
 	Subreddit     string `json:"subreddit_name_prefixed"`
 	Permalink     string `json:"permalink"`
 	Over18        bool   `json:"over_18"`
+	Score         int    `json:"score"`
 	NumComments   int    `json:"num_comments"`
 	Stickied      bool   `json:"stickied"`
 	IsGallery     bool   `json:"is_gallery"`
@@ -352,6 +354,7 @@ func extractPost(d postData) (Post, bool) {
 		Subreddit:   d.Subreddit,
 		Permalink:   "https://www.reddit.com" + d.Permalink,
 		NSFW:        d.Over18,
+		Score:       d.Score,
 		NumComments: d.NumComments,
 	}
 

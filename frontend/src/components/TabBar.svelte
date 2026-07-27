@@ -41,16 +41,16 @@
   });
 </script>
 
+<!-- Floating icon-only pill, reels-style: content runs full-bleed behind it
+     and the active tab carries its own highlight. -->
 <div id="tabbar" bind:this={el}>
   <Tabs.Root value={P.tab} onValueChange={showTab}>
     <Tabs.List class="tabbar-list">
-      <Tabs.Trigger value="posts" class="tab">
+      <Tabs.Trigger value="posts" class="tab" aria-label="Posts" title="Posts">
         <Icon name="images" />
-        <span>Posts</span>
       </Tabs.Trigger>
-      <Tabs.Trigger value="settings" class="tab">
+      <Tabs.Trigger value="settings" class="tab" aria-label="Settings" title="Settings">
         <Icon name="settings" />
-        <span>Settings</span>
       </Tabs.Trigger>
     </Tabs.List>
   </Tabs.Root>

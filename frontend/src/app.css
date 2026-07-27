@@ -339,9 +339,10 @@ button {
 }
 
 /* ---- viewer ---- */
+/* full-bleed: content runs behind the floating tab pill, reels-style */
 #viewer {
   position: absolute;
-  inset: 0 0 var(--tabbar-h) 0;
+  inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -551,14 +552,16 @@ button {
 
 #progress-track {
   position: relative;
-  background: rgba(255, 255, 255, 0.08);
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.22);
 }
 
 #progress-fill {
   position: absolute;
   left: 0;
   top: 0;
-  background: var(--primary);
+  border-radius: 2px;
+  background: #fff;
 }
 
 /* video playback: the bar becomes a seek control with a bigger hit area */
@@ -581,9 +584,9 @@ button {
 
 #progress.pos-bottom {
   bottom: var(--tabbar-h);
-  /* solid backing: the strip between meta and tab bar is chrome, so the
-     next post must not show through it while swiping */
-  background: #0e0e14;
+  /* inset line floating over the content, reels-style */
+  left: 0.75rem;
+  right: 0.75rem;
 }
 
 #progress.pos-top {
@@ -592,7 +595,7 @@ button {
 
 #progress.pos-bottom #progress-track,
 #progress.pos-top #progress-track {
-  height: 3px;
+  height: 2.5px;
 }
 
 #progress.pos-bottom #progress-fill,
@@ -699,14 +702,27 @@ button {
 
 #meta-actions {
   display: flex;
-  gap: 0;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
   pointer-events: auto;
   flex-shrink: 0;
 }
 
 #meta-actions .icon-btn {
-  font-size: 1.55rem;
-  padding: 0.4rem 0.45rem;
+  flex-direction: column;
+  gap: 0.1rem;
+  font-size: 1.75rem;
+  padding: 0.25rem 0.35rem;
+  filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.6));
+}
+
+.action-count {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: #fff;
+  line-height: 1;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7);
 }
 
 #up-btn.active-up {
@@ -1133,7 +1149,7 @@ h2.as-header,
    scrolled content clips below the mask instead of sliding over the clock. */
 #settings-page {
   position: absolute;
-  inset: 0 0 var(--tabbar-h) 0;
+  inset: 0;
   z-index: 20;
   background: var(--bg);
   overflow: hidden;
@@ -1151,7 +1167,7 @@ h2.as-header,
   width: 100%;
   max-width: 34rem;
   margin: 0 auto;
-  padding: 0.5rem 0 2rem;
+  padding: 0.5rem 0 calc(var(--tabbar-h) + 1rem);
 }
 
 #settings-page h2 {
@@ -1381,48 +1397,51 @@ h2.as-header,
   padding: 0.4rem 0.6rem;
 }
 
-/* ---- bottom tab bar (Bits UI Tabs) ---- */
+/* ---- bottom tab bar: floating icon-only pill (Bits UI Tabs) ---- */
+/* The wrapper spans the bottom so its measured height keeps driving
+   --tabbar-h (meta bar / progress / nav-zone offsets); only the pill
+   itself takes pointer events — content shows and swipes behind it. */
 #tabbar {
   position: absolute;
   left: 0;
   right: 0;
   bottom: 0;
-  /* content-sized: the bar is exactly its buttons plus the safe area */
-  z-index: 18;
-  /* fully opaque: slides swipe behind the bar and must not shine through */
-  background: #0e0e14;
-  border-top: 1px solid #26262f;
-  /* The safe-area inset guarantees clearance between the labels and the
-     home indicator — it must not STACK on the buttons' own bottom padding,
-     or the bar reads ~6px too tall. Fold the button padding into the inset
-     (keep the difference), so label-to-screen-bottom equals the inset
-     exactly. Browsers (inset 0) keep zero extra padding, as before. */
-  padding-bottom: max(calc(var(--safe-bottom) - 0.25rem), 0px);
+  /* above the full-bleed settings page (20); overlay sheets (30+) cover it */
+  z-index: 21;
+  display: flex;
+  justify-content: center;
+  padding: 0.5rem 0 max(var(--safe-bottom), 0.5rem);
+  pointer-events: none;
 }
 
 .tabbar-list {
   display: flex;
+  gap: 0.35rem;
+  pointer-events: auto;
+  padding: 0.3rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(26, 26, 34, 0.82);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
 }
 
 .tab {
-  flex: 1;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.15rem;
-  padding: 0.3rem 0 0.25rem;
+  width: 3.6rem;
+  height: 2.55rem;
   background: none;
   border: none;
-  color: #8a8a98;
-  font-size: 0.65rem;
-  cursor: pointer;
-}
-
-.tab .icon {
+  border-radius: 999px;
+  color: #b5b5c2;
   font-size: 1.35rem;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
 }
 
 .tab[data-state='active'] {
-  color: var(--primary);
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
 }

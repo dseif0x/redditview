@@ -23,6 +23,14 @@
     e.preventDefault();
     goToFeed(feed);
   }
+
+  // Instagram-style compact counts under the action icons.
+  function fmtCount(n) {
+    if (n == null) return '';
+    if (n >= 1e6) return (n / 1e6).toFixed(n < 1e7 ? 1 : 0).replace(/\.0$/, '') + 'M';
+    if (n >= 1000) return (n / 1000).toFixed(n < 1e5 ? 1 : 0).replace(/\.0$/, '') + 'K';
+    return String(n);
+  }
 </script>
 
 {#if post}
@@ -58,6 +66,7 @@
         <a href={post.permalink} target="_blank" rel="noopener">open ↗</a>
       </div>
     </div>
+    <!-- Vertical action rail, reels-style: big icons with counts below. -->
     <div id="meta-actions">
       <button
         id="up-btn"
@@ -67,6 +76,7 @@
         onclick={() => vote(1)}
       >
         <Icon name="arrow-up-circle" filled={post.likes === true} />
+        {#if post.score != null}<span class="action-count">{fmtCount(post.score)}</span>{/if}
       </button>
       <button
         id="down-btn"
@@ -88,6 +98,7 @@
       </button>
       <button id="comments-btn" class="icon-btn" title="Comments (c)" onclick={openComments}>
         <Icon name="message-circle" />
+        <span class="action-count">{fmtCount(post.numComments || 0)}</span>
       </button>
     </div>
   </footer>
