@@ -10,7 +10,7 @@
     registerFeedInput,
   } from '../lib/player.svelte.js';
   import { settings, saveSettings } from '../lib/settings.svelte.js';
-  import { api } from '../lib/api.js';
+  import { getSubscriptions } from '../lib/subscriptions.js';
   import { showToast } from '../lib/toast.svelte.js';
   import { presentActionSheet } from '../lib/sheet.svelte.js';
   import Icon from './Icon.svelte';
@@ -70,29 +70,30 @@
     return true;
   }
 
-  async function fetchSubscriptions() {
-    try {
-      return await api('/api/subscriptions');
-    } catch (err) {
-      showToast('Could not load subscriptions: ' + (err.message || err));
-      return null;
-    }
-  }
-
+  // The subscription-backed levels present immediately (spinner in the
+  // sheet on a cache miss) and fill in from the cached-first loader.
   async function openFollowing() {
     if (!requireCookie()) return;
-    const subs = await fetchSubscriptions();
-    if (!subs) return;
-    const users = subs.following || [];
-    if (users.length === 0) {
-      showToast("This account doesn't follow any users yet");
-      return;
-    }
-    const options = [
-      { text: 'All following', value: '*' },
-      ...users.map((u) => ({ text: 'u/' + u, value: u })),
-    ];
-    const v = await presentActionSheet('Following', options);
+    let users = [];
+    const v = await presentActionSheet(
+      'Following',
+      (async () => {
+        try {
+          users = (await getSubscriptions()).following || [];
+        } catch (err) {
+          showToast('Could not load subscriptions: ' + (err.message || err));
+          return null;
+        }
+        if (users.length === 0) {
+          showToast("This account doesn't follow any users yet");
+          return null;
+        }
+        return [
+          { text: 'All following', value: '*' },
+          ...users.map((u) => ({ text: 'u/' + u, value: u })),
+        ];
+      })()
+    );
     if (v === undefined) return;
     if (v === '*') goToFeed('r/' + users.map((u) => 'u_' + u).join('+'));
     else goToFeed(`user/${v}/submitted`);
@@ -100,18 +101,26 @@
 
   async function openSubscribed() {
     if (!requireCookie()) return;
-    const subs = await fetchSubscriptions();
-    if (!subs) return;
-    const subreddits = subs.subreddits || [];
-    if (subreddits.length === 0) {
-      showToast("This account isn't subscribed to any subreddits yet");
-      return;
-    }
-    const options = [
-      { text: 'All subscribed', value: '*' },
-      ...subreddits.map((s) => ({ text: 'r/' + s, value: s })),
-    ];
-    const v = await presentActionSheet('Subscribed', options);
+    let subreddits = [];
+    const v = await presentActionSheet(
+      'Subscribed',
+      (async () => {
+        try {
+          subreddits = (await getSubscriptions()).subreddits || [];
+        } catch (err) {
+          showToast('Could not load subscriptions: ' + (err.message || err));
+          return null;
+        }
+        if (subreddits.length === 0) {
+          showToast("This account isn't subscribed to any subreddits yet");
+          return null;
+        }
+        return [
+          { text: 'All subscribed', value: '*' },
+          ...subreddits.map((s) => ({ text: 'r/' + s, value: s })),
+        ];
+      })()
+    );
     if (v === undefined) return;
     if (v === '*') goToFeed('r/' + subreddits.join('+'));
     else goToFeed('r/' + v);
