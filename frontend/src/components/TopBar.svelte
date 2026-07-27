@@ -251,8 +251,8 @@
       title="Sort"
       onclick={openSortPicker}
     >
-      <span id="sort-label">{sortLabel(settings.sort)}</span>
       <Icon name="chevrons-up-down" />
+      <span id="sort-label">{sortLabel(settings.sort)}</span>
     </button>
   </div>
   <div class="controls">
