@@ -848,18 +848,26 @@ button {
   -webkit-box-orient: vertical;
   overflow: hidden;
   pointer-events: auto;
+  /* the title feeds the viewer's swipe engine, so the browser must not
+     claim its touches (and drags shouldn't select the text) */
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 #meta-title.truncatable {
   cursor: pointer;
 }
 
-/* tap a clamped title to read all of it (tap again to collapse) */
+/* tap a clamped title to read all of it (tap again to collapse); while
+   expanded it's a reading surface — touches scroll it instead of dragging
+   the feed */
 #meta-title.expanded {
   display: block;
   -webkit-line-clamp: unset;
   max-height: 40dvh;
   overflow-y: auto;
+  touch-action: pan-y;
 }
 
 #meta-sub {

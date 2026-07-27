@@ -1057,7 +1057,9 @@ function gestureBegin(x, y, target, isTouch = false) {
   canDrag =
     settings.smoothScroll &&
     P.window.length > 0 &&
-    !target.closest('.text-post') &&
+    // Scrollable reading surfaces own their touches (an expanded title
+    // scrolls its overflow just like a text post's body).
+    !target.closest('.text-post, #meta-title.expanded') &&
     // Touches starting at the screen edge belong to history back/forward.
     !(isTouch && (x <= EDGE_SWIPE_PX || x >= window.innerWidth - EDGE_SWIPE_PX));
 }
@@ -1163,6 +1165,12 @@ export function viewerTouchEnd(e) {
 // Mouse drags navigate too (posts along the feed axis, galleries across it).
 let mouseDragging = false;
 let lastMouseDragEnd = 0;
+
+// Lets click handlers on gesture surfaces (e.g. the tap-to-expand title)
+// ignore the click a mouse drag leaves behind.
+export function recentDragEnd() {
+  return Date.now() - lastMouseDragEnd < 400;
+}
 
 export function viewerPointerDown(e) {
   if (e.pointerType !== 'mouse' || e.button !== 0) return;
