@@ -180,6 +180,7 @@ export function VideoPost({
         style={styles.media}
         contentFit={fill ? 'cover' : 'contain'}
         nativeControls={false}
+        playsInline
       />
       {showPauseIcon && active && started && paused ? (
         <View style={styles.pauseWrap} pointerEvents="none">

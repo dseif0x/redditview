@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import {
   KeyboardAvoidingView,
-  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -12,14 +11,17 @@ import {
   View,
 } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
-import { activeCookie, BarPos, getSettings, replaceSettings, saveSettings, Settings } from './settings';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { activeCookie, BarPos, getSettings, replaceSettings, saveSettings } from './settings';
 import { showSheet } from './components/sheets';
 import { toast } from './components/Toast';
 import { colors } from './theme';
 
-// Full settings sheet, ported from the web app: multi-account cookie
-// management (masked until revealed), display/behavior preferences, post
-// type filters, and settings export/import.
+// Full settings page, ported from the web app: shown by the Settings tab
+// (bottom tab bar) as an opaque page over the feed, exactly like the web
+// frontend's #settings-page. Multi-account cookie management (masked until
+// revealed), display/behavior preferences, post type filters, and settings
+// export/import.
 
 export type SettingsResult = { changed: boolean; reloadFeed: boolean };
 
@@ -52,7 +54,8 @@ function Toggle({ label, value, onChange }: { label: string; value: boolean; onC
   );
 }
 
-export function SettingsModal({ onClose }: { onClose: (result: SettingsResult) => void }) {
+export function SettingsPage({ onClose }: { onClose: (result: SettingsResult) => void }) {
+  const insets = useSafeAreaInsets();
   const s0 = getSettings();
   const [editingAccount, setEditingAccount] = useState(s0.accounts.length ? s0.activeAccount : -1);
   const [accountName, setAccountName] = useState(
@@ -201,10 +204,13 @@ export function SettingsModal({ onClose }: { onClose: (result: SettingsResult) =
   const hasMaskedCookie = !cookieRevealed && !!storedCookie(editingAccount);
 
   return (
-    <Modal visible transparent animationType="slide" onRequestClose={() => onClose({ changed: false, reloadFeed: false })}>
-      <KeyboardAvoidingView style={styles.backdrop} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <View style={styles.sheet}>
-          <ScrollView keyboardShouldPersistTaps="handled">
+    <View style={styles.page}>
+      <KeyboardAvoidingView style={styles.fill} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <View style={styles.inner}>
+          <ScrollView
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={[styles.content, { paddingTop: insets.top + 14 }]}
+          >
             <Text style={styles.title}>Settings</Text>
 
             <Text style={styles.section}>Account</Text>
@@ -342,22 +348,16 @@ export function SettingsModal({ onClose }: { onClose: (result: SettingsResult) =
           </ScrollView>
         </View>
       </KeyboardAvoidingView>
-    </Modal>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' },
-  sheet: {
-    backgroundColor: '#14141c',
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    borderTopWidth: 1,
-    borderColor: '#33333f',
-    padding: 20,
-    paddingBottom: 30,
-    maxHeight: '88%',
-  },
+  // Opaque page over the feed, tab bar stays visible below (web parity).
+  page: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: colors.bg, zIndex: 20 },
+  fill: { flex: 1 },
+  inner: { flex: 1, width: '100%', maxWidth: 560, alignSelf: 'center' },
+  content: { padding: 20, paddingBottom: 40 },
   title: { color: colors.text, fontSize: 20, fontWeight: '700', marginBottom: 4 },
   section: { color: colors.accent, fontSize: 13, fontWeight: '700', marginTop: 18, marginBottom: 6 },
   label: { color: colors.textDim, fontSize: 13, marginBottom: 5, marginTop: 8 },

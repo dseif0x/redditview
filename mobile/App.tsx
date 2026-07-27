@@ -26,7 +26,7 @@ import { toast, ToastHost } from './src/components/Toast';
 import { voteBurst, VoteBurstHost } from './src/components/VoteBurst';
 import { GalleryHandle, GalleryPost, ImagePost, TextPost, VideoPost } from './src/PostViews';
 import { initPWA } from './src/pwa';
-import { SettingsModal } from './src/SettingsModal';
+import { SettingsPage } from './src/SettingsPage';
 import { isSeen, loadSeen, markSeen } from './src/seen';
 import { getSettings, loadSettings, Resume, saveSettings, Settings } from './src/settings';
 import { applySort, sortLabel } from './src/sort';
@@ -49,7 +49,9 @@ function Feed() {
   const [prefs, setPrefs] = useState<Settings>(getSettings());
   const refreshPrefs = () => setPrefs({ ...getSettings() });
 
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  // Bottom tab bar, exactly like the web frontend: the Settings tab shows
+  // an opaque page over the feed while the bar stays visible.
+  const [tab, setTab] = useState<'posts' | 'settings'>('posts');
   const [commentsPost, setCommentsPost] = useState<Post | null>(null);
   const [feedInput, setFeedInput] = useState('');
   const [posts, setPosts] = useState<Post[]>([]);
@@ -67,8 +69,12 @@ function Feed() {
   postsRef.current = posts;
   const activeIndexRef = useRef(activeIndex);
   activeIndexRef.current = activeIndex;
+  const tabRef = useRef(tab);
+  tabRef.current = tab;
+  const commentsRef = useRef(commentsPost);
+  commentsRef.current = commentsPost;
   const sheetOpenRef = useRef(false);
-  sheetOpenRef.current = settingsOpen || commentsPost !== null;
+  sheetOpenRef.current = tab === 'settings' || commentsPost !== null;
 
   const listRef = useRef<FlatList<Post>>(null);
   const afterRef = useRef<string | null>(null);
@@ -249,6 +255,17 @@ function Feed() {
     }
   };
 
+  const prevSlide = () => {
+    const i = activeIndexRef.current;
+    if (i > 0) listRef.current?.scrollToIndex({ index: i - 1, animated: true });
+  };
+
+  const galleryStepActive = (dir: 1 | -1): boolean => {
+    const post = postsRef.current[activeIndexRef.current];
+    if (post?.kind !== 'gallery') return false;
+    return galleryRefs.current.get(post.name)?.step(dir) ?? false;
+  };
+
   // ---------------------------------------------------------------------
   // Feed history: subreddit/author jumps push the position being left so
   // the back button restores both the feed and where you were in it.
@@ -291,7 +308,7 @@ function Feed() {
         saveSettings({ sort: r.sort });
         loadFeed(r.path, r);
       } else if (Platform.OS !== 'web' && !s.serverUrl) {
-        setSettingsOpen(true);
+        setTab('settings'); // native first launch: no server yet
       } else if (Platform.OS !== 'web' || s.feed || s.serverUrl || s.accounts.length) {
         setFeedInput(s.feed);
         loadFeed(s.feed);
@@ -332,8 +349,8 @@ function Feed() {
     if (posts.length && activeIndex >= posts.length - 5) loadMore();
   }, [activeIndex, posts, loadMore]);
 
-  // Hold playback + countdown while a sheet is open (comments/settings).
-  const sheetOpen = settingsOpen || commentsPost !== null;
+  // Hold playback + countdown while comments or the settings tab are open.
+  const sheetOpen = tab === 'settings' || commentsPost !== null;
   useEffect(() => {
     if (sheetOpen) {
       pauseTimer();
@@ -474,6 +491,88 @@ function Feed() {
     if (p && p.duration > 0) p.currentTime = frac * p.duration;
   };
 
+  // Desktop web keyboard shortcuts, matching the classic frontend. Only the
+  // handlers' stable internals (refs, setters) are captured, so registering
+  // once is safe.
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof document === 'undefined') return;
+    const onKey = (e: KeyboardEvent) => {
+      const el = document.activeElement as HTMLElement | null;
+      if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA')) return;
+      if (tabRef.current === 'settings') {
+        if (e.key === 'Escape') setTab('posts');
+        return;
+      }
+      if (commentsRef.current) {
+        if (e.key === 'Escape' || e.key === 'c') setCommentsPost(null);
+        return; // don't navigate the feed under the sheet
+      }
+      const vertical = getSettings().vertical;
+      const active = () => postsRef.current[activeIndexRef.current];
+      switch (e.key) {
+        case ' ':
+          e.preventDefault();
+          toggleAutoscroll();
+          break;
+        // Arrows on the feed axis move between posts; arrows on the cross
+        // axis step through the active gallery.
+        case 'ArrowRight':
+          if (vertical && galleryStepActive(1)) break;
+          nextSlide();
+          break;
+        case 'ArrowLeft':
+          if (vertical && galleryStepActive(-1)) break;
+          prevSlide();
+          break;
+        case 'ArrowDown':
+          e.preventDefault();
+          if (!vertical && galleryStepActive(1)) break;
+          nextSlide();
+          break;
+        case 'ArrowUp':
+          e.preventDefault();
+          if (!vertical && galleryStepActive(-1)) break;
+          prevSlide();
+          break;
+        case 'j':
+          nextSlide();
+          break;
+        case 'k':
+          prevSlide();
+          break;
+        case 'm':
+          toggleMute();
+          break;
+        case 'f':
+          toggleFill();
+          break;
+        case 'a': {
+          const p = active();
+          if (p) vote(p, 1);
+          break;
+        }
+        case 'z': {
+          const p = active();
+          if (p) vote(p, -1);
+          break;
+        }
+        case 's': {
+          const p = active();
+          if (p) toggleSave(p);
+          break;
+        }
+        case 'c': {
+          const p = active();
+          if (p) setCommentsPost(p);
+          break;
+        }
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: ViewToken[] }) => {
     const first = viewableItems.find((v) => v.isViewable);
     if (first?.index != null) setActiveIndex(first.index);
@@ -551,8 +650,9 @@ function Feed() {
             )}
           </PinchZoom>
 
-          {/* Per-post overlay: meta bottom-left, actions bottom-right. */}
-          <View style={[styles.meta, { paddingBottom: insets.bottom + 20 }]} pointerEvents="box-none">
+          {/* Per-post overlay: meta bottom-left, actions bottom-right. The
+              tab bar below already consumes the bottom safe area. */}
+          <View style={[styles.meta, { paddingBottom: 16 }]} pointerEvents="box-none">
             <View style={styles.metaText} pointerEvents="box-none">
               <Pressable onPress={() => isActive && setExpandedTitle((e) => !e)}>
                 <Text style={styles.title} numberOfLines={isActive && expandedTitle ? undefined : 2}>
@@ -606,7 +706,11 @@ function Feed() {
   const seekableNow = activePost?.kind === 'video' && !sheetOpen;
 
   return (
-    <View style={styles.root} onLayout={(e) => setSize({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })}>
+    <View style={styles.root}>
+      <View
+        style={styles.content}
+        onLayout={(e) => setSize({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })}
+      >
       {ready && size.h > 0 && (
         <FlatList
           ref={listRef}
@@ -654,7 +758,7 @@ function Feed() {
         seekable={!!seekableNow}
         pos={prefs.barPos}
         invert={prefs.barInvert}
-        bottomInset={insets.bottom}
+        bottomInset={0}
         topInset={insets.top}
         onScrub={onScrub}
         onScrubEnd={onScrubEnd}
@@ -683,9 +787,6 @@ function Feed() {
           <Pressable style={styles.goBtn} onPress={() => goToFeed(feedInput.trim())} testID="go-btn">
             <Text style={styles.goBtnText}>Go</Text>
           </Pressable>
-          <Pressable style={styles.roundBtn} onPress={() => setSettingsOpen(true)} testID="gear-btn">
-            <Text style={styles.roundBtnText}>⚙︎</Text>
-          </Pressable>
         </View>
         <View style={styles.toolsRow}>
           {prefs.bookmarks.length ? (
@@ -712,11 +813,10 @@ function Feed() {
         </View>
       </View>
 
-      {commentsPost ? <CommentsSheet post={commentsPost} onClose={() => setCommentsPost(null)} /> : null}
-      {settingsOpen ? (
-        <SettingsModal
+      {tab === 'settings' ? (
+        <SettingsPage
           onClose={(result) => {
-            setSettingsOpen(false);
+            setTab('posts');
             if (result.changed) {
               refreshPrefs();
               setFeedInput(getSettings().feed);
@@ -727,6 +827,22 @@ function Feed() {
           }}
         />
       ) : null}
+      </View>
+
+      {/* Bottom tab bar, like the web frontend's ion-tab-bar. Switching to
+          Posts while in settings discards unsaved edits (web parity). */}
+      <View style={[styles.tabbar, { paddingBottom: insets.bottom }]}>
+        <Pressable style={styles.tabBtn} onPress={() => setTab('posts')} testID="tab-posts">
+          <Text style={[styles.tabIcon, tab === 'posts' && styles.tabActive]}>▤</Text>
+          <Text style={[styles.tabLabel, tab === 'posts' && styles.tabActive]}>Posts</Text>
+        </Pressable>
+        <Pressable style={styles.tabBtn} onPress={() => setTab('settings')} testID="tab-settings">
+          <Text style={[styles.tabIcon, tab === 'settings' && styles.tabActive]}>⚙︎</Text>
+          <Text style={[styles.tabLabel, tab === 'settings' && styles.tabActive]}>Settings</Text>
+        </Pressable>
+      </View>
+
+      {commentsPost ? <CommentsSheet post={commentsPost} onClose={() => setCommentsPost(null)} /> : null}
 
       <ToastHost />
       <SheetHost />
@@ -767,6 +883,17 @@ export default function App() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
+  content: { flex: 1 },
+  tabbar: {
+    flexDirection: 'row',
+    backgroundColor: '#0e0e14',
+    borderTopWidth: 1,
+    borderColor: '#26262f',
+  },
+  tabBtn: { flex: 1, alignItems: 'center', paddingVertical: 7, gap: 1 },
+  tabIcon: { color: colors.hint, fontSize: 19 },
+  tabLabel: { color: colors.hint, fontSize: 10.5 },
+  tabActive: { color: colors.accent },
   topbar: { position: 'absolute', top: 0, left: 0, right: 0, gap: 7, paddingHorizontal: 12, paddingBottom: 10 },
   topRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   toolsRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },

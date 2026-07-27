@@ -22,10 +22,34 @@ multi-account cookie management (masked until revealed) · settings
 export/import (clipboard JSON, compatible schema) · fill-screen mode ·
 pinch-to-zoom (transient, springs back) · persisted mute.
 
-Not ported (web-platform workarounds with no native equivalent): the audio
-unlock/video element pool, keyboard shortcuts, the smooth-scroll toggle
-(native paging is always smooth), the debug overlay, and edge-tap bar
-docking (the bar position is a settings picker instead).
+Also ported: the bottom tab bar (Posts / Settings, with the settings page
+over the feed like the web frontend) and desktop keyboard shortcuts on web
+(space, arrows, j/k, m, f, a/z, s, c, Esc).
+
+Not ported (web-platform workarounds with no native equivalent): the
+smooth-scroll toggle (native paging is always smooth), the debug overlay,
+and edge-tap bar docking (the bar position is a settings picker instead).
+
+## Deferred — worth implementing later
+
+- **Web audio unlock** (matters only for the web/PWA build served by the
+  `:rn` image): browsers still enforce autoplay-with-sound policies there.
+  The classic frontend (`frontend/src/main.js`) has the full playbook:
+  fall back to muted playback when `play()` rejects with `NotAllowedError`,
+  re-lift the mute on the next user gesture (touchend/click capture
+  listener), and — the part that needs raw element access — a recycled pool
+  of gesture-"blessed" `<video>` elements so gestureless starts (autoscroll
+  advances) keep sound on iOS Safari. The fallback + gesture-rescue halves
+  are implementable web-only against `expo-video`'s player API; the pool
+  would need patching expo-video's web VideoView or a custom web player.
+  Until then: the web build plays videos muted reliably; unmuted playback
+  may pause on advance in iOS Safari until tapped.
+- **Browser history integration** (web/PWA): the classic frontend pushes a
+  history entry per feed change with cursor+post state, so browser
+  back/forward (and iOS edge swipes) restore the exact position. The RN
+  app has the same state in its in-app history stack (`history` in
+  App.tsx) — wiring it to `history.pushState`/`popstate` in a web-only
+  module would restore parity.
 
 ## Try it on your iPhone (no Mac needed)
 
