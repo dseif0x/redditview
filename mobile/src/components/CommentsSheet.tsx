@@ -8,6 +8,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { api, Comment, CommentsPage, Post, qs } from '../api';
 import { showSheet } from './sheets';
 import { colors } from '../theme';
@@ -109,8 +110,8 @@ export function CommentsSheet({ post, onClose }: { post: Post; onClose: () => vo
                 {COMMENT_SORTS.find((s) => s.value === sort)?.text} ▾
               </Text>
             </Pressable>
-            <Pressable onPress={onClose} hitSlop={10}>
-              <Text style={styles.close}>✕</Text>
+            <Pressable onPress={onClose} hitSlop={10} testID="comments-close">
+              <Ionicons name="close-outline" size={24} color={colors.text} />
             </Pressable>
           </View>
           <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>

@@ -320,7 +320,10 @@ export function TextPost({
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
-  media: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
+  // Explicit size, not inset stretching: on web the <video> is a CSS
+  // replaced element, and absolutely positioned replaced elements with
+  // auto width keep their intrinsic size instead of stretching to inset.
+  media: { position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' },
   pauseWrap: {
     position: 'absolute',
     top: 0,

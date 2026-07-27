@@ -15,6 +15,7 @@ import {
   ViewToken,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import { Ionicons } from '@expo/vector-icons';
 import type { VideoPlayer } from 'expo-video';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { api, FeedPage, mediaUrl, Post, qs } from './src/api';
@@ -734,16 +735,37 @@ function Feed() {
               </View>
             </View>
             <View style={styles.rail}>
-              <RailButton label="▲" active={item.likes === true} activeColor={colors.upvote} onPress={() => vote(item, 1)} />
-              <RailButton label="▼" active={item.likes === false} activeColor={colors.downvote} onPress={() => vote(item, -1)} />
-              <RailButton label="★" active={item.saved} activeColor={colors.save} onPress={() => toggleSave(item)} />
               <RailButton
-                label="💬"
+                icon={item.likes === true ? 'arrow-up-circle' : 'arrow-up-circle-outline'}
+                color={item.likes === true ? colors.upvote : colors.text}
+                onPress={() => vote(item, 1)}
+                testID="rail-up"
+              />
+              <RailButton
+                icon={item.likes === false ? 'arrow-down-circle' : 'arrow-down-circle-outline'}
+                color={item.likes === false ? colors.downvote : colors.text}
+                onPress={() => vote(item, -1)}
+                testID="rail-down"
+              />
+              <RailButton
+                icon={item.saved ? 'star' : 'star-outline'}
+                color={item.saved ? colors.save : colors.text}
+                onPress={() => toggleSave(item)}
+                testID="rail-save"
+              />
+              <RailButton
+                icon="chatbubble-outline"
                 sub={item.numComments ? String(item.numComments) : undefined}
                 onPress={() => setCommentsPost(item)}
+                testID="rail-comments"
               />
               {item.kind === 'video' ? (
-                <RailButton label={prefs.muted ? '🔇' : '🔊'} onPress={toggleMute} />
+                <RailButton
+                  icon={prefs.muted ? 'volume-mute-outline' : 'volume-high-outline'}
+                  color={prefs.muted ? colors.text : colors.accent}
+                  onPress={toggleMute}
+                  testID="rail-mute"
+                />
               ) : null}
             </View>
           </View>
@@ -821,7 +843,7 @@ function Feed() {
         <View style={styles.topRow}>
           {historyLen > 0 ? (
             <Pressable style={styles.roundBtn} onPress={goBack} testID="back-btn">
-              <Text style={styles.roundBtnText}>‹</Text>
+              <Ionicons name="chevron-back" size={20} color={colors.text} />
             </Pressable>
           ) : null}
           <TextInput
@@ -843,24 +865,32 @@ function Feed() {
         <View style={styles.toolsRow}>
           {prefs.bookmarks.length ? (
             <Pressable style={styles.pill} onPress={openBookmarks} testID="bookmarks-btn">
-              <Text style={styles.pillText}>★ Feeds</Text>
+              <Ionicons name="star" size={13} color={colors.save} />
+              <Text style={styles.pillText}>Feeds</Text>
             </Pressable>
           ) : null}
           <Pressable style={styles.pillIcon} onPress={toggleBookmark} testID="bm-btn">
-            <Text style={[styles.pillText, marked && { color: colors.save }]}>{marked ? '★' : '☆'}</Text>
+            <Ionicons
+              name={marked ? 'star' : 'star-outline'}
+              size={17}
+              color={marked ? colors.save : colors.text}
+            />
           </Pressable>
           <Pressable style={[styles.pill, { flex: 1 }]} onPress={openSortPicker} testID="sort-btn">
             <Text style={[styles.pillText, prefs.sort ? { color: colors.accent } : null]} numberOfLines={1}>
-              {sortLabel(prefs.sort)} ▾
+              {sortLabel(prefs.sort)}
             </Text>
+            <Ionicons name="chevron-expand-outline" size={13} color={colors.hint} />
           </Pressable>
           <Pressable style={styles.pillIcon} onPress={toggleFill} testID="fill-btn">
-            <Text style={[styles.pillText, prefs.fillScreen && { color: colors.accent }]}>⛶</Text>
+            <Ionicons name="expand-outline" size={17} color={prefs.fillScreen ? colors.accent : colors.text} />
           </Pressable>
           <Pressable style={styles.pillIcon} onPress={toggleAutoscroll} testID="autoscroll-btn">
-            <Text style={[styles.pillText, prefs.autoscroll && { color: colors.accent }]}>
-              {prefs.autoscroll ? '❚❚' : '▶'}
-            </Text>
+            <Ionicons
+              name={prefs.autoscroll ? 'pause-outline' : 'play-outline'}
+              size={17}
+              color={prefs.autoscroll ? colors.accent : colors.text}
+            />
           </Pressable>
         </View>
       </View>
@@ -872,11 +902,11 @@ function Feed() {
           autosave; leaving the tab reloads the feed if needed. */}
       <View style={[styles.tabbar, { paddingBottom: insets.bottom }]}>
         <Pressable style={styles.tabBtn} onPress={() => switchTab('posts')} testID="tab-posts">
-          <Text style={[styles.tabIcon, tab === 'posts' && styles.tabActive]}>▤</Text>
+          <Ionicons name="albums-outline" size={21} color={tab === 'posts' ? colors.accent : colors.hint} />
           <Text style={[styles.tabLabel, tab === 'posts' && styles.tabActive]}>Posts</Text>
         </Pressable>
         <Pressable style={styles.tabBtn} onPress={() => switchTab('settings')} testID="tab-settings">
-          <Text style={[styles.tabIcon, tab === 'settings' && styles.tabActive]}>⚙︎</Text>
+          <Ionicons name="settings-outline" size={21} color={tab === 'settings' ? colors.accent : colors.hint} />
           <Text style={[styles.tabLabel, tab === 'settings' && styles.tabActive]}>Settings</Text>
         </Pressable>
       </View>
@@ -892,21 +922,21 @@ function Feed() {
 }
 
 function RailButton({
-  label,
+  icon,
   sub,
-  active,
-  activeColor,
+  color = colors.text,
   onPress,
+  testID,
 }: {
-  label: string;
+  icon: React.ComponentProps<typeof Ionicons>['name'];
   sub?: string;
-  active?: boolean;
-  activeColor?: string;
+  color?: string;
   onPress: () => void;
+  testID?: string;
 }) {
   return (
-    <Pressable style={styles.railBtn} onPress={onPress} hitSlop={6}>
-      <Text style={[styles.railIcon, active && activeColor ? { color: activeColor } : null]}>{label}</Text>
+    <Pressable style={styles.railBtn} onPress={onPress} hitSlop={6} testID={testID}>
+      <Ionicons name={icon} size={27} color={color} style={styles.railIcon} />
       {sub ? <Text style={styles.railSub}>{sub}</Text> : null}
     </Pressable>
   );
@@ -929,8 +959,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderColor: '#26262f',
   },
-  tabBtn: { flex: 1, alignItems: 'center', paddingVertical: 7, gap: 1 },
-  tabIcon: { color: colors.hint, fontSize: 19 },
+  tabBtn: { flex: 1, alignItems: 'center', paddingVertical: 7, gap: 2 },
   tabLabel: { color: colors.hint, fontSize: 10.5 },
   tabActive: { color: colors.accent },
   topbar: { position: 'absolute', top: 0, left: 0, right: 0, gap: 7, paddingHorizontal: 12, paddingBottom: 10 },
@@ -967,7 +996,10 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     paddingHorizontal: 13,
     paddingVertical: 6,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
   },
   pillIcon: {
     backgroundColor: colors.chrome,
@@ -1008,10 +1040,10 @@ const styles = StyleSheet.create({
     borderColor: '#55555f',
   },
   openLink: { color: '#ff8b66', fontSize: 12 },
-  rail: { alignItems: 'center', gap: 2 },
-  railBtn: { width: 44, minHeight: 42, alignItems: 'center', justifyContent: 'center' },
-  railIcon: { color: colors.text, fontSize: 23, textShadowColor: 'rgba(0,0,0,0.8)', textShadowRadius: 4 },
-  railSub: { color: colors.textDim, fontSize: 10, marginTop: -2 },
+  rail: { alignItems: 'center', gap: 3 },
+  railBtn: { width: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+  railIcon: { textShadowColor: 'rgba(0,0,0,0.7)', textShadowRadius: 5 },
+  railSub: { color: colors.text, fontSize: 11, marginTop: -3, textShadowColor: 'rgba(0,0,0,0.7)', textShadowRadius: 4 },
   empty: { alignItems: 'center', justifyContent: 'center', padding: 32 },
   emptyTitle: { color: colors.accent, fontSize: 28, fontWeight: '800', marginBottom: 10 },
   hint: { color: colors.hint, fontSize: 14, textAlign: 'center', lineHeight: 20 },
