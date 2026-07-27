@@ -66,7 +66,7 @@
         title="Upvote (a)"
         onclick={() => vote(1)}
       >
-        <Icon name={post.likes === true ? 'arrow-up-circle' : 'arrow-up-circle-outline'} />
+        <Icon name="arrow-up-circle" filled={post.likes === true} />
       </button>
       <button
         id="down-btn"
@@ -75,7 +75,7 @@
         title="Downvote (z)"
         onclick={() => vote(-1)}
       >
-        <Icon name={post.likes === false ? 'arrow-down-circle' : 'arrow-down-circle-outline'} />
+        <Icon name="arrow-down-circle" filled={post.likes === false} />
       </button>
       <button
         id="save-btn"
@@ -84,10 +84,10 @@
         title="Save (s)"
         onclick={toggleSave}
       >
-        <Icon name={post.saved ? 'star' : 'star-outline'} />
+        <Icon name="star" filled={!!post.saved} />
       </button>
       <button id="comments-btn" class="icon-btn" title="Comments (c)" onclick={openComments}>
-        <Icon name="chatbubble-outline" />
+        <Icon name="message-circle" />
       </button>
     </div>
   </footer>

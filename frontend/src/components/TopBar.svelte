@@ -85,7 +85,7 @@
       title={marked ? 'Remove this feed from bookmarks' : 'Bookmark this feed'}
       onclick={toggleBookmark}
     >
-      <Icon name={marked ? 'star' : 'star-outline'} />
+      <Icon name="star" filled={marked} />
     </button>
     <button
       id="sort-btn"
@@ -95,7 +95,7 @@
       onclick={openSortPicker}
     >
       <span id="sort-label">{sortLabel(settings.sort)}</span>
-      <Icon name="chevron-expand-outline" />
+      <Icon name="chevrons-up-down" />
     </button>
   </div>
   <div class="controls">
@@ -107,7 +107,7 @@
       title="Fill screen (f)"
       onclick={toggleFill}
     >
-      <Icon name="expand-outline" />
+      <Icon name="expand" />
     </button>
     <button
       id="pause-btn"
@@ -119,7 +119,7 @@
         : 'Autoscroll off — click to start (space)'}
       onclick={toggleAutoscroll}
     >
-      <Icon name={settings.autoscroll ? 'pause-outline' : 'play-outline'} />
+      <Icon name={settings.autoscroll ? 'pause' : 'play'} />
     </button>
     <button
       id="mute-btn"
@@ -129,7 +129,7 @@
       title={P.muted ? 'Audio off — click to play audio (m)' : 'Audio on — click to mute (m)'}
       onclick={toggleMute}
     >
-      <Icon name={P.muted ? 'volume-mute-outline' : 'volume-high-outline'} />
+      <Icon name={P.muted ? 'volume-off' : 'volume-on'} />
     </button>
   </div>
 </header>

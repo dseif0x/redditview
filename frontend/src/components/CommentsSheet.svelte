@@ -60,7 +60,7 @@
           {sortText}
         </button>
         <Dialog.Close class="icon-btn comments-close" title="Close (Esc)">
-          <Icon name="close-outline" />
+          <Icon name="x" />
         </Dialog.Close>
       </header>
       <div id="comments-list">
