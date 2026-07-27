@@ -13,7 +13,7 @@ func TestCORSPreflight(t *testing.T) {
 
 	// Preflight must short-circuit before the method-specific routes.
 	req := httptest.NewRequest(http.MethodOptions, "/api/vote", nil)
-	req.Header.Set("Origin", "capacitor://localhost")
+	req.Header.Set("Origin", "https://frontend.example.com")
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 

@@ -377,7 +377,7 @@
           autocapitalize="off"
           bind:value={serverUrl}
           onchange={commitServerUrl}
-          placeholder="Empty = this server. Required in the iOS app, e.g. https://redditview.example.com"
+          placeholder="Empty = this server. Set to use a remote backend, e.g. https://redditview.example.com"
         />
       </div>
       <div class="item">

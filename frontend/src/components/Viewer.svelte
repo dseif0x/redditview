@@ -8,7 +8,7 @@
     viewerTouchEnd,
     viewerPointerDown,
   } from '../lib/player.svelte.js';
-  import { settings, IS_NATIVE } from '../lib/settings.svelte.js';
+  import { settings } from '../lib/settings.svelte.js';
   import Slide from './Slide.svelte';
 </script>
 
@@ -36,12 +36,6 @@
           <strong>downvoted</strong>, or <strong>hidden</strong>.
         </p>
         <p class="hint">← / → navigate · space toggles autoscroll · m toggles sound</p>
-        {#if IS_NATIVE}
-          <p class="hint">
-            This app needs a redditview server: set its URL in the
-            <strong>Settings</strong> tab first.
-          </p>
-        {/if}
       </div>
     {:else if P.message.kind === 'loading'}
       <div class="loading"><div class="spinner"></div></div>

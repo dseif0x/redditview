@@ -1,10 +1,9 @@
-import { settings, IS_NATIVE } from './settings.svelte.js';
+import { settings } from './settings.svelte.js';
 
 const PROXIED_HOSTS = ['redd.it', 'redditmedia.com', 'redditstatic.com', 'imgur.com', 'redgifs.com'];
 
 // Base URL of the backend serving /api. Empty = same origin (the normal
-// web app); the native shell and remote dev setups point it elsewhere via
-// the server URL setting.
+// deployment); remote setups point it elsewhere via the server URL setting.
 export function apiBase() {
   return String(settings.serverUrl || '')
     .trim()
@@ -29,9 +28,6 @@ export function mediaUrl(u) {
 // is given, and turns error responses into thrown Errors.
 export async function api(url, body) {
   const base = apiBase();
-  if (IS_NATIVE && !base) {
-    throw new Error('Set your backend server URL in the Settings tab');
-  }
   const headers = {};
   if (settings.cookie.trim()) headers['X-Reddit-Cookie'] = settings.cookie.trim();
   let init = { headers };
