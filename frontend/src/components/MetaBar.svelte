@@ -75,7 +75,7 @@
         title="Upvote (a)"
         onclick={() => vote(1)}
       >
-        <Icon name="arrow-up-circle" filled={post.likes === true} />
+        <Icon name="arrow-big-up" filled={post.likes === true} />
         {#if post.score != null}<span class="action-count">{fmtCount(post.score)}</span>{/if}
       </button>
       <button
@@ -85,7 +85,7 @@
         title="Downvote (z)"
         onclick={() => vote(-1)}
       >
-        <Icon name="arrow-down-circle" filled={post.likes === false} />
+        <Icon name="arrow-big-down" filled={post.likes === false} />
       </button>
       <button
         id="save-btn"

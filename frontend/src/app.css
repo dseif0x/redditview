@@ -109,16 +109,6 @@ button {
   fill: currentColor;
 }
 
-/* filled circle buttons: knock the inner arrow out in the background color
-   so it stays visible against the solid disc */
-#meta-actions .icon-filled svg {
-  stroke: var(--bg);
-}
-
-#save-btn .icon-filled svg {
-  stroke: currentColor;
-}
-
 /* ---- shared buttons ---- */
 .icon-btn {
   display: inline-flex;
