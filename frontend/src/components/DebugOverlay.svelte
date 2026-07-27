@@ -31,6 +31,43 @@
     perfRafId = requestAnimationFrame(perfLoop);
   }
 
+  // Reads the real env(safe-area-inset-bottom) via a probe element, so the
+  // overlay can show what the device actually reports.
+  let envProbe = null;
+  function envBottom() {
+    if (!envProbe) {
+      envProbe = document.createElement('div');
+      envProbe.style.cssText =
+        'position:fixed;visibility:hidden;pointer-events:none;padding-bottom:env(safe-area-inset-bottom,0px)';
+      document.body.appendChild(envProbe);
+    }
+    return getComputedStyle(envProbe).paddingBottom;
+  }
+
+  // Viewport geometry: everything needed to diagnose bottom-inset issues
+  // (standalone letterboxing, leftover scroll, env double-counting) from a
+  // single on-device screenshot.
+  function viewportLine() {
+    const landscape = window.innerWidth > window.innerHeight;
+    const screenH = landscape
+      ? Math.min(screen.width, screen.height)
+      : Math.max(screen.width, screen.height);
+    const vv = window.visualViewport;
+    const app = document.getElementById('app');
+    const bar = document.getElementById('tabbar');
+    const standalone =
+      navigator.standalone === true || window.matchMedia?.('(display-mode: standalone)')?.matches;
+    return [
+      `vp: ${standalone ? 'standalone' : 'browser'} scr=${screenH} inner=${window.innerHeight}`,
+      `icb=${document.documentElement.clientHeight}`,
+      `vv=${vv ? `${Math.round(vv.height)}@${Math.round(vv.offsetTop + vv.pageTop)}` : '-'}`,
+      `y=${Math.round(window.scrollY)} envB=${envBottom()}`,
+      `appB=${app ? Math.round(app.getBoundingClientRect().bottom) : '-'}`,
+      `barB=${bar ? Math.round(bar.getBoundingClientRect().bottom) : '-'}`,
+      `lb=${document.documentElement.style.getPropertyValue('--bottom-letterbox') || '0px'}`,
+    ].join(' ');
+  }
+
   $effect(() => {
     const iv = setInterval(() => {
       if (!settings.debug) {
@@ -50,6 +87,7 @@
       }
       text = [
         `${P.muted ? 'MUTED' : 'audio on'} | ${audio}`,
+        viewportLine(),
         [fps, dbg.lastTransitionProfile].filter(Boolean).join(' | '),
         ...dbg.log,
       ]
@@ -60,6 +98,8 @@
       clearInterval(iv);
       if (perfRafId != null) cancelAnimationFrame(perfRafId);
       perfRafId = null;
+      envProbe?.remove();
+      envProbe = null;
     };
   });
 </script>
