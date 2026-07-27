@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"sort"
 	"strings"
 )
 
@@ -247,6 +248,96 @@ func handleFeed(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(out)
+}
+
+// ---------------------------------------------------------------------------
+// Subscriptions: the cookie account's subscribed subreddits and followed
+// users. Reddit implements "follow" as a subscription to the user's profile
+// subreddit (u_<name>), so one listing serves both, split by prefix.
+// ---------------------------------------------------------------------------
+
+type subredditListing struct {
+	Data struct {
+		After    string `json:"after"`
+		Children []struct {
+			Data struct {
+				DisplayName string `json:"display_name"`
+			} `json:"data"`
+		} `json:"children"`
+	} `json:"data"`
+}
+
+// redditGetJSON fetches a reddit JSON endpoint with the usual host fallback.
+func redditGetJSON(r *http.Request, path string, q url.Values, cookie string, out any) error {
+	var lastErr error
+	for _, host := range feedHosts {
+		req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, host+path+"?"+q.Encode(), nil)
+		if err != nil {
+			return err
+		}
+		req.Header.Set("User-Agent", userAgent)
+		req.Header.Set("Accept", "application/json")
+		if cookie != "" {
+			req.Header.Set("Cookie", cookie)
+		}
+		resp, err := httpClient.Do(req)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		if resp.StatusCode != http.StatusOK {
+			_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 2048))
+			resp.Body.Close()
+			lastErr = fmt.Errorf("reddit returned %d", resp.StatusCode)
+			continue
+		}
+		err = json.NewDecoder(io.LimitReader(resp.Body, 20<<20)).Decode(out)
+		resp.Body.Close()
+		return err
+	}
+	return lastErr
+}
+
+func handleSubscriptions(w http.ResponseWriter, r *http.Request) {
+	cookie := r.Header.Get("X-Reddit-Cookie")
+	if cookie == "" {
+		http.Error(w, "reddit cookie required to list subscriptions — set it in settings", http.StatusUnauthorized)
+		return
+	}
+	subreddits := []string{}
+	following := []string{}
+	after := ""
+	for page := 0; page < 4; page++ { // up to 400 subscriptions
+		q := url.Values{}
+		q.Set("raw_json", "1")
+		q.Set("limit", "100")
+		if after != "" {
+			q.Set("after", after)
+		}
+		var l subredditListing
+		if err := redditGetJSON(r, "subreddits/mine/subscriber.json", q, cookie, &l); err != nil {
+			http.Error(w, "could not list subscriptions: "+err.Error(), http.StatusBadGateway)
+			return
+		}
+		for _, c := range l.Data.Children {
+			if name, ok := strings.CutPrefix(c.Data.DisplayName, "u_"); ok {
+				following = append(following, name)
+			} else if c.Data.DisplayName != "" {
+				subreddits = append(subreddits, c.Data.DisplayName)
+			}
+		}
+		after = l.Data.After
+		if after == "" {
+			break
+		}
+	}
+	lessFold := func(s []string) {
+		sort.Slice(s, func(i, j int) bool { return strings.ToLower(s[i]) < strings.ToLower(s[j]) })
+	}
+	lessFold(subreddits)
+	lessFold(following)
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{"subreddits": subreddits, "following": following})
 }
 
 // extractPost classifies a reddit post into one of our media kinds.
