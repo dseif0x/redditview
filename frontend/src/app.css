@@ -1265,13 +1265,6 @@ h2.as-header,
   margin: 0 1.25rem 1rem;
 }
 
-#settings-form .actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.5rem;
-  margin: 1rem 1rem 0;
-}
-
 [hidden] {
   display: none !important;
 }

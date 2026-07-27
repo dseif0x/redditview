@@ -1,4 +1,8 @@
 <script>
+  // Settings autosave: every control writes straight into `settings` and
+  // persists on change — there is no Save/Cancel step. Side effects that the
+  // old form applied on Save (feed reload on filter/cookie/server changes,
+  // slide re-placement on axis flip) fire on the individual change instead.
   import { tick } from 'svelte';
   import { Switch, Checkbox } from 'bits-ui';
   import {
@@ -8,7 +12,7 @@
     replaceSettings,
     DEFAULTS,
   } from '../lib/settings.svelte.js';
-  import { P, startFeed, showTab, settingsSaved } from '../lib/player.svelte.js';
+  import { P, startFeed, refreshAfterVerticalChange } from '../lib/player.svelte.js';
   import { apiBase } from '../lib/api.js';
   import { showToast } from '../lib/toast.svelte.js';
   import { presentActionSheet } from '../lib/sheet.svelte.js';
@@ -29,6 +33,7 @@
     { key: 'showVideos', label: 'Videos' },
     { key: 'showText', label: 'Text posts' },
   ];
+  const FEED_KEYS = ['showImages', 'showVideos', 'showText', 'skipSeen'];
 
   // Which account the page is editing: an index into settings.accounts, or
   // -1 for the "add new account" entry.
@@ -41,9 +46,6 @@
   let cookieMasked = $state(false);
   let serverUrl = $state(settings.serverUrl);
   let imageSeconds = $state(settings.imageSeconds);
-  let bools = $state(
-    Object.fromEntries([...TOGGLES, ...FILTERS].map(({ key }) => [key, settings[key]]))
-  );
   let ioVisible = $state(false);
   let ioValue = $state('');
   let ioEl = $state(null);
@@ -65,6 +67,22 @@
     );
   });
 
+  // Re-derive the request cookie from the active account; a change reloads
+  // the feed, since it changes what the backend returns.
+  function applyActiveCookie() {
+    const prev = settings.cookie;
+    settings.cookie = activeCookie();
+    saveSettings();
+    if (prev !== settings.cookie && P.feedActive) startFeed(P.feedPath);
+  }
+
+  function createAccount(name, cookie) {
+    settings.accounts.push({ name: name || `Account ${settings.accounts.length + 1}`, cookie });
+    settings.activeAccount = settings.accounts.length - 1;
+    editingAccount = settings.activeAccount;
+    applyActiveCookie();
+  }
+
   async function pickAccount() {
     const options = settings.accounts.map((a, i) => ({
       text: (a.name || `Account ${i + 1}`) + (i === settings.activeAccount ? ' (active)' : ''),
@@ -78,7 +96,40 @@
     );
     if (v === undefined) return;
     editingAccount = v === 'new' ? -1 : Number(v);
+    // Picking an account makes it the active one right away.
+    if (editingAccount >= 0) {
+      settings.activeAccount = editingAccount;
+      applyActiveCookie();
+    }
     loadAccountFields();
+  }
+
+  function commitAccountName() {
+    const name = accountName.trim();
+    if (editingAccount >= 0) {
+      const a = settings.accounts[editingAccount];
+      if (!a) return;
+      a.name = name || `Account ${editingAccount + 1}`;
+      saveSettings();
+    } else if (name) {
+      // Naming the "add account" entry creates the account.
+      createAccount(name, cookieMasked ? '' : cookieValue.trim());
+    }
+  }
+
+  // A masked (hidden) cookie field means "unchanged". Once revealed, the
+  // field is authoritative — clearing it clears the cookie.
+  function commitCookie() {
+    const cookie = cookieValue.trim();
+    if (editingAccount >= 0) {
+      const a = settings.accounts[editingAccount];
+      if (!a) return;
+      a.cookie = cookie;
+      applyActiveCookie();
+    } else if (cookie) {
+      // Pasting a cookie into the "add account" entry creates the account.
+      createAccount(accountName.trim(), cookie);
+    }
   }
 
   function revealCookie() {
@@ -93,43 +144,43 @@
     editingAccount = settings.accounts.length
       ? Math.min(editingAccount, settings.accounts.length - 1)
       : -1;
-    const prevCookie = settings.cookie;
-    settings.cookie = activeCookie();
-    saveSettings();
     loadAccountFields();
     showToast('Account deleted');
-    if (prevCookie !== settings.cookie && P.feedActive) startFeed(P.feedPath);
+    applyActiveCookie();
   }
 
-  function save() {
-    const changed = (key) => settings[key] !== bools[key];
-    const filtersChanged = ['showImages', 'showVideos', 'showText', 'skipSeen'].some(changed);
-    const verticalChanged = changed('vertical');
-    const prevCookie = settings.cookie;
+  function commitServerUrl() {
     const prevServer = apiBase();
-
-    // Saving selects the edited account as the active one.
-    const name = accountName.trim();
-    // A masked (hidden) cookie field means "unchanged": keep the stored value.
-    // Once revealed, the field is authoritative — clearing it clears the cookie.
-    const cookie = cookieMasked
-      ? settings.accounts[editingAccount]?.cookie || ''
-      : cookieValue.trim();
-    if (editingAccount === -1) {
-      if (name || cookie) {
-        settings.accounts.push({ name: name || `Account ${settings.accounts.length + 1}`, cookie });
-        settings.activeAccount = settings.accounts.length - 1;
-      }
-    } else if (settings.accounts[editingAccount]) {
-      settings.accounts[editingAccount] = { name: name || `Account ${editingAccount + 1}`, cookie };
-      settings.activeAccount = editingAccount;
-    }
-    settings.cookie = activeCookie();
-
     settings.serverUrl = String(serverUrl).trim();
+    serverUrl = settings.serverUrl;
+    saveSettings();
+    if (apiBase() !== prevServer && P.feedActive) startFeed(P.feedPath);
+  }
+
+  function commitImageSeconds() {
     settings.imageSeconds = Math.max(1, parseFloat(imageSeconds) || DEFAULTS.imageSeconds);
-    for (const key of Object.keys(bools)) settings[key] = bools[key];
-    settingsSaved({ filtersChanged, verticalChanged, prevCookie, prevServer });
+    imageSeconds = settings.imageSeconds;
+    saveSettings();
+  }
+
+  function applyToggle(key, value) {
+    if (settings[key] === value) return;
+    settings[key] = value;
+    saveSettings();
+    if (key === 'vertical') refreshAfterVerticalChange();
+    if (FEED_KEYS.includes(key)) {
+      if (!settings.showImages && !settings.showVideos && !settings.showText) {
+        showToast('All post types disabled — the feed will be empty');
+      }
+      // The filters changed what the feed contains; reload it.
+      if (P.feedActive) startFeed(P.feedPath);
+    }
+  }
+
+  // Tapping the row text toggles the control, like ion-toggle labels did.
+  function rowToggle(e, key) {
+    if (e.target.closest('[data-switch-root], [data-checkbox-root]')) return;
+    applyToggle(key, !settings[key]);
   }
 
   // -------------------------------------------------------------------------
@@ -172,18 +223,11 @@
     // Refresh the form's local state from the imported settings.
     serverUrl = settings.serverUrl;
     imageSeconds = settings.imageSeconds;
-    for (const key of Object.keys(bools)) bools[key] = settings[key];
     editingAccount = settings.accounts.length ? settings.activeAccount : -1;
     loadAccountFields();
     ioVisible = false;
     showToast('Settings imported');
     if (P.feedActive) startFeed(P.feedInput.trim());
-  }
-
-  // Tapping the row text toggles the control, like ion-toggle labels did.
-  function rowToggle(e, key) {
-    if (e.target.closest('[data-switch-root], [data-checkbox-root]')) return;
-    bools[key] = !bools[key];
   }
 </script>
 
@@ -202,6 +246,7 @@
           id="account-name-input"
           class="item-input"
           bind:value={accountName}
+          onchange={commitAccountName}
           placeholder="e.g. main"
           autocomplete="off"
         />
@@ -221,6 +266,7 @@
           <textarea
             id="cookie-input"
             bind:value={cookieValue}
+            onchange={commitCookie}
             rows="4"
             placeholder="Paste the FULL Cookie header from a logged-in reddit.com request (DevTools → Network → request headers). Just reddit_session usually gets blocked as a bot."
           ></textarea>
@@ -243,6 +289,7 @@
           autocomplete="off"
           autocapitalize="off"
           bind:value={serverUrl}
+          onchange={commitServerUrl}
           placeholder="Empty = this server. Required in the iOS app, e.g. https://redditview.example.com"
         />
       </div>
@@ -256,13 +303,18 @@
           max="600"
           step="0.5"
           bind:value={imageSeconds}
+          onchange={commitImageSeconds}
         />
       </div>
       {#each TOGGLES as t (t.key)}
         <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
         <div class="item item-toggle" onclick={(e) => rowToggle(e, t.key)}>
           <span class="item-label">{t.label}</span>
-          <Switch.Root class="switch" bind:checked={bools[t.key]}>
+          <Switch.Root
+            class="switch"
+            checked={settings[t.key]}
+            onCheckedChange={(v) => applyToggle(t.key, v)}
+          >
             <Switch.Thumb class="switch-thumb" />
           </Switch.Root>
         </div>
@@ -274,7 +326,11 @@
       {#each FILTERS as f (f.key)}
         <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
         <div class="item item-toggle" onclick={(e) => rowToggle(e, f.key)}>
-          <Checkbox.Root class="checkbox" bind:checked={bools[f.key]}>
+          <Checkbox.Root
+            class="checkbox"
+            checked={settings[f.key]}
+            onCheckedChange={(v) => applyToggle(f.key, v)}
+          >
             <svg class="checkbox-mark" viewBox="0 0 24 24" aria-hidden="true">
               <path
                 d="M5 12.5l4.5 4.5L19 7.5"
@@ -305,13 +361,9 @@
       ></textarea>
     {/if}
     <p class="hint">
-      Everything is stored only in this browser's localStorage. The cookie is sent to the backend
-      per request and never persisted server-side. Export includes accounts and cookies — treat it
-      like a password.
+      Changes are saved automatically, and only in this browser's localStorage. The cookie is sent
+      to the backend per request and never persisted server-side. Export includes accounts and
+      cookies — treat it like a password.
     </p>
-    <div class="actions">
-      <button type="button" class="btn-outline" onclick={() => showTab('posts')}>Cancel</button>
-      <button type="button" class="btn-solid" onclick={save}>Save</button>
-    </div>
   </form>
 </section>
