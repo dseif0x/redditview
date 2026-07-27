@@ -21,6 +21,9 @@
       {#if sheet.current}
         <div class="as-group">
           <Dialog.Title class="as-header">{sheet.current.header}</Dialog.Title>
+          {#if sheet.current.loading}
+            <div class="as-loading"><div class="spinner"></div></div>
+          {/if}
           {#each sheet.current.options as o (o.value)}
             <button
               type="button"

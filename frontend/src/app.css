@@ -1044,6 +1044,19 @@ h2.comments-title,
   flex-shrink: 0;
 }
 
+/* async sheets (subscriptions) show a spinner until their options arrive */
+.as-loading {
+  display: flex;
+  justify-content: center;
+  padding: 1.1rem 1rem 1.3rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.as-loading .spinner {
+  width: 1.6rem;
+  height: 1.6rem;
+}
+
 h2.as-header,
 .as-header {
   margin: 0;
