@@ -1352,7 +1352,12 @@ h2.as-header,
   /* fully opaque: slides swipe behind the bar and must not shine through */
   background: #0e0e14;
   border-top: 1px solid #26262f;
-  padding-bottom: var(--safe-bottom);
+  /* The safe-area inset guarantees clearance between the labels and the
+     home indicator — it must not STACK on the buttons' own bottom padding,
+     or the bar reads ~6px too tall. Fold the button padding into the inset
+     (keep the difference), so label-to-screen-bottom equals the inset
+     exactly. Browsers (inset 0) keep zero extra padding, as before. */
+  padding-bottom: max(calc(var(--safe-bottom) - 0.25rem), 0px);
 }
 
 .tabbar-list {
@@ -1366,7 +1371,7 @@ h2.as-header,
   align-items: center;
   justify-content: center;
   gap: 0.15rem;
-  padding: 0.4rem 0 0.35rem;
+  padding: 0.3rem 0 0.25rem;
   background: none;
   border: none;
   color: #8a8a98;
