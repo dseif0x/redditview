@@ -8,7 +8,7 @@
 import { flushSync } from 'svelte';
 import Hls from 'hls.js';
 import { settings, saveSettings, markSeen, hasSeen } from './settings.svelte.js';
-import { api, apiBase, mediaUrl } from './api.js';
+import { api, mediaUrl } from './api.js';
 import { showToast } from './toast.svelte.js';
 import { presentActionSheet } from './sheet.svelte.js';
 import { alog, timed, profileTransition } from './debug.svelte.js';
@@ -1179,26 +1179,13 @@ export function showTab(tab) {
   }
 }
 
-// Re-apply side effects after the settings form is saved.
-export function settingsSaved({ filtersChanged, verticalChanged, prevCookie, prevServer }) {
-  saveSettings();
-  // Mounted neighbor slides carry transforms sized for the old axis;
-  // re-place the window (transforms themselves re-derive reactively).
-  if (verticalChanged && P.activeUid != null) {
-    const entry = P.window.find((e) => e.uid === P.activeUid);
-    if (entry) showSlide(entry.pos, 0);
-  }
-
-  if (!settings.showImages && !settings.showVideos && !settings.showText) {
-    showToast('All post types disabled — the feed will be empty');
-  } else {
-    showToast('Settings saved');
-  }
-  // Reload if the account, server, or type filters changed what the feed contains.
-  if ((filtersChanged || prevCookie !== settings.cookie || apiBase() !== prevServer) && P.feedActive) {
-    startFeed(P.feedPath);
-  }
-  showTab('posts');
+// Mounted neighbor slides carry transforms sized for the old axis; re-place
+// the window after the navigation axis flips (the transforms themselves
+// re-derive reactively).
+export function refreshAfterVerticalChange() {
+  if (P.activeUid == null) return;
+  const entry = P.window.find((e) => e.uid === P.activeUid);
+  if (entry) showSlide(entry.pos, 0);
 }
 
 // ---------------------------------------------------------------------------
