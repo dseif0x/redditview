@@ -210,8 +210,13 @@ async function prfViaAssertion() {
 // Payload build / apply / merge
 // ---------------------------------------------------------------------------
 function buildPayload() {
+  const snap = $state.snapshot(settings);
+  // Which account is ACTIVE is a per-device choice — the account list syncs,
+  // the selection doesn't (cookie is derived from the selection).
+  delete snap.activeAccount;
+  delete snap.cookie;
   return {
-    settings: $state.snapshot(settings),
+    settings: snap,
     seen: seenList(),
     updatedAt: localUpdatedAt() || Date.now(),
   };
@@ -220,7 +225,15 @@ function buildPayload() {
 function applyRemote(payload) {
   const localAt = localUpdatedAt();
   if (payload.settings && (payload.updatedAt || 0) > localAt) {
-    withRemoteApply(() => replaceSettings(payload.settings));
+    const incoming = { ...payload.settings };
+    delete incoming.cookie;
+    // Keep this device's active account, re-located by name in case the
+    // synced list changed. A device with no selection yet (initial sync)
+    // falls back to the first account via replaceSettings' validation.
+    const activeName = settings.accounts[settings.activeAccount]?.name;
+    const at = activeName ? (incoming.accounts || []).findIndex((a) => a.name === activeName) : -1;
+    incoming.activeAccount = at >= 0 ? at : 0;
+    withRemoteApply(() => replaceSettings(incoming));
   }
   mergeSeen(payload.seen);
 }
