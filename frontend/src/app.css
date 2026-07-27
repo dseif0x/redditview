@@ -26,7 +26,8 @@ body {
   height: 100%;
   background: var(--bg);
   color: var(--text);
-  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-family: 'Inter Variable', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  -webkit-font-smoothing: antialiased;
   overflow: hidden;
   /* browser pinch-zoom is disabled; the app pinch-zooms the post media */
   touch-action: pan-x pan-y;
