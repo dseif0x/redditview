@@ -20,7 +20,6 @@ import {
   withRemoteApply,
   seenList,
   mergeSeen,
-  IS_NATIVE,
 } from './settings.svelte.js';
 import { apiBase } from './api.js';
 import { showToast } from './toast.svelte.js';
@@ -449,10 +448,9 @@ export async function syncDeleteAccount() {
 // ---------------------------------------------------------------------------
 export function initSync() {
   // Passkeys bind to the page's origin, so sync only works when the app is
-  // served by its own backend (the normal web deployment) — not from the
-  // native shell or a cross-origin server URL.
-  sync.available =
-    !IS_NATIVE && apiBase() === '' && !!window.PublicKeyCredential && !!crypto?.subtle;
+  // served by its own backend (the normal deployment) — not with a
+  // cross-origin server URL configured.
+  sync.available = apiBase() === '' && !!window.PublicKeyCredential && !!crypto?.subtle;
   if (!sync.available) return;
 
   setSettingsChangeHook(() => schedulePush());

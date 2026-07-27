@@ -90,24 +90,6 @@ docker build -t redditview .
 docker run -p 8080:8080 redditview
 ```
 
-## iOS app (sideload)
-
-`.github/workflows/ios.yml` builds an **unsigned** `.ipa` on every push to
-`main` that touches the frontend (artifact on the workflow run). The app
-bundles the web frontend with Capacitor; on first launch, set the **Backend
-server URL** in the Settings tab to any deployed redditview instance
-(`https://`, or plain `http://` for a LAN/homelab server). All `/api` calls,
-the media proxy, and HLS rewriting then work exactly as in the browser — the
-backend allows cross-origin API requests for this.
-
-Install the `.ipa` by sideloading — AltStore, Sideloadly, etc. re-sign it
-with your own (free) Apple ID. Proper distribution signing would need an
-Apple Developer account and cert secrets wired into the workflow.
-
-The native project is generated in CI (`npx cap add ios`) and not checked in;
-`frontend/capacitor.config.json` and the icon/splash sources in
-`frontend/assets/` are the only tracked iOS files.
-
 ## Kubernetes (Helm)
 
 The chart in `charts/redditview` is published to GitHub Pages by

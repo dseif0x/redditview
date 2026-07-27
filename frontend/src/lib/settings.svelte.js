@@ -1,11 +1,6 @@
 // ---------------------------------------------------------------------------
 // Settings (localStorage only), as reactive Svelte state.
 // ---------------------------------------------------------------------------
-// Running inside the Capacitor iOS shell (bundled assets, capacitor://
-// scheme). The native app has no same-origin backend, so it needs the
-// backend server URL setting.
-export const IS_NATIVE = location.protocol === 'capacitor:';
-
 const SETTINGS_KEY = 'redditview.settings';
 export const DEFAULTS = {
   serverUrl: '',

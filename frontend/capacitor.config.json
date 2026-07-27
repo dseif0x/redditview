@@ -1,9 +1,0 @@
-{
-  "appId": "com.redditview.app",
-  "appName": "redditview",
-  "webDir": "dist",
-  "ios": {
-    "contentInset": "never",
-    "backgroundColor": "#0b0b0f"
-  }
-}

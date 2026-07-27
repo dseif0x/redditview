@@ -44,12 +44,14 @@ func main() {
 	log.Fatal(http.ListenAndServe(addr, withCORS(mux)))
 }
 
-// withCORS lets the native app (a capacitor:// webview with no same-origin
-// backend) call the API cross-origin. The API holds no server-side state or
-// credentials — the reddit cookie always arrives from the client per
-// request — so a wildcard origin doesn't expose anything a direct request
-// couldn't already reach. Handles preflight before the mux so OPTIONS
-// doesn't 405 against the method-specific routes.
+// withCORS lets a frontend served from another origin (the backend server
+// URL setting) call the API cross-origin. The reddit API holds no
+// server-side state or credentials — the reddit cookie always arrives from
+// the client per request — so a wildcard origin doesn't expose anything a
+// direct request couldn't already reach (the passkey-sync session cookie is
+// unaffected: browsers refuse credentialed requests under a wildcard).
+// Handles preflight before the mux so OPTIONS doesn't 405 against the
+// method-specific routes.
 func withCORS(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
