@@ -1479,6 +1479,17 @@ export function initPlayer() {
   document.addEventListener('focusout', () => setTimeout(resetViewportScroll, 60));
   window.visualViewport?.addEventListener('resize', () => setTimeout(resetViewportScroll, 60));
   window.addEventListener('orientationchange', () => setTimeout(resetViewportScroll, 250));
+  // The standalone shell is 100vh — taller than iOS's cut-short layout
+  // viewport — so the document is technically scrollable by the difference,
+  // and anything that scrolls it (focus reveals, scrollIntoView) shifts the
+  // whole app up. The app never scrolls the document on purpose; clamp it.
+  window.addEventListener(
+    'scroll',
+    () => {
+      if (window.scrollX || window.scrollY) window.scrollTo(0, 0);
+    },
+    { passive: true }
+  );
 
   // Resume the last session's feed and position.
   const r = settings.resume;
