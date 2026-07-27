@@ -32,6 +32,7 @@
 
   function feedLink(e, feed) {
     e.preventDefault();
+    if (recentDragEnd()) return; // the click is a mouse drag's residue, not a tap
     goToFeed(feed);
   }
 
@@ -46,10 +47,20 @@
 
 {#if post}
   <footer id="meta">
-    <div id="meta-text">
-      <!-- The title sits above #viewer, so it feeds the same gesture engine:
-           swipes that start on it still navigate, while a clean tap (no drag)
-           expands the clamped text. -->
+    <!-- The caption block sits above #viewer, so its interactive pieces
+         (title, subreddit/author/open links) feed the same gesture engine:
+         swipes that start on them still navigate, while clean taps keep
+         their own behavior. Handlers live here once — events bubble up from
+         whichever child was touched. -->
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div
+      id="meta-text"
+      ontouchstart={viewerTouchStart}
+      ontouchmove={viewerTouchMove}
+      ontouchend={viewerTouchEnd}
+      onpointerdown={viewerPointerDown}
+      ondragstart={(e) => e.preventDefault()}
+    >
       <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
       <div
         id="meta-title"
@@ -59,10 +70,6 @@
         onclick={() => {
           if (!recentDragEnd()) expanded = !expanded;
         }}
-        ontouchstart={viewerTouchStart}
-        ontouchmove={viewerTouchMove}
-        ontouchend={viewerTouchEnd}
-        onpointerdown={viewerPointerDown}
       >
         {post.title}
       </div>
@@ -83,7 +90,14 @@
         {/if}
         {#if post.nsfw}NSFW ·{/if}
         {#if post.kind === 'gallery'}{P.galleryIdx + 1}/{post.images.length} ·{/if}
-        <a href={post.permalink} target="_blank" rel="noopener">open ↗</a>
+        <a
+          href={post.permalink}
+          target="_blank"
+          rel="noopener"
+          onclick={(e) => {
+            if (recentDragEnd()) e.preventDefault();
+          }}>open ↗</a
+        >
       </div>
     </div>
     <!-- Vertical action rail, reels-style: big icons with counts below. -->

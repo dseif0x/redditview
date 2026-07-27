@@ -790,6 +790,9 @@ button {
 #meta a {
   pointer-events: auto;
   color: #ff8b66;
+  /* like the title, links feed the swipe engine — the browser must not
+     claim touches that start on them */
+  touch-action: none;
 }
 
 #meta a.meta-feed-link {
