@@ -8,8 +8,8 @@
   import Volume2 from '@lucide/svelte/icons/volume-2';
   import Expand from '@lucide/svelte/icons/expand';
   import Star from '@lucide/svelte/icons/star';
-  import CircleArrowUp from '@lucide/svelte/icons/circle-arrow-up';
-  import CircleArrowDown from '@lucide/svelte/icons/circle-arrow-down';
+  import ArrowBigUp from '@lucide/svelte/icons/arrow-big-up';
+  import ArrowBigDown from '@lucide/svelte/icons/arrow-big-down';
   import MessageCircle from '@lucide/svelte/icons/message-circle';
   import X from '@lucide/svelte/icons/x';
   import Images from '@lucide/svelte/icons/images';
@@ -24,8 +24,8 @@
     'volume-on': Volume2,
     expand: Expand,
     star: Star,
-    'arrow-up-circle': CircleArrowUp,
-    'arrow-down-circle': CircleArrowDown,
+    'arrow-big-up': ArrowBigUp,
+    'arrow-big-down': ArrowBigDown,
     'message-circle': MessageCircle,
     x: X,
     images: Images,
