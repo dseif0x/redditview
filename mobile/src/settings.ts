@@ -9,6 +9,9 @@ export type Account = { name: string; cookie: string };
 export type Bookmark = { path: string; sort: string };
 export type Resume = { path: string; sort: string; cursor: string; name: string };
 export type BarPos = 'bottom' | 'top' | 'left' | 'right';
+// 'auto' = the web app's movable-bar mode: tapping near a screen edge docks
+// the bar there; the docked position lives in barAutoPos.
+export type BarPosSetting = BarPos | 'auto';
 
 export type Settings = {
   serverUrl: string;
@@ -22,7 +25,8 @@ export type Settings = {
   fillScreen: boolean;
   vertical: boolean;
   showPauseIcon: boolean;
-  barPos: BarPos;
+  barPos: BarPosSetting;
+  barAutoPos: BarPos;
   barInvert: boolean;
   showImages: boolean;
   showVideos: boolean;
@@ -47,6 +51,7 @@ export const DEFAULTS: Settings = {
   vertical: true, // TikTok-style by default on mobile; the web app defaults horizontal
   showPauseIcon: true,
   barPos: 'bottom',
+  barAutoPos: 'bottom',
   barInvert: false,
   showImages: true,
   showVideos: true,
@@ -75,7 +80,8 @@ function sanitize(raw: Partial<Settings> & { cookie?: string }): Settings {
     .filter((b) => b && typeof b === 'object' && typeof b.path === 'string')
     .map((b) => ({ path: b.path, sort: String(b.sort || '') }));
   s.imageSeconds = Math.max(1, Number(s.imageSeconds) || DEFAULTS.imageSeconds);
-  if (!['bottom', 'top', 'left', 'right'].includes(s.barPos)) s.barPos = 'bottom';
+  if (!['bottom', 'top', 'left', 'right', 'auto'].includes(s.barPos)) s.barPos = 'bottom';
+  if (!['bottom', 'top', 'left', 'right'].includes(s.barAutoPos)) s.barAutoPos = 'bottom';
   if (s.resume && (typeof s.resume !== 'object' || typeof s.resume.path !== 'string' || !s.resume.name)) {
     s.resume = null;
   }

@@ -24,11 +24,15 @@ pinch-to-zoom (transient, springs back) · persisted mute.
 
 Also ported: the bottom tab bar (Posts / Settings, with the settings page
 over the feed like the web frontend) and desktop keyboard shortcuts on web
-(space, arrows, j/k, m, f, a/z, s, c, Esc).
+(space, arrows, j/k, m, f, a/z, s, c, Esc). Settings autosave on every
+interaction — leaving the Settings tab reloads the feed when the account,
+server, or filters changed. The progress bar position picker has an
+**Auto** mode mirroring the web app's movable bar: tap near a screen edge
+to dock the bar there.
 
 Not ported (web-platform workarounds with no native equivalent): the
-smooth-scroll toggle (native paging is always smooth), the debug overlay,
-and edge-tap bar docking (the bar position is a settings picker instead).
+smooth-scroll toggle (native paging is always smooth) and the debug
+overlay.
 
 ## Deferred — worth implementing later
 

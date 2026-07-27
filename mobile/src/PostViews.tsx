@@ -28,7 +28,10 @@ import { colors } from './theme';
 // ---------------------------------------------------------------------------
 const DOUBLE_TAP_MS = 300;
 
-export function useTaps(onSingle: () => void, onDouble: (x: number, y: number) => void) {
+export function useTaps(
+  onSingle: (x: number, y: number) => void,
+  onDouble: (x: number, y: number) => void
+) {
   const lastTap = useRef(0);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(
@@ -53,7 +56,7 @@ export function useTaps(onSingle: () => void, onDouble: (x: number, y: number) =
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(() => {
       timer.current = null;
-      onSingle();
+      onSingle(pageX, pageY);
     }, DOUBLE_TAP_MS + 30);
   };
 }
@@ -86,6 +89,7 @@ export function VideoPost({
   onProgress,
   registerPlayer,
   onDoubleTap,
+  interceptTap,
 }: {
   post: Post;
   active: boolean;
@@ -97,6 +101,8 @@ export function VideoPost({
   onProgress: (frac: number) => void;
   registerPlayer: (p: VideoPlayer | null) => void;
   onDoubleTap: (x: number, y: number) => void;
+  // Returns true when the tap was consumed (e.g. edge-docking the bar).
+  interceptTap?: (x: number, y: number) => boolean;
 }) {
   const [src, setSrc] = useState<VideoSource>(() => videoSource(post));
   const [started, setStarted] = useState(false);
@@ -161,7 +167,8 @@ export function VideoPost({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [player, active]);
 
-  const handleTap = useTaps(() => {
+  const handleTap = useTaps((x, y) => {
+    if (interceptTap?.(x, y)) return;
     if (player.playing) player.pause();
     else player.play();
   }, onDoubleTap);
@@ -202,7 +209,7 @@ export function ImagePost({
 }: {
   post: Post;
   fill: boolean;
-  onSingleTap: () => void;
+  onSingleTap: (x: number, y: number) => void;
   onDoubleTap: (x: number, y: number) => void;
 }) {
   const handleTap = useTaps(onSingleTap, onDoubleTap);
@@ -231,7 +238,7 @@ export const GalleryPost = forwardRef<
     feedVertical: boolean;
     fill: boolean;
     onPage: (page: number) => void;
-    onSingleTap: () => void;
+    onSingleTap: (x: number, y: number) => void;
     onDoubleTap: (x: number, y: number) => void;
   }
 >(function GalleryPost({ post, width, height, feedVertical, fill, onPage, onSingleTap, onDoubleTap }, ref) {
@@ -297,7 +304,7 @@ export function TextPost({
   onDoubleTap,
 }: {
   post: Post;
-  onSingleTap: () => void;
+  onSingleTap: (x: number, y: number) => void;
   onDoubleTap: (x: number, y: number) => void;
 }) {
   const handleTap = useTaps(onSingleTap, onDoubleTap);

@@ -90,6 +90,36 @@ function Feed() {
   const galleryRefs = useRef(new Map<string, GalleryHandle | null>());
   const currentPlayer = useRef<VideoPlayer | null>(null);
   const pausedBySheet = useRef(false);
+  const sizeRef = useRef(size);
+  sizeRef.current = size;
+
+  // Settings autosave: entering the settings tab snapshots the values whose
+  // change requires a feed reload; leaving the tab compares and reloads.
+  const settingsSnapshot = useRef<string | null>(null);
+  const reloadSnapshot = () => {
+    const st = getSettings();
+    const cookie = st.accounts[st.activeAccount]?.cookie.trim() ?? '';
+    return JSON.stringify([cookie, st.serverUrl.trim(), st.showImages, st.showVideos, st.showText, st.skipSeen]);
+  };
+
+  const switchTab = (next: 'posts' | 'settings') => {
+    if (next === tabRef.current) return;
+    if (next === 'settings') {
+      settingsSnapshot.current = reloadSnapshot();
+      setTab('settings');
+      return;
+    }
+    setTab('posts');
+    refreshPrefs();
+    setFeedInput(getSettings().feed);
+    const before = settingsSnapshot.current;
+    settingsSnapshot.current = null;
+    // Reload the active feed — or start it for the first time (first-launch
+    // configuration ends by leaving the settings tab).
+    if (before !== null && before !== reloadSnapshot()) loadFeed(getSettings().feed);
+  };
+  const switchTabRef = useRef(switchTab);
+  switchTabRef.current = switchTab;
 
   // ---------------------------------------------------------------------
   // Progress bar + autoscroll countdown (images/galleries/text). Videos
@@ -308,7 +338,7 @@ function Feed() {
         saveSettings({ sort: r.sort });
         loadFeed(r.path, r);
       } else if (Platform.OS !== 'web' && !s.serverUrl) {
-        setTab('settings'); // native first launch: no server yet
+        switchTabRef.current('settings'); // native first launch: no server yet
       } else if (Platform.OS !== 'web' || s.feed || s.serverUrl || s.accounts.length) {
         setFeedInput(s.feed);
         loadFeed(s.feed);
@@ -480,6 +510,26 @@ function Feed() {
     goToFeed(b.path);
   };
 
+  // Auto bar mode (the web app's movable bar): a tap near a screen edge
+  // docks the progress bar there. Returns true when the tap was consumed;
+  // taps on the current edge fall through to the normal action.
+  const EDGE_BAND = 32;
+  const edgeDockTap = (x: number, y: number): boolean => {
+    const st = getSettings();
+    if (st.barPos !== 'auto') return false;
+    const { w, h } = sizeRef.current;
+    let pos: 'top' | 'bottom' | 'left' | 'right' | null = null;
+    if (y <= insets.top + EDGE_BAND) pos = 'top';
+    else if (y >= h - EDGE_BAND) pos = 'bottom';
+    else if (x <= EDGE_BAND) pos = 'left';
+    else if (x >= w - EDGE_BAND) pos = 'right';
+    if (!pos || pos === st.barAutoPos) return false;
+    saveSettings({ barAutoPos: pos });
+    refreshPrefs();
+    toast('Progress bar → ' + pos, 1000);
+    return true;
+  };
+
   // Seek (video only): live preview while dragging, commit on release.
   const onScrub = (frac: number) => {
     scrubbing.current = true;
@@ -500,7 +550,7 @@ function Feed() {
       const el = document.activeElement as HTMLElement | null;
       if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA')) return;
       if (tabRef.current === 'settings') {
-        if (e.key === 'Escape') setTab('posts');
+        if (e.key === 'Escape') switchTabRef.current('posts');
         return;
       }
       if (commentsRef.current) {
@@ -595,7 +645,8 @@ function Feed() {
   const renderItem = useCallback(
     ({ item, index }: { item: Post; index: number }) => {
       const isActive = index === activeIndex;
-      const singleTapTimer = () => {
+      const singleTapTimer = (x: number, y: number) => {
+        if (edgeDockTap(x, y)) return;
         // Tapping a non-video slide pauses/resumes the autoscroll countdown.
         if (!getSettings().autoscroll) return;
         if (timer.current?.running) pauseTimer();
@@ -620,6 +671,7 @@ function Feed() {
                 }}
                 registerPlayer={(p) => (currentPlayer.current = p)}
                 onDoubleTap={doubleTapUpvote(item)}
+                interceptTap={edgeDockTap}
               />
             ) : item.kind === 'gallery' ? (
               <GalleryPost
@@ -756,7 +808,7 @@ function Feed() {
       <SeekBar
         progress={progressAnim}
         seekable={!!seekableNow}
-        pos={prefs.barPos}
+        pos={prefs.barPos === 'auto' ? prefs.barAutoPos : prefs.barPos}
         invert={prefs.barInvert}
         bottomInset={0}
         topInset={insets.top}
@@ -813,30 +865,17 @@ function Feed() {
         </View>
       </View>
 
-      {tab === 'settings' ? (
-        <SettingsPage
-          onClose={(result) => {
-            setTab('posts');
-            if (result.changed) {
-              refreshPrefs();
-              setFeedInput(getSettings().feed);
-              // Reload the active feed — or start it for the first time
-              // (first-launch configuration ends here).
-              if (result.reloadFeed) loadFeed(getSettings().feed);
-            }
-          }}
-        />
-      ) : null}
+      {tab === 'settings' ? <SettingsPage onChanged={refreshPrefs} /> : null}
       </View>
 
-      {/* Bottom tab bar, like the web frontend's ion-tab-bar. Switching to
-          Posts while in settings discards unsaved edits (web parity). */}
+      {/* Bottom tab bar, like the web frontend's ion-tab-bar. Settings
+          autosave; leaving the tab reloads the feed if needed. */}
       <View style={[styles.tabbar, { paddingBottom: insets.bottom }]}>
-        <Pressable style={styles.tabBtn} onPress={() => setTab('posts')} testID="tab-posts">
+        <Pressable style={styles.tabBtn} onPress={() => switchTab('posts')} testID="tab-posts">
           <Text style={[styles.tabIcon, tab === 'posts' && styles.tabActive]}>▤</Text>
           <Text style={[styles.tabLabel, tab === 'posts' && styles.tabActive]}>Posts</Text>
         </Pressable>
-        <Pressable style={styles.tabBtn} onPress={() => setTab('settings')} testID="tab-settings">
+        <Pressable style={styles.tabBtn} onPress={() => switchTab('settings')} testID="tab-settings">
           <Text style={[styles.tabIcon, tab === 'settings' && styles.tabActive]}>⚙︎</Text>
           <Text style={[styles.tabLabel, tab === 'settings' && styles.tabActive]}>Settings</Text>
         </Pressable>

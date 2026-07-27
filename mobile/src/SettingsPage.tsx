@@ -12,20 +12,18 @@ import {
 } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { activeCookie, BarPos, getSettings, replaceSettings, saveSettings } from './settings';
+import { BarPosSetting, getSettings, replaceSettings, saveSettings, Settings } from './settings';
 import { showSheet } from './components/sheets';
 import { toast } from './components/Toast';
 import { colors } from './theme';
 
-// Full settings page, ported from the web app: shown by the Settings tab
-// (bottom tab bar) as an opaque page over the feed, exactly like the web
-// frontend's #settings-page. Multi-account cookie management (masked until
-// revealed), display/behavior preferences, post type filters, and settings
-// export/import.
+// Full settings page, shown by the Settings tab as an opaque page over the
+// feed (like the web frontend's #settings-page). Every interaction saves
+// immediately — there is no Save/Cancel; leaving the tab is "done", and the
+// app decides then whether the feed needs a reload.
 
-export type SettingsResult = { changed: boolean; reloadFeed: boolean };
-
-const BAR_POS_OPTIONS = [
+const BAR_POS_OPTIONS: { text: string; value: BarPosSetting }[] = [
+  { text: 'Auto (tap near an edge)', value: 'auto' },
   { text: 'Bottom', value: 'bottom' },
   { text: 'Top', value: 'top' },
   { text: 'Left (vertical)', value: 'left' },
@@ -54,38 +52,37 @@ function Toggle({ label, value, onChange }: { label: string; value: boolean; onC
   );
 }
 
-export function SettingsPage({ onClose }: { onClose: (result: SettingsResult) => void }) {
+export function SettingsPage({ onChanged }: { onChanged: () => void }) {
   const insets = useSafeAreaInsets();
   const s0 = getSettings();
   const [editingAccount, setEditingAccount] = useState(s0.accounts.length ? s0.activeAccount : -1);
-  const [accountName, setAccountName] = useState(
-    s0.accounts[s0.activeAccount]?.name ?? ''
-  );
+  const [accountName, setAccountName] = useState(s0.accounts[s0.activeAccount]?.name ?? '');
   const [cookie, setCookie] = useState('');
   const [cookieRevealed, setCookieRevealed] = useState(!s0.accounts[s0.activeAccount]?.cookie);
   const [serverUrl, setServerUrl] = useState(s0.serverUrl);
   const [imageSeconds, setImageSeconds] = useState(String(s0.imageSeconds));
-  const [prefs, setPrefs] = useState({
-    fillScreen: s0.fillScreen,
-    vertical: s0.vertical,
-    showPauseIcon: s0.showPauseIcon,
-    barPos: s0.barPos,
-    barInvert: s0.barInvert,
-    showImages: s0.showImages,
-    showVideos: s0.showVideos,
-    showText: s0.showText,
-    skipSeen: s0.skipSeen,
-  });
+  const [prefs, setPrefsState] = useState(s0);
   const [ioText, setIoText] = useState('');
   const [ioVisible, setIoVisible] = useState(false);
 
+  const apply = (patch: Partial<Settings>) => {
+    setPrefsState(saveSettings(patch));
+    onChanged();
+  };
+
+  const toggle = (k: 'fillScreen' | 'vertical' | 'showPauseIcon' | 'barInvert' | 'skipSeen' | 'showImages' | 'showVideos' | 'showText') => ({
+    value: prefs[k],
+    onChange: (v: boolean) => apply({ [k]: v }),
+  });
+
   const storedCookie = (idx: number) => getSettings().accounts[idx]?.cookie ?? '';
 
-  const selectAccount = (idx: number) => {
+  const selectAccount = (idx: number, makeActive: boolean) => {
     setEditingAccount(idx);
     setAccountName(idx >= 0 ? getSettings().accounts[idx]?.name ?? '' : '');
     setCookie('');
     setCookieRevealed(idx < 0 || !storedCookie(idx));
+    if (makeActive && idx >= 0) apply({ activeAccount: idx });
   };
 
   const pickAccount = async () => {
@@ -97,68 +94,48 @@ export function SettingsPage({ onClose }: { onClose: (result: SettingsResult) =>
     options.push({ text: '+ Add account…', value: 'new' });
     const v = await showSheet('Account', options, editingAccount >= 0 ? String(editingAccount) : 'new');
     if (v === undefined) return;
-    selectAccount(v === 'new' ? -1 : Number(v));
+    selectAccount(v === 'new' ? -1 : Number(v), v !== 'new');
+  };
+
+  // Editing name/cookie writes straight into the account list; typing into
+  // the "+ Add account" entry creates the account (as active) on the first
+  // character.
+  const editAccount = (patch: { name?: string; cookie?: string }) => {
+    const st = getSettings();
+    if (editingAccount === -1) {
+      if (!(patch.name ?? '').trim() && !(patch.cookie ?? '').trim()) return;
+      const accounts = [
+        ...st.accounts,
+        { name: (patch.name ?? '').trim() || `Account ${st.accounts.length + 1}`, cookie: patch.cookie ?? '' },
+      ];
+      setEditingAccount(accounts.length - 1);
+      apply({ accounts, activeAccount: accounts.length - 1 });
+      return;
+    }
+    const accounts = st.accounts.map((a, i) =>
+      i === editingAccount
+        ? {
+            name: patch.name !== undefined ? patch.name.trim() || `Account ${i + 1}` : a.name,
+            cookie: patch.cookie !== undefined ? patch.cookie.trim() : a.cookie,
+          }
+        : a
+    );
+    apply({ accounts });
   };
 
   const deleteAccount = () => {
     if (editingAccount < 0) return;
-    const s = getSettings();
-    const accounts = s.accounts.filter((_, i) => i !== editingAccount);
-    let active = s.activeAccount >= accounts.length ? 0 : s.activeAccount;
-    saveSettings({ accounts, activeAccount: active });
-    selectAccount(accounts.length ? Math.min(editingAccount, accounts.length - 1) : -1);
+    const st = getSettings();
+    const accounts = st.accounts.filter((_, i) => i !== editingAccount);
+    const active = st.activeAccount >= accounts.length ? 0 : st.activeAccount;
+    apply({ accounts, activeAccount: active });
+    selectAccount(accounts.length ? Math.min(editingAccount, accounts.length - 1) : -1, false);
     toast('Account deleted');
   };
 
   const revealCookie = () => {
     setCookie(storedCookie(editingAccount));
     setCookieRevealed(true);
-  };
-
-  const save = () => {
-    const s = getSettings();
-    const prevCookie = activeCookie();
-    const prevServer = s.serverUrl.trim();
-    const filtersChanged =
-      prefs.showImages !== s.showImages ||
-      prefs.showVideos !== s.showVideos ||
-      prefs.showText !== s.showText ||
-      prefs.skipSeen !== s.skipSeen;
-
-    // Saving selects the edited account as the active one. A masked cookie
-    // field means "unchanged"; once revealed the field is authoritative.
-    const accounts = [...s.accounts];
-    let active = s.activeAccount;
-    const name = accountName.trim();
-    const newCookie = cookieRevealed ? cookie.trim() : storedCookie(editingAccount);
-    if (editingAccount === -1) {
-      if (name || newCookie) {
-        accounts.push({ name: name || `Account ${accounts.length + 1}`, cookie: newCookie });
-        active = accounts.length - 1;
-      }
-    } else if (accounts[editingAccount]) {
-      accounts[editingAccount] = { name: name || `Account ${editingAccount + 1}`, cookie: newCookie };
-      active = editingAccount;
-    }
-
-    saveSettings({
-      accounts,
-      activeAccount: active,
-      serverUrl: serverUrl.trim(),
-      imageSeconds: Math.max(1, parseFloat(imageSeconds) || 8),
-      ...prefs,
-    });
-
-    if (!prefs.showImages && !prefs.showVideos && !prefs.showText) {
-      toast('All post types disabled — the feed will be empty');
-    } else {
-      toast('Settings saved', 1500);
-    }
-    onClose({
-      changed: true,
-      reloadFeed:
-        filtersChanged || activeCookie() !== prevCookie || getSettings().serverUrl.trim() !== prevServer,
-    });
   };
 
   const exportSettings = async () => {
@@ -193,8 +170,15 @@ export function SettingsPage({ onClose }: { onClose: (result: SettingsResult) =>
       toast(String(err?.message || err));
       return;
     }
+    // Refresh every field from the imported state.
+    const st = getSettings();
+    setPrefsState(st);
+    setServerUrl(st.serverUrl);
+    setImageSeconds(String(st.imageSeconds));
+    selectAccount(st.accounts.length ? st.activeAccount : -1, false);
+    setIoVisible(false);
     toast('Settings imported');
-    onClose({ changed: true, reloadFeed: true });
+    onChanged();
   };
 
   const currentAccountLabel =
@@ -212,6 +196,7 @@ export function SettingsPage({ onClose }: { onClose: (result: SettingsResult) =>
             contentContainerStyle={[styles.content, { paddingTop: insets.top + 14 }]}
           >
             <Text style={styles.title}>Settings</Text>
+            <Text style={styles.autosaveHint}>Changes are saved as you make them.</Text>
 
             <Text style={styles.section}>Account</Text>
             <Pressable style={styles.pickerRow} onPress={pickAccount} testID="account-picker">
@@ -222,7 +207,10 @@ export function SettingsPage({ onClose }: { onClose: (result: SettingsResult) =>
             <TextInput
               style={styles.input}
               value={accountName}
-              onChangeText={setAccountName}
+              onChangeText={(v) => {
+                setAccountName(v);
+                editAccount({ name: v });
+              }}
               placeholder="e.g. main"
               placeholderTextColor={colors.hint}
               autoCapitalize="none"
@@ -243,7 +231,10 @@ export function SettingsPage({ onClose }: { onClose: (result: SettingsResult) =>
               <TextInput
                 style={[styles.input, styles.cookieInput]}
                 value={cookie}
-                onChangeText={setCookie}
+                onChangeText={(v) => {
+                  setCookie(v);
+                  editAccount({ cookie: v });
+                }}
                 placeholder="Paste the FULL Cookie header from a logged-in reddit.com request (DevTools → Network). Optional for public subreddits."
                 placeholderTextColor={colors.hint}
                 autoCapitalize="none"
@@ -263,7 +254,10 @@ export function SettingsPage({ onClose }: { onClose: (result: SettingsResult) =>
             <TextInput
               style={styles.input}
               value={serverUrl}
-              onChangeText={setServerUrl}
+              onChangeText={(v) => {
+                setServerUrl(v);
+                apply({ serverUrl: v.trim() });
+              }}
               placeholder={Platform.OS === 'web' ? 'Empty = this server' : 'https://redditview.example.com'}
               placeholderTextColor={colors.hint}
               autoCapitalize="none"
@@ -277,20 +271,25 @@ export function SettingsPage({ onClose }: { onClose: (result: SettingsResult) =>
               <TextInput
                 style={[styles.input, styles.numInput]}
                 value={imageSeconds}
-                onChangeText={setImageSeconds}
+                onChangeText={(v) => {
+                  setImageSeconds(v);
+                  const n = parseFloat(v);
+                  if (n >= 1) apply({ imageSeconds: n });
+                }}
                 keyboardType="numeric"
                 testID="image-seconds"
               />
             </Row>
-            <Toggle label="Fill screen (crop to fill)" value={prefs.fillScreen} onChange={(v) => setPrefs({ ...prefs, fillScreen: v })} />
-            <Toggle label="Vertical navigation (swipe up/down)" value={prefs.vertical} onChange={(v) => setPrefs({ ...prefs, vertical: v })} />
-            <Toggle label="Paused indicator on videos" value={prefs.showPauseIcon} onChange={(v) => setPrefs({ ...prefs, showPauseIcon: v })} />
+            <Toggle label="Fill screen (crop to fill)" {...toggle('fillScreen')} />
+            <Toggle label="Vertical navigation (swipe up/down)" {...toggle('vertical')} />
+            <Toggle label="Paused indicator on videos" {...toggle('showPauseIcon')} />
             <Row label="Progress bar position">
               <Pressable
                 style={styles.smallBtn}
+                testID="bar-pos"
                 onPress={async () => {
                   const v = await showSheet('Progress bar position', BAR_POS_OPTIONS, prefs.barPos);
-                  if (v !== undefined) setPrefs({ ...prefs, barPos: v as BarPos });
+                  if (v !== undefined) apply({ barPos: v as BarPosSetting });
                 }}
               >
                 <Text style={styles.smallBtnText}>
@@ -298,13 +297,13 @@ export function SettingsPage({ onClose }: { onClose: (result: SettingsResult) =>
                 </Text>
               </Pressable>
             </Row>
-            <Toggle label="Left/right progress bar fills upwards" value={prefs.barInvert} onChange={(v) => setPrefs({ ...prefs, barInvert: v })} />
-            <Toggle label="Skip posts you've already seen" value={prefs.skipSeen} onChange={(v) => setPrefs({ ...prefs, skipSeen: v })} />
+            <Toggle label="Left/right progress bar fills upwards" {...toggle('barInvert')} />
+            <Toggle label="Skip posts you've already seen" {...toggle('skipSeen')} />
 
             <Text style={styles.section}>Show post types</Text>
-            <Toggle label="Images & galleries" value={prefs.showImages} onChange={(v) => setPrefs({ ...prefs, showImages: v })} />
-            <Toggle label="Videos" value={prefs.showVideos} onChange={(v) => setPrefs({ ...prefs, showVideos: v })} />
-            <Toggle label="Text posts" value={prefs.showText} onChange={(v) => setPrefs({ ...prefs, showText: v })} />
+            <Toggle label="Images & galleries" {...toggle('showImages')} />
+            <Toggle label="Videos" {...toggle('showVideos')} />
+            <Toggle label="Text posts" {...toggle('showText')} />
 
             <Text style={styles.section}>Transfer</Text>
             <View style={styles.ioRow}>
@@ -333,18 +332,6 @@ export function SettingsPage({ onClose }: { onClose: (result: SettingsResult) =>
               and never persisted there. Export includes accounts and cookies — treat it like a
               password.
             </Text>
-
-            <View style={styles.actions}>
-              <Pressable
-                style={[styles.btn, styles.btnGhost]}
-                onPress={() => onClose({ changed: false, reloadFeed: false })}
-              >
-                <Text style={styles.btnGhostText}>Cancel</Text>
-              </Pressable>
-              <Pressable style={styles.btn} onPress={save} testID="settings-save">
-                <Text style={styles.btnText}>Save</Text>
-              </Pressable>
-            </View>
           </ScrollView>
         </View>
       </KeyboardAvoidingView>
@@ -358,11 +345,12 @@ const styles = StyleSheet.create({
   fill: { flex: 1 },
   inner: { flex: 1, width: '100%', maxWidth: 560, alignSelf: 'center' },
   content: { padding: 20, paddingBottom: 40 },
-  title: { color: colors.text, fontSize: 20, fontWeight: '700', marginBottom: 4 },
+  title: { color: colors.text, fontSize: 20, fontWeight: '700', marginBottom: 2 },
+  autosaveHint: { color: colors.hint, fontSize: 12 },
   section: { color: colors.accent, fontSize: 13, fontWeight: '700', marginTop: 18, marginBottom: 6 },
   label: { color: colors.textDim, fontSize: 13, marginBottom: 5, marginTop: 8 },
   input: {
-    backgroundColor: colors.bg,
+    backgroundColor: '#14141c',
     borderWidth: 1,
     borderColor: '#33333f',
     borderRadius: 10,
@@ -385,7 +373,7 @@ const styles = StyleSheet.create({
   pickerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.bg,
+    backgroundColor: '#14141c',
     borderWidth: 1,
     borderColor: '#33333f',
     borderRadius: 10,
@@ -398,7 +386,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: colors.bg,
+    backgroundColor: '#14141c',
     borderWidth: 1,
     borderColor: '#33333f',
     borderRadius: 10,
@@ -418,9 +406,4 @@ const styles = StyleSheet.create({
   danger: { color: '#ff6b5e', fontSize: 13, marginTop: 10 },
   ioRow: { flexDirection: 'row', gap: 10, marginBottom: 10 },
   hint: { color: colors.hint, fontSize: 12, marginTop: 12, lineHeight: 17 },
-  actions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 10, marginTop: 18 },
-  btn: { backgroundColor: colors.accent, borderRadius: 999, paddingHorizontal: 22, paddingVertical: 10 },
-  btnText: { color: '#fff', fontWeight: '600' },
-  btnGhost: { backgroundColor: 'transparent', borderWidth: 1, borderColor: '#33333f' },
-  btnGhostText: { color: colors.textDim, fontWeight: '600' },
 });
