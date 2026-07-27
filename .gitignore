@@ -3,5 +3,7 @@ frontend/dist/
 frontend/ios/
 frontend/build/
 backend/redditview
+backend/backend
+backend/data/
 *.log
 .DS_Store
