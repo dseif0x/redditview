@@ -2,17 +2,13 @@
   box-sizing: border-box;
 }
 
-/* ---- Ionic theme: match the app's dark palette ----
-   :root.ios too: the always-dark palette scopes its vars there, which
-   out-specifies a bare :root override. */
-:root,
-:root.ios {
-  --ion-background-color: #0b0b0f;
-  --ion-background-color-rgb: 11, 11, 15;
-  --ion-text-color: #e8e8ee;
-  --ion-text-color-rgb: 232, 232, 238;
-  --ion-item-background: #1e1e28;
-  --ion-toolbar-background: rgba(14, 14, 20, 0.96);
+/* ---- theme ---- */
+:root {
+  --bg: #0b0b0f;
+  --text: #e8e8ee;
+  --item-bg: #1e1e28;
+  --primary: #428cff;
+  --danger: #ff4961;
   /* fallback; JS measures the real rendered bar height into this variable */
   --tabbar-h: calc(3.2rem + env(safe-area-inset-bottom));
 }
@@ -21,12 +17,17 @@ html,
 body {
   margin: 0;
   height: 100%;
-  background: #0b0b0f;
-  color: #e8e8ee;
+  background: var(--bg);
+  color: var(--text);
   font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
   overflow: hidden;
   /* browser pinch-zoom is disabled; the app pinch-zooms the post media */
   touch-action: pan-x pan-y;
+}
+
+button {
+  font-family: inherit;
+  -webkit-tap-highlight-color: transparent;
 }
 
 #viewer {
@@ -42,6 +43,113 @@ body {
   inset: 0;
   display: flex;
   flex-direction: column;
+}
+
+/* ---- inline icons (ionicons SVG markup, tinted via currentColor) ---- */
+.icon {
+  display: inline-flex;
+  width: 1em;
+  height: 1em;
+  flex-shrink: 0;
+}
+
+.icon svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  fill: currentColor;
+  stroke: currentColor;
+}
+
+.icon svg .ionicon-fill-none {
+  fill: none;
+}
+
+.icon svg .ionicon-stroke-width {
+  stroke-width: 32px;
+}
+
+/* ---- shared buttons ---- */
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  color: #fff;
+  padding: 0.35rem;
+  margin: 0;
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 1.35rem;
+  line-height: 1;
+}
+
+.icon-btn:active {
+  opacity: 0.6;
+}
+
+.btn-solid {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  background: var(--primary);
+  color: #fff;
+  border: none;
+  border-radius: 999px;
+  padding: 0.42rem 1rem;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.btn-solid:active {
+  opacity: 0.85;
+}
+
+.btn-outline {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  background: none;
+  color: #b5b5c2;
+  border: 1px solid #55555f;
+  border-radius: 999px;
+  padding: 0.35rem 0.9rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.btn-outline:active {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.btn-danger {
+  background: none;
+  border: none;
+  color: var(--danger);
+  font-size: 0.9rem;
+  padding: 0.3rem 0;
+  cursor: pointer;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  min-height: 2.1rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(22, 22, 30, 0.82);
+  color: var(--text);
+  font-size: 0.82rem;
+  padding: 0 0.8rem;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  white-space: nowrap;
 }
 
 /* ---- top bar ---- */
@@ -94,30 +202,12 @@ body {
 
 #feed-input:focus {
   outline: none;
-  border-color: var(--ion-color-primary);
+  border-color: var(--primary);
 }
 
-/* the topbar selects render as translucent pill chips */
-#topbar ion-select {
+#bookmark-select {
   flex: 0 0 auto;
-  min-height: 2.1rem;
   max-width: 7rem;
-  border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(22, 22, 30, 0.82);
-  font-size: 0.82rem;
-  --padding-start: 0.8rem;
-  --padding-end: 0.6rem;
-  --padding-top: 0;
-  --padding-bottom: 0;
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-}
-
-#topbar ion-button,
-#meta-actions ion-button {
-  --color: #fff;
-  margin: 0;
 }
 
 /* the sort button is a pill chip that fills the row up to the controls;
@@ -128,20 +218,19 @@ body {
   contain: inline-size;
   min-width: 4.5rem;
   min-height: 2.1rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
   border-radius: 999px;
   border: 1px solid rgba(255, 255, 255, 0.14);
   background: rgba(22, 22, 30, 0.82);
   font-size: 0.82rem;
   font-weight: 400;
-  --color: #e8e8ee;
-  --padding-start: 0.8rem;
-  --padding-end: 0.6rem;
+  color: var(--text);
+  padding: 0 0.6rem 0 0.8rem;
+  cursor: pointer;
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
-}
-
-#sort-btn::part(native) {
-  width: 100%;
 }
 
 #sort-btn span {
@@ -150,30 +239,23 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  text-align: left;
 }
 
-#sort-btn ion-icon {
+#sort-btn .icon {
   font-size: 0.95rem;
   color: #8a8a98;
 }
 
 /* the option matching the current sort in the picker sheets */
-.action-sheet-button.sheet-current {
+.as-btn.sheet-current {
   font-weight: 700;
-}
-
-#topbar .controls ion-button::part(native),
-#bm-btn::part(native) {
-  border-radius: 999px;
-}
-
-#topbar ion-icon {
-  font-size: 1.35rem;
 }
 
 #go-btn {
   flex: 0 0 auto;
-  --border-radius: 999px;
+  padding: 0.38rem 0.95rem;
+  font-size: 0.85rem;
 }
 
 .controls {
@@ -184,12 +266,13 @@ body {
   flex-shrink: 0;
 }
 
-#topbar ion-button.active {
-  --color: var(--ion-color-primary);
+#topbar .icon-btn.active,
+#sort-btn.active {
+  color: var(--primary);
 }
 
 #bm-btn.active {
-  --color: #ffd635;
+  color: #ffd635;
 }
 
 @media (max-width: 480px) {
@@ -222,10 +305,12 @@ body {
   justify-content: center;
   overflow: hidden;
   user-select: none; /* mouse drags navigate; don't select/highlight media */
+  -webkit-user-select: none;
 }
 
 .slide .text-post {
   user-select: text;
+  -webkit-user-select: text;
 }
 
 .slide.sliding,
@@ -243,6 +328,11 @@ body {
 .slide.zooming img,
 .slide.zooming video {
   will-change: transform;
+}
+
+/* the video element's mount point participates in the slide's own layout */
+.video-box {
+  display: contents;
 }
 
 /* gallery: all images in one slide, stacked along the cross axis */
@@ -335,6 +425,10 @@ body {
   object-fit: cover;
 }
 
+#viewer.fill .slide .poster-overlay {
+  object-fit: cover;
+}
+
 .text-post {
   max-width: 44rem;
   max-height: 80%;
@@ -357,12 +451,31 @@ body {
   text-align: center;
   padding: 2rem;
   color: #9a9aa8;
+  white-space: pre-line; /* multi-line error messages */
 }
 
-.loading ion-spinner {
+.slide .loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.spinner {
   width: 2.2rem;
   height: 2.2rem;
-  color: #9a9aa8;
+  border-radius: 50%;
+  border: 3px solid rgba(154, 154, 168, 0.25);
+  border-top-color: #9a9aa8;
+  animation: spin 0.8s linear infinite;
+  margin: 0 auto;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 #empty-state h1 {
@@ -395,7 +508,7 @@ body {
   position: absolute;
   left: 0;
   top: 0;
-  background: var(--ion-color-primary);
+  background: var(--primary);
 }
 
 /* video playback: the bar becomes a seek control with a bigger hit area */
@@ -531,7 +644,7 @@ body {
 
 #meta a.meta-feed-link:hover {
   color: #fff;
-  border-bottom-color: var(--ion-color-primary);
+  border-bottom-color: var(--primary);
 }
 
 #meta-actions {
@@ -541,20 +654,21 @@ body {
   flex-shrink: 0;
 }
 
-#meta-actions ion-icon {
+#meta-actions .icon-btn {
   font-size: 1.55rem;
+  padding: 0.4rem 0.45rem;
 }
 
 #up-btn.active-up {
-  --color: #ff4500;
+  color: #ff4500;
 }
 
 #down-btn.active-down {
-  --color: #7193ff;
+  color: #7193ff;
 }
 
 #save-btn.active-save {
-  --color: #ffd635;
+  color: #ffd635;
 }
 
 #meta-title {
@@ -651,24 +765,20 @@ body {
   background: linear-gradient(to top, rgba(0, 0, 0, 0.25), transparent);
 }
 
-/* ---- comments bottom sheet ---- */
-#comments-panel {
-  position: absolute;
+/* ---- comments bottom sheet (Bits UI Dialog) ---- */
+.comments-backdrop {
+  position: fixed;
   inset: 0;
   z-index: 30;
-}
-
-#comments-backdrop {
-  position: absolute;
-  inset: 0;
   background: rgba(0, 0, 0, 0.5);
 }
 
-#comments-sheet {
-  position: absolute;
+.comments-sheet {
+  position: fixed;
   left: 0;
   right: 0;
   bottom: 0; /* covers the tab bar, like a modal sheet */
+  z-index: 31;
   height: min(78dvh, 100dvh - env(safe-area-inset-top) - 3rem);
   display: flex;
   flex-direction: column;
@@ -676,6 +786,7 @@ body {
   border-top: 1px solid #33333f;
   border-radius: 16px 16px 0 0;
   animation: sheet-up 0.25s ease-out;
+  outline: none;
 }
 
 @keyframes sheet-up {
@@ -695,16 +806,20 @@ body {
   border-bottom: 1px solid #26262f;
 }
 
-#comments-title {
+h2.comments-title,
+.comments-title {
   font-weight: 600;
+  font-size: 1rem;
   flex: 1;
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 #comments-sort {
-  /* ion-select defaults to its container's full width; pin it to a compact
-     pill so it can't run past the sheet edge */
   flex: 0 1 auto;
-  width: auto;
   max-width: 9rem;
   min-width: 0;
   min-height: 1.9rem;
@@ -712,20 +827,14 @@ body {
   border-radius: 8px;
   border: 1px solid #33333f;
   background: #0b0b0f;
-  --padding-start: 0.6rem;
-  --padding-end: 0.5rem;
-  --padding-top: 0;
-  --padding-bottom: 0;
-}
-
-#comments-sort::part(text) {
-  white-space: nowrap;
+  padding: 0 0.6rem;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-#comments-close {
-  --color: #e8e8ee;
+.comments-close {
+  color: var(--text);
   margin: 0;
 }
 
@@ -838,6 +947,110 @@ body {
   }
 }
 
+/* ---- action sheet (Bits UI Dialog styled like ion-action-sheet) ---- */
+.sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.action-sheet {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 51;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-width: 28rem;
+  margin: 0 auto;
+  padding: 0.5rem calc(0.5rem + env(safe-area-inset-right)) calc(0.5rem + env(safe-area-inset-bottom))
+    calc(0.5rem + env(safe-area-inset-left));
+  animation: sheet-up 0.25s ease-out;
+  outline: none;
+}
+
+.as-group {
+  display: flex;
+  flex-direction: column;
+  border-radius: 14px;
+  overflow: hidden;
+  background: rgba(30, 30, 40, 0.97);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+h2.as-header,
+.as-header {
+  margin: 0;
+  padding: 0.7rem 1rem 0.55rem;
+  text-align: center;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #8a8a98;
+}
+
+.as-btn {
+  background: none;
+  border: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--primary);
+  font-size: 1.05rem;
+  padding: 0.85rem 1rem;
+  text-align: center;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.as-btn:active {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.as-btn.as-cancel {
+  background: rgba(30, 30, 40, 0.97);
+  border-top: none;
+  border-radius: 14px;
+  font-weight: 600;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+/* ---- toast ---- */
+.toast {
+  position: fixed;
+  top: calc(env(safe-area-inset-top) + 0.6rem);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 60;
+  background: rgba(40, 40, 52, 0.96);
+  color: var(--text);
+  padding: 0.6rem 1.1rem;
+  border-radius: 12px;
+  font-size: 0.9rem;
+  max-width: min(92vw, 26rem);
+  text-align: center;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  animation: toast-in 0.2s ease-out;
+  pointer-events: none;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -8px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
 /* ---- settings page (tab) ---- */
 /* The page itself never scrolls: its safe-area padding is a solid mask
    under the iOS status bar. The form inside is the scroll container, so
@@ -846,7 +1059,7 @@ body {
   position: absolute;
   inset: 0 0 var(--tabbar-h) 0;
   z-index: 20;
-  background: var(--ion-background-color);
+  background: var(--bg);
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -870,35 +1083,178 @@ body {
   font-size: 1.5rem;
 }
 
-#settings-page ion-list {
-  margin-bottom: 1rem;
+#settings-page .list {
+  background: var(--item-bg);
+  border-radius: 12px;
+  margin: 0 1rem 1rem;
+  overflow: hidden;
 }
 
-#settings-page ion-list-header {
+.list .list-header {
+  padding: 0.65rem 1rem 0.35rem;
+  font-weight: 600;
+}
+
+.list .item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 1rem;
+  min-height: 2.9rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.list .item:last-child {
+  border-bottom: none;
+}
+
+.item-label {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.item-toggle {
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.item-input {
+  background: none;
+  border: none;
+  color: inherit;
+  text-align: right;
   font-size: 1rem;
-  min-height: 2rem;
+  flex: 0 1 10rem;
+  min-width: 0;
 }
 
-/* long option labels wrap instead of truncating */
-#settings-page ion-toggle::part(label),
-#settings-page ion-checkbox::part(label) {
-  white-space: normal;
+.item-input:focus {
+  outline: none;
 }
 
-#settings-form .settings-io {
+.item-input.num {
+  flex: 0 0 5rem;
+}
+
+.item-stacked {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.35rem;
+}
+
+.stacked-label {
+  font-size: 0.8rem;
+  color: #8a8a98;
+  text-align: left;
+  align-self: flex-start;
+}
+
+.item-stacked input,
+.item-stacked textarea {
+  width: 100%;
+  background: rgba(11, 11, 15, 0.55);
+  border: 1px solid #33333f;
+  border-radius: 8px;
+  padding: 0.5rem 0.6rem;
+  color: inherit;
+  font: inherit;
+  font-size: 0.9rem;
+  resize: vertical;
+}
+
+.item-stacked input:focus,
+.item-stacked textarea:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+.item-end {
+  justify-content: flex-end;
+}
+
+/* ---- Bits UI switch (iOS style) ---- */
+.switch {
+  position: relative;
+  width: 51px;
+  height: 31px;
+  flex-shrink: 0;
+  border: none;
+  border-radius: 999px;
+  background: #39393f;
+  padding: 2px;
+  cursor: pointer;
+  transition: background 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+}
+
+.switch[data-state='checked'] {
+  background: var(--primary);
+}
+
+.switch-thumb {
+  display: block;
+  width: 27px;
+  height: 27px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  transition: transform 0.2s ease;
+  transform: translateX(0);
+}
+
+.switch-thumb[data-state='checked'] {
+  transform: translateX(20px);
+}
+
+/* ---- Bits UI checkbox ---- */
+.checkbox {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  border: 2px solid #55555f;
+  border-radius: 7px;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.checkbox[data-state='checked'] {
+  background: var(--primary);
+  border-color: var(--primary);
+}
+
+.checkbox .checkbox-mark {
+  width: 14px;
+  height: 14px;
+  opacity: 0;
+}
+
+.checkbox[data-state='checked'] .checkbox-mark {
+  opacity: 1;
+}
+
+.settings-io {
   display: flex;
   gap: 0.5rem;
   margin: 0 1rem 0.75rem;
 }
 
-#settings-form #io-text {
+#io-text {
   display: block;
   width: calc(100% - 2rem);
   margin: 0 1rem 1rem;
   padding: 0.5rem;
   border-radius: 8px;
   border: 1px solid #33333f;
-  background: #0b0b0f;
+  background: var(--bg);
   color: inherit;
   font-family: monospace;
   font-size: 0.75rem;
@@ -938,7 +1294,7 @@ body {
   padding: 0.4rem 0.6rem;
 }
 
-/* ---- bottom tab bar ---- */
+/* ---- bottom tab bar (Bits UI Tabs) ---- */
 #tabbar {
   position: absolute;
   left: 0;
@@ -947,26 +1303,34 @@ body {
   /* content-sized: the bar is exactly its buttons plus the safe area */
   z-index: 18;
   /* fully opaque: slides swipe behind the bar and must not shine through */
-  --background: #0e0e14;
-  --border: 1px solid #26262f;
-  --color: #8a8a98;
-  --color-selected: var(--ion-color-primary);
+  background: #0e0e14;
+  border-top: 1px solid #26262f;
   padding-bottom: env(safe-area-inset-bottom);
-  height: auto;
-  contain: none;
 }
 
-#tabbar ion-tab-button {
+.tabbar-list {
+  display: flex;
+}
+
+.tab {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.15rem;
+  padding: 0.4rem 0 0.35rem;
+  background: none;
+  border: none;
+  color: #8a8a98;
   font-size: 0.65rem;
-  --padding-start: 0;
-  --padding-end: 0;
+  cursor: pointer;
 }
 
-#tabbar ion-tab-button ion-icon {
+.tab .icon {
   font-size: 1.35rem;
 }
 
-#tabbar ion-tab-button.active {
-  --color: var(--ion-color-primary);
-  color: var(--ion-color-primary);
+.tab[data-state='active'] {
+  color: var(--primary);
 }
