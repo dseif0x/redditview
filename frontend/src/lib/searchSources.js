@@ -4,9 +4,10 @@
 //   id          stable key
 //   label       chip / section title
 //   icon        Icon.svelte name for the chip and result rows
+//   pinned      no chip; its items are the panel's initial view
 //   needsCookie gated behind a reddit cookie
 //   empty       message when the source has no entries at all
-//   items(q)    resolves to [{ label, path, sublabel?, applySort? }]
+//   items(q)    resolves to [{ label, path, sublabel?, icon?, applySort? }]
 //   live        set true for query-driven sources (e.g. a future backend
 //               subreddit/user search): they are re-called with the current
 //               query (debounced by `debounce` ms, default 250) as the user
@@ -20,6 +21,27 @@ import { settings } from './settings.svelte.js';
 import { getSubscriptions } from './subscriptions.js';
 
 export const SOURCES = [
+  {
+    // Reddit's built-in listings, pinned: no chip — they ARE the panel's
+    // initial view (and still match in cross-source search). Items carry
+    // their own icons since each shortcut has its own identity.
+    id: 'feeds',
+    label: 'Feeds',
+    icon: 'layers',
+    pinned: true,
+    needsCookie: true,
+    empty: '',
+    async items() {
+      return [
+        { label: 'Home', path: '', icon: 'home' },
+        { label: 'Friends', path: 'r/friends', icon: 'heart' },
+        { label: 'Saved posts', path: 'saved', icon: 'bookmark' },
+        { label: 'Upvoted', path: 'upvoted', icon: 'arrow-big-up' },
+        { label: 'Downvoted', path: 'downvoted', icon: 'arrow-big-down' },
+        { label: 'Hidden', path: 'hidden', icon: 'eye-off' },
+      ];
+    },
+  },
   {
     id: 'following',
     label: 'Followed',

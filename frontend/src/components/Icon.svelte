@@ -19,6 +19,10 @@
   import Eye from '@lucide/svelte/icons/eye';
   import Users from '@lucide/svelte/icons/users';
   import Newspaper from '@lucide/svelte/icons/newspaper';
+  import Home from '@lucide/svelte/icons/home';
+  import Heart from '@lucide/svelte/icons/heart';
+  import Bookmark from '@lucide/svelte/icons/bookmark';
+  import EyeOff from '@lucide/svelte/icons/eye-off';
 
   const ICONS = {
     play: Play,
@@ -38,6 +42,10 @@
     eye: Eye,
     users: Users,
     newspaper: Newspaper,
+    home: Home,
+    heart: Heart,
+    bookmark: Bookmark,
+    'eye-off': EyeOff,
   };
 </script>
 
