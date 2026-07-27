@@ -16,6 +16,14 @@
   import { apiBase } from '../lib/api.js';
   import { showToast } from '../lib/toast.svelte.js';
   import { presentActionSheet } from '../lib/sheet.svelte.js';
+  import {
+    sync,
+    syncRegister,
+    syncLogin,
+    syncNow,
+    syncLogout,
+    syncDeleteAccount,
+  } from '../lib/syncAccount.svelte.js';
   import Icon from './Icon.svelte';
 
   const TOGGLES = [
@@ -184,6 +192,27 @@
   }
 
   // -------------------------------------------------------------------------
+  // Passkey sync
+  // -------------------------------------------------------------------------
+  function lastSyncLabel(t) {
+    if (!t) return '';
+    const s = Math.max(0, (Date.now() - t) / 1000);
+    if (s < 90) return 'just now';
+    if (s < 5400) return `${Math.round(s / 60)}m ago`;
+    if (s < 129600) return `${Math.round(s / 3600)}h ago`;
+    return `${Math.round(s / 86400)}d ago`;
+  }
+
+  async function deleteSyncAccount() {
+    const v = await presentActionSheet('Delete the sync account and its server data?', [
+      { text: 'Delete sync account', value: 'delete' },
+    ]);
+    if (v === 'delete') syncDeleteAccount();
+  }
+
+  const quiet = (p) => p.catch(() => {}); // errors surface via sync.error/toasts
+
+  // -------------------------------------------------------------------------
   // Settings export/import: move accounts + preferences between devices,
   // since localStorage is per-browser.
   // -------------------------------------------------------------------------
@@ -276,6 +305,64 @@
         <div class="item item-end">
           <button type="button" class="btn-danger" onclick={deleteAccount}>Delete this account</button>
         </div>
+      {/if}
+    </div>
+
+    <div class="list">
+      <div class="list-header">Sync</div>
+      {#if !sync.available}
+        <div class="item">
+          <span class="item-label sync-note">
+            Passkey sync needs the app to be served by its own backend (same origin) in a browser
+            that supports passkeys.
+          </span>
+        </div>
+      {:else if sync.loggedIn}
+        <div class="item">
+          <span class="item-label">
+            Synced with passkey{sync.name ? ` · ${sync.name}` : ''}
+            {#if sync.lastSyncAt}<span class="sync-note"> · {lastSyncLabel(sync.lastSyncAt)}</span>{/if}
+          </span>
+          <button type="button" class="btn-outline" disabled={sync.busy} onclick={() => syncNow()}>
+            Sync now
+          </button>
+        </div>
+        <div class="item item-end">
+          <button type="button" class="btn-outline" disabled={sync.busy} onclick={() => syncLogout()}>
+            Sign out
+          </button>
+          <button type="button" class="btn-danger" disabled={sync.busy} onclick={deleteSyncAccount}>
+            Delete sync account
+          </button>
+        </div>
+      {:else}
+        <div class="item item-stacked">
+          <span class="sync-note">
+            Sync settings, accounts and seen history across devices — end-to-end encrypted with a
+            passkey. The server only ever stores ciphertext.
+          </span>
+          <div class="sync-actions">
+            <button
+              type="button"
+              class="btn-solid"
+              disabled={sync.busy}
+              onclick={() => quiet(syncRegister())}
+            >
+              Create sync passkey
+            </button>
+            <button
+              type="button"
+              class="btn-outline"
+              disabled={sync.busy}
+              onclick={() => quiet(syncLogin())}
+            >
+              Sign in
+            </button>
+          </div>
+        </div>
+      {/if}
+      {#if sync.error}
+        <div class="item"><span class="item-label error">{sync.error}</span></div>
       {/if}
     </div>
 

@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { P, initPlayer } from './lib/player.svelte.js';
   import { settings } from './lib/settings.svelte.js';
+  import { initSync } from './lib/syncAccount.svelte.js';
   import TopBar from './components/TopBar.svelte';
   import Viewer from './components/Viewer.svelte';
   import ProgressBar from './components/ProgressBar.svelte';
@@ -15,7 +16,10 @@
 
   // Global listeners + session resume run once the shell (progress bar, tab
   // bar) has mounted and registered its elements.
-  onMount(() => initPlayer());
+  onMount(() => {
+    initPlayer();
+    initSync();
+  });
 </script>
 
 <div id="app" class:vertical={settings.vertical}>
