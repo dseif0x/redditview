@@ -254,7 +254,7 @@ button {
   border-color: var(--primary);
 }
 
-#bookmark-select {
+#feeds-btn {
   flex: 0 0 auto;
   max-width: 7rem;
 }
@@ -1030,10 +1030,18 @@ h2.comments-title,
   display: flex;
   flex-direction: column;
   border-radius: 14px;
-  overflow: hidden;
   background: rgba(30, 30, 40, 0.97);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
+  /* long lists (subscriptions, followed users) scroll inside the sheet */
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  max-height: min(62dvh, 30rem);
+}
+
+.as-group .as-btn {
+  flex-shrink: 0;
 }
 
 h2.as-header,
