@@ -36,6 +36,7 @@ func main() {
 	mux.HandleFunc("GET /api/subscriptions", handleSubscriptions)
 	mux.HandleFunc("POST /api/vote", handleVote)
 	mux.HandleFunc("POST /api/save", handleSave)
+	mux.HandleFunc("POST /api/subscribe", handleSubscribe)
 	registerSyncRoutes(mux)
 	mux.Handle("GET /", spaHandler(staticDir))
 

@@ -58,6 +58,22 @@ function refresh(fp) {
   return inflight;
 }
 
+// Keep the cached lists in step after a follow/subscribe change without a
+// refetch (the sheet that triggered the change was rendered from this cache,
+// so it belongs to the current account).
+export function patchSubscriptions(kind, name, on) {
+  const cached = readCache();
+  if (!cached) return;
+  const key = kind === 'user' ? 'following' : 'subreddits';
+  const list = (cached[key] || []).filter((n) => n.toLowerCase() !== name.toLowerCase());
+  if (on) {
+    list.push(name);
+    list.sort((a, b) => (a.toLowerCase() < b.toLowerCase() ? -1 : 1));
+  }
+  cached[key] = list;
+  localStorage.setItem(CACHE_KEY, JSON.stringify(cached));
+}
+
 // Returns { subreddits, following } — instantly from the cache when it
 // matches the current account (kicking off a background refresh when
 // stale), or from the network on a cache miss.

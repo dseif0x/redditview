@@ -10,7 +10,8 @@
     registerFeedInput,
   } from '../lib/player.svelte.js';
   import { settings, saveSettings } from '../lib/settings.svelte.js';
-  import { getSubscriptions } from '../lib/subscriptions.js';
+  import { getSubscriptions, patchSubscriptions } from '../lib/subscriptions.js';
+  import { api } from '../lib/api.js';
   import { showToast } from '../lib/toast.svelte.js';
   import { presentActionSheet } from '../lib/sheet.svelte.js';
   import Icon from './Icon.svelte';
@@ -39,6 +40,71 @@
       showToast('Feed bookmarked', 1500);
     }
     saveSettings();
+  }
+
+  // A user-profile or single-subreddit feed the save button can act on
+  // beyond bookmarking (follow the user / subscribe to the subreddit).
+  function feedTarget(path) {
+    let m = /^(?:u|user)\/([^/+]+?)(?:\/(?:submitted|posts|overview|comments|gilded))?$/i.exec(path);
+    if (!m) m = /^r\/u_([^/+]+)$/i.exec(path); // r/u_name IS a user profile
+    if (m) return { kind: 'user', name: m[1] };
+    const s = /^r\/([A-Za-z0-9][A-Za-z0-9_]*)$/i.exec(path);
+    if (s && !['all', 'popular', 'friends', 'mod'].includes(s[1].toLowerCase())) {
+      return { kind: 'subreddit', name: s[1] };
+    }
+    return null;
+  }
+
+  // The save button: on a user or subreddit feed (with a cookie) it opens a
+  // chooser — save/unsave the feed locally, or follow/unfollow the user
+  // (subscribe/unsubscribe the subreddit) on reddit. Every option flips to
+  // its opposite when already active. Elsewhere it stays the plain
+  // one-tap bookmark toggle.
+  async function onSaveButton() {
+    const target = feedTarget(P.feedInput.trim());
+    if (!target || !settings.cookie.trim()) {
+      toggleBookmark();
+      return;
+    }
+    const label = (target.kind === 'user' ? 'u/' : 'r/') + target.name;
+    let active = false; // currently following / subscribed
+    const v = await presentActionSheet(
+      label,
+      (async () => {
+        try {
+          const subs = await getSubscriptions();
+          const list = target.kind === 'user' ? subs.following : subs.subreddits;
+          active = (list || []).some((n) => n.toLowerCase() === target.name.toLowerCase());
+        } catch {
+          /* state unknown; offer the positive action */
+        }
+        const redditText =
+          target.kind === 'user'
+            ? (active ? 'Unfollow ' : 'Follow ') + label
+            : (active ? 'Unsubscribe from ' : 'Subscribe to ') + label;
+        return [
+          { text: bookmarkIndex >= 0 ? 'Remove saved feed' : 'Save feed', value: 'save' },
+          { text: redditText, value: 'reddit' },
+        ];
+      })()
+    );
+    if (v === 'save') {
+      toggleBookmark();
+    } else if (v === 'reddit') {
+      const srName = target.kind === 'user' ? 'u_' + target.name : target.name;
+      try {
+        await api('/api/subscribe', { name: srName, subscribe: !active });
+        patchSubscriptions(target.kind, target.name, !active);
+        showToast(
+          target.kind === 'user'
+            ? (active ? 'Unfollowed ' : 'Following ') + label
+            : (active ? 'Unsubscribed from ' : 'Subscribed to ') + label,
+          2000
+        );
+      } catch (err) {
+        showToast('Failed: ' + (err.message || err));
+      }
+    }
   }
 
   async function openSavedFeeds() {
@@ -173,8 +239,8 @@
       class="icon-btn"
       class:active={marked}
       type="button"
-      title={marked ? 'Remove this feed from bookmarks' : 'Bookmark this feed'}
-      onclick={toggleBookmark}
+      title={marked ? 'Remove this feed from bookmarks' : 'Save this feed'}
+      onclick={onSaveButton}
     >
       <Icon name="star" filled={marked} />
     </button>
