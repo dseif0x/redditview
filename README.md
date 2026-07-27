@@ -110,7 +110,9 @@ The native project is generated in CI (`npx cap add ios`) and not checked in;
 
 There is also a fully native (React Native / Expo) proof-of-concept in
 `mobile/` — native video player, native paging — runnable on an iPhone via
-Expo Go without a Mac; see `mobile/README.md`.
+Expo Go without a Mac; see `mobile/README.md`. Its web build ships as the
+`ghcr.io/…/redditview:rn` image (`Dockerfile.rn`), built per push on the
+spike branch alongside an unsigned RN `.ipa`.
 
 ## Kubernetes (Helm)
 

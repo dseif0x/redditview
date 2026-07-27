@@ -1,0 +1,31 @@
+# Variant of the main Dockerfile that serves the React Native app's WEB
+# export (mobile/, via react-native-web) instead of frontend/. Built by
+# .github/workflows/rn-preview.yml as the :rn image.
+
+# ---- RN web build (arch-independent, runs on the build host) ----
+FROM --platform=$BUILDPLATFORM node:22-alpine AS web
+WORKDIR /src
+COPY mobile/package.json mobile/package-lock.json ./
+RUN npm ci
+COPY mobile/ ./
+ENV CI=1
+RUN npx expo export --platform web
+
+# ---- backend build (cross-compiles on the build host) ----
+FROM --platform=$BUILDPLATFORM golang:1.24-alpine AS backend
+ARG TARGETOS TARGETARCH
+WORKDIR /src
+COPY backend/go.mod ./
+RUN go mod download
+COPY backend/ ./
+RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -ldflags="-s -w" -o /redditview .
+
+# ---- runtime ----
+FROM alpine:3.21
+RUN apk add --no-cache ca-certificates && adduser -D -H app
+COPY --from=backend /redditview /usr/local/bin/redditview
+COPY --from=web /src/dist /app/static
+ENV STATIC_DIR=/app/static PORT=8080
+EXPOSE 8080
+USER app
+ENTRYPOINT ["redditview"]

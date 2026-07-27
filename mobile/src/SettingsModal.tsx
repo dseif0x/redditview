@@ -37,7 +37,11 @@ export function SettingsModal({ visible, onClose }: { visible: boolean; onClose:
               style={styles.input}
               value={serverUrl}
               onChangeText={setServerUrl}
-              placeholder="https://redditview.example.com"
+              placeholder={
+                Platform.OS === 'web'
+                  ? 'Empty = this server'
+                  : 'https://redditview.example.com'
+              }
               placeholderTextColor={colors.hint}
               autoCapitalize="none"
               autoCorrect={false}

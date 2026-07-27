@@ -10,6 +10,11 @@ on:
     branches: [claude/expo-spike]
   workflow_dispatch:
 
+# Superseded runs are cancelled — the macOS ipa build is the expensive one.
+concurrency:
+  group: rn-preview-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   ipa:
     runs-on: macos-latest
@@ -82,10 +87,12 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # Dockerfile.rn serves the RN app's web export instead of frontend/.
       - name: Build and push :rn
         uses: docker/build-push-action@v6
         with:
           context: .
+          file: Dockerfile.rn
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ghcr.io/${{ github.repository }}:rn

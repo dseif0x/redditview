@@ -23,6 +23,16 @@ native paging, talking to the same Go backend as the web app.
 `npx expo start --web` runs the same code in a browser (video falls back to
 mp4 there — no hls.js glue in the spike).
 
+## Web build / the `:rn` image
+
+`npx expo export --platform web` produces a static web build of this same
+app (react-native-web). `Dockerfile.rn` — built by
+`.github/workflows/rn-preview.yml` as `ghcr.io/…/redditview:rn` — packages
+it with the Go backend in place of the classic frontend. Served that way,
+an empty server URL means same origin, so the deployed app needs no
+configuration, and it stays installable as a PWA (manifest + service
+worker are wired up by `src/pwa.web.ts` from `public/`).
+
 ## Spike scope
 
 In: vertical paged feed, native video with audio (redgifs resolution

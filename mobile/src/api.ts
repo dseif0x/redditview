@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import { getSettings } from './settings';
 
 // Mirrors the Post shape the Go backend serves (backend/feed.go).
@@ -29,10 +30,14 @@ export function apiBase(): string {
 }
 
 // Backend API fetch: attaches the reddit cookie, POSTs a JSON body when one
-// is given, and turns error responses into thrown Errors.
+// is given, and turns error responses into thrown Errors. On web an empty
+// server URL means same origin (the backend serving this app); native has no
+// same-origin backend, so there the server URL is required.
 export async function api<T>(path: string, body?: unknown): Promise<T> {
   const base = apiBase();
-  if (!base) throw new Error('Set your server URL in settings (gear icon) first.');
+  if (!base && Platform.OS !== 'web') {
+    throw new Error('Set your server URL in settings (gear icon) first.');
+  }
   const cookie = getSettings().cookie.trim();
   const headers: Record<string, string> = {};
   if (cookie) headers['X-Reddit-Cookie'] = cookie;

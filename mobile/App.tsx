@@ -15,6 +15,7 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { api, FeedPage, Post } from './src/api';
 import { GalleryPost, ImagePost, TextPost, VideoPost } from './src/PostViews';
+import { initPWA } from './src/pwa';
 import { SettingsModal } from './src/SettingsModal';
 import { getSettings, loadSettings, saveSettings } from './src/settings';
 import { colors } from './src/theme';
@@ -39,13 +40,16 @@ function Feed() {
   const fetching = useRef(false);
   const listRef = useRef<FlatList<Post>>(null);
 
-  // Load persisted settings; open settings on first launch (no server yet).
+  // Load persisted settings. Native needs a server URL, so first launch
+  // opens settings; on web an empty URL means same origin (the backend
+  // serving this app), so only a truly fresh visit shows the empty state.
   useEffect(() => {
+    initPWA();
     loadSettings().then((s) => {
       setFeedInput(s.feed);
       setReady(true);
-      if (!s.serverUrl) setSettingsOpen(true);
-      else loadFeed(s.feed);
+      if (Platform.OS !== 'web' && !s.serverUrl) setSettingsOpen(true);
+      else if (Platform.OS !== 'web' || s.feed || s.cookie || s.serverUrl) loadFeed(s.feed);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
