@@ -45,11 +45,11 @@
   <Tabs.Root value={P.tab} onValueChange={showTab}>
     <Tabs.List class="tabbar-list">
       <Tabs.Trigger value="posts" class="tab">
-        <Icon name="albums-outline" />
+        <Icon name="images" />
         <span>Posts</span>
       </Tabs.Trigger>
       <Tabs.Trigger value="settings" class="tab">
-        <Icon name="settings-outline" />
+        <Icon name="settings" />
         <span>Settings</span>
       </Tabs.Trigger>
     </Tabs.List>

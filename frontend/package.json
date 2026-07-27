@@ -11,9 +11,9 @@
   "dependencies": {
     "@capacitor/core": "^8.4.2",
     "@capacitor/ios": "^8.4.2",
+    "@lucide/svelte": "^1.27.0",
     "bits-ui": "^2.18.1",
     "hls.js": "^1.5.20",
-    "ionicons": "^8.0.13",
     "svelte": "^5.56.8"
   },
   "devDependencies": {

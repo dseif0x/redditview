@@ -257,7 +257,7 @@
             >Reddit cookie saved ({settings.accounts[editingAccount]?.cookie.length || 0} chars)</span
           >
           <button type="button" class="btn-outline" onclick={revealCookie}>
-            <Icon name="eye-outline" /> Show
+            <Icon name="eye" /> Show
           </button>
         </div>
       {:else}
