@@ -1200,24 +1200,27 @@ export function registerFeedInput(el) {
   feedInputEl = el;
 }
 
-// iOS 26 standalone web apps hold the layout viewport above the home
-// indicator (a system letterbox painted with the page background) while
-// env(safe-area-inset-bottom) still reports the inset — so padding with raw
-// env() doubles the dead space under the tab bar. Measure how much bottom
-// space the system already withholds and publish it for the CSS to subtract
-// (--safe-bottom). On a healthy edge-to-edge viewport this measures 0 and
-// nothing changes. iOS reports screen dimensions portrait-fixed, so compare
-// against the axis that currently runs vertically.
+// Standalone iOS can end the shell short of the physical screen bottom (the
+// layout viewport stops above the home indicator) while
+// env(safe-area-inset-bottom) still reports the inset — padding with raw
+// env() then pads for space the shell never covers. Measure where #app
+// ACTUALLY ends versus the screen and publish the shortfall for the CSS to
+// subtract (--safe-bottom). When the standalone 100vh sizing reclaims the
+// full screen this measures 0 and the normal safe-area padding applies;
+// when the shell stays short, the padding shrinks by exactly the shortfall.
+// iOS reports screen dimensions portrait-fixed, so compare against the axis
+// that currently runs vertically.
 function syncBottomLetterbox() {
   let gap = 0;
   const standalone =
     navigator.standalone === true || window.matchMedia?.('(display-mode: standalone)')?.matches;
-  if (standalone && window.screen) {
+  const app = document.getElementById('app');
+  if (standalone && window.screen && app) {
     const landscape = window.innerWidth > window.innerHeight;
     const screenH = landscape
       ? Math.min(screen.width, screen.height)
       : Math.max(screen.width, screen.height);
-    gap = Math.max(0, screenH - window.innerHeight);
+    gap = Math.max(0, Math.round(screenH - app.getBoundingClientRect().bottom));
   }
   document.documentElement.style.setProperty('--bottom-letterbox', gap + 'px');
 }
@@ -1227,6 +1230,8 @@ export function initPlayer() {
   initialized = true;
 
   syncBottomLetterbox();
+  requestAnimationFrame(syncBottomLetterbox); // re-measure once layout settles
+  setTimeout(syncBottomLetterbox, 800);
   window.addEventListener('resize', syncBottomLetterbox);
   window.visualViewport?.addEventListener('resize', syncBottomLetterbox);
   window.addEventListener('orientationchange', () => setTimeout(syncBottomLetterbox, 300));

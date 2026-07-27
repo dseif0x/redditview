@@ -65,6 +65,30 @@ button {
   flex-direction: column;
 }
 
+/* Standalone iOS stops the layout viewport above the home indicator, so
+   anything anchored to the viewport's bottom edge (fixed + bottom: 0)
+   floats above the real screen bottom — while 100vh still spans the full
+   screen. The Ionic app relied on exactly this by sizing its shell with vh
+   in PWA mode (html.plt-pwa { height: 100vh }). Anchor the shell to the
+   top and give it the full-screen height so the tab bar reaches the real
+   bottom edge; syncBottomLetterbox() measures whatever shortfall remains
+   and --safe-bottom adapts either way. */
+@media all and (display-mode: standalone), all and (display-mode: fullscreen) {
+  html,
+  body {
+    height: 100vh;
+  }
+
+  body {
+    bottom: auto;
+  }
+
+  #app {
+    inset: 0 0 auto 0;
+    height: 100vh;
+  }
+}
+
 /* ---- inline icons (lucide SVGs, tinted via currentColor) ---- */
 .icon {
   display: inline-flex;
@@ -790,16 +814,21 @@ button {
   background: linear-gradient(to top, rgba(0, 0, 0, 0.25), transparent);
 }
 
-/* ---- comments bottom sheet (Bits UI Dialog) ---- */
+/* ---- comments bottom sheet (Bits UI Dialog) ----
+   Overlays are position:absolute anchored to the pinned body, NOT
+   position:fixed: fixed anchors to the layout viewport, which standalone
+   iOS cuts short above the home indicator, leaving bottom sheets floating.
+   The body spans the full screen (100vh in standalone), so absolute
+   children reach the real bottom edge. */
 .comments-backdrop {
-  position: fixed;
+  position: absolute;
   inset: 0;
   z-index: 30;
   background: rgba(0, 0, 0, 0.5);
 }
 
 .comments-sheet {
-  position: fixed;
+  position: absolute;
   left: 0;
   right: 0;
   bottom: 0; /* covers the tab bar, like a modal sheet */
@@ -943,7 +972,7 @@ h2.comments-title,
 
 /* ---- double-tap vote burst ---- */
 .vote-burst {
-  position: fixed;
+  position: absolute;
   z-index: 25;
   pointer-events: none;
   font-size: 4.5rem;
@@ -974,14 +1003,14 @@ h2.comments-title,
 
 /* ---- action sheet (Bits UI Dialog styled like ion-action-sheet) ---- */
 .sheet-backdrop {
-  position: fixed;
+  position: absolute;
   inset: 0;
   z-index: 50;
   background: rgba(0, 0, 0, 0.4);
 }
 
 .action-sheet {
-  position: fixed;
+  position: absolute;
   left: 0;
   right: 0;
   bottom: 0;
@@ -1046,7 +1075,7 @@ h2.as-header,
 
 /* ---- toast ---- */
 .toast {
-  position: fixed;
+  position: absolute;
   top: calc(env(safe-area-inset-top) + 0.6rem);
   left: 50%;
   transform: translateX(-50%);
@@ -1296,7 +1325,7 @@ h2.as-header,
 
 /* ---- debug overlay ---- */
 #debug-overlay {
-  position: fixed;
+  position: absolute;
   top: calc(env(safe-area-inset-top) + 6rem);
   left: 0.5rem;
   right: 0.5rem;
