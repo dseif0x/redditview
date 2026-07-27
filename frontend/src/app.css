@@ -284,6 +284,152 @@ button {
   }
 }
 
+/* ---- search suggestions ---- */
+/* Glass panel dropped from the top bar while the feed input is focused. */
+#suggest {
+  position: absolute;
+  top: 100%;
+  left: calc(0.75rem + env(safe-area-inset-left));
+  right: calc(0.75rem + env(safe-area-inset-right));
+  display: flex;
+  flex-direction: column;
+  max-height: min(24rem, 55vh);
+  border-radius: 1.1rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(16, 16, 22, 0.88);
+  backdrop-filter: blur(24px) saturate(1.4);
+  -webkit-backdrop-filter: blur(24px) saturate(1.4);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
+  overflow: hidden;
+  animation: suggest-in 0.16s ease;
+}
+
+@keyframes suggest-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.sg-chips {
+  display: flex;
+  gap: 0.4rem;
+  padding: 0.6rem 0.6rem 0.5rem;
+}
+
+.sg-chip {
+  flex: 1 1 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.5rem 0.4rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+  color: #cfcfd8;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.sg-chip .icon {
+  font-size: 1rem;
+  color: #8b8b98;
+  transition: color 0.15s ease;
+}
+
+.sg-chip.active {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.18);
+  color: #fff;
+}
+
+.sg-chip.active .icon {
+  color: #fff;
+}
+
+.sg-body {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0 0.45rem 0.5rem;
+}
+
+.sg-head {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.6rem 0.6rem 0.3rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #8b8b98;
+}
+
+.sg-item {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.55rem 0.65rem;
+  border: none;
+  border-radius: 0.7rem;
+  background: none;
+  color: #e8e8ef;
+  font-size: 0.92rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.sg-item:hover,
+.sg-item:focus-visible {
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.sg-item .icon {
+  font-size: 1rem;
+  color: #8b8b98;
+}
+
+.sg-item .sg-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sg-item .sg-sub {
+  flex-shrink: 0;
+  font-size: 0.75rem;
+  color: #8b8b98;
+}
+
+.sg-note {
+  margin: 0;
+  padding: 0.55rem 0.75rem 0.85rem;
+  font-size: 0.85rem;
+  line-height: 1.45;
+  color: #8b8b98;
+}
+
+.sg-loading {
+  display: flex;
+  justify-content: center;
+  padding: 0.8rem 0 1rem;
+}
+
+.sg-loading .spinner {
+  width: 1.4rem;
+  height: 1.4rem;
+  border-width: 2px;
+}
+
 /* ---- viewer ---- */
 /* full-bleed: content runs behind the floating tab pill, reels-style */
 #viewer {
