@@ -7,10 +7,10 @@ COPY frontend/ ./
 RUN npm run build
 
 # ---- backend build (cross-compiles on the build host) ----
-FROM --platform=$BUILDPLATFORM golang:1.24-alpine AS backend
+FROM --platform=$BUILDPLATFORM golang:1.25-alpine AS backend
 ARG TARGETOS TARGETARCH
 WORKDIR /src
-COPY backend/go.mod ./
+COPY backend/go.mod backend/go.sum ./
 RUN go mod download
 COPY backend/ ./
 RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -ldflags="-s -w" -o /redditview .

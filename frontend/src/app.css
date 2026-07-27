@@ -1295,6 +1295,24 @@ h2.as-header,
   opacity: 1;
 }
 
+/* ---- passkey sync section ---- */
+.sync-note {
+  font-size: 0.82rem;
+  color: #8a8a98;
+  line-height: 1.4;
+}
+
+.sync-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.item button[disabled] {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
 .settings-io {
   display: flex;
   gap: 0.5rem;

@@ -64,8 +64,37 @@ export function activeCookie() {
 }
 settings.cookie = activeCookie();
 
+// Sync integration: the sync module registers a hook that schedules an
+// upload after local changes, and flips `applyingRemote` while it applies a
+// downloaded snapshot so those writes don't count as local edits (or loop
+// back into another upload).
+let changeHook = null;
+let applyingRemote = false;
+const UPDATED_KEY = 'redditview.updatedAt';
+
+export function setSettingsChangeHook(fn) {
+  changeHook = fn;
+}
+
+export function localUpdatedAt() {
+  return Number(localStorage.getItem(UPDATED_KEY) || 0);
+}
+
+export function withRemoteApply(fn) {
+  applyingRemote = true;
+  try {
+    fn();
+  } finally {
+    applyingRemote = false;
+  }
+}
+
 export function saveSettings() {
   localStorage.setItem(SETTINGS_KEY, JSON.stringify($state.snapshot(settings)));
+  if (!applyingRemote) {
+    localStorage.setItem(UPDATED_KEY, String(Date.now()));
+    changeHook?.();
+  }
 }
 
 // Wholesale replacement (settings import): validates shape like the original.
@@ -115,4 +144,20 @@ export function markSeen(id) {
   seenSaveTimer = setTimeout(() => {
     (window.requestIdleCallback || setTimeout)(() => localStorage.setItem(SEEN_KEY, JSON.stringify([...seenIds])));
   }, 1500);
+  changeHook?.();
+}
+
+export function seenList() {
+  return [...seenIds];
+}
+
+// Union-merge remote seen ids in (remote first so local recency survives the
+// insertion-order cap), then persist.
+export function mergeSeen(ids) {
+  if (!Array.isArray(ids) || ids.length === 0) return;
+  const merged = new Set(ids);
+  for (const id of seenIds) merged.add(id);
+  while (merged.size > SEEN_MAX) merged.delete(merged.values().next().value);
+  seenIds = merged;
+  (window.requestIdleCallback || setTimeout)(() => localStorage.setItem(SEEN_KEY, JSON.stringify([...seenIds])));
 }

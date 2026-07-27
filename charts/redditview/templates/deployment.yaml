@@ -41,10 +41,15 @@ spec:
           env:
             - name: PORT
               value: "8080"
+            - name: DATA_DIR
+              value: /data
             {{- range $key, $value := .Values.env }}
             - name: {{ $key }}
               value: {{ $value | quote }}
             {{- end }}
+          volumeMounts:
+            - name: data
+              mountPath: /data
           livenessProbe:
             httpGet:
               path: /
@@ -56,6 +61,14 @@ spec:
           {{- with .Values.resources }}
           resources:
             {{- toYaml . | nindent 12 }}
+          {{- end }}
+      volumes:
+        - name: data
+          {{- if .Values.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ .Values.persistence.existingClaim | default (include "redditview.fullname" .) }}
+          {{- else }}
+          emptyDir: {}
           {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:

@@ -26,6 +26,8 @@ func main() {
 		staticDir = "../frontend/dist"
 	}
 
+	initSyncStore()
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/feed", handleFeed)
 	mux.HandleFunc("GET /api/media", handleMedia)
@@ -33,6 +35,7 @@ func main() {
 	mux.HandleFunc("GET /api/comments", handleComments)
 	mux.HandleFunc("POST /api/vote", handleVote)
 	mux.HandleFunc("POST /api/save", handleSave)
+	registerSyncRoutes(mux)
 	mux.Handle("GET /", spaHandler(staticDir))
 
 	log.Printf("redditview listening on %s (static: %s)", addr, staticDir)
@@ -49,7 +52,7 @@ func withCORS(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		if r.Method == http.MethodOptions {
-			w.Header().Set("Access-Control-Allow-Methods", "GET, POST")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE")
 			w.Header().Set("Access-Control-Allow-Headers", "X-Reddit-Cookie, Content-Type, Range")
 			w.Header().Set("Access-Control-Max-Age", "86400")
 			w.WriteHeader(http.StatusNoContent)
