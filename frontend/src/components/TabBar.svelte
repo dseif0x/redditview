@@ -1,6 +1,7 @@
 <script>
   import { Tabs } from 'bits-ui';
   import { P, showTab } from '../lib/player.svelte.js';
+  import { openFeedsMenu } from '../lib/feedsMenu.js';
   import Icon from './Icon.svelte';
 
   let el = $state(null);
@@ -49,6 +50,12 @@
       <Tabs.Trigger value="posts" class="tab" aria-label="Posts" title="Posts">
         <Icon name="images" />
       </Tabs.Trigger>
+      <!-- Feeds is a launcher, not a page: a plain button (not a trigger) so
+           every tap opens the menu and the active tab never moves off the
+           current page. -->
+      <button type="button" class="tab" aria-label="Feeds" title="Feeds" onclick={openFeedsMenu}>
+        <Icon name="layers" />
+      </button>
       <Tabs.Trigger value="settings" class="tab" aria-label="Settings" title="Settings">
         <Icon name="settings" />
       </Tabs.Trigger>

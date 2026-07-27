@@ -14,7 +14,8 @@
   import X from '@lucide/svelte/icons/x';
   import Images from '@lucide/svelte/icons/images';
   import Settings from '@lucide/svelte/icons/settings';
-  import ChevronsUpDown from '@lucide/svelte/icons/chevrons-up-down';
+  import ArrowDownWideNarrow from '@lucide/svelte/icons/arrow-down-wide-narrow';
+  import Layers from '@lucide/svelte/icons/layers';
   import Eye from '@lucide/svelte/icons/eye';
 
   const ICONS = {
@@ -30,7 +31,8 @@
     x: X,
     images: Images,
     settings: Settings,
-    'chevrons-up-down': ChevronsUpDown,
+    sort: ArrowDownWideNarrow,
+    layers: Layers,
     eye: Eye,
   };
 </script>
