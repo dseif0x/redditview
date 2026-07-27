@@ -17,7 +17,15 @@
 >
   <Dialog.Portal>
     <Dialog.Overlay class="sheet-backdrop" />
-    <Dialog.Content class="action-sheet" aria-describedby={undefined}>
+    <!-- No auto-focus on open: the sheet is anchored to the real screen
+         bottom, which sits below iOS's cut-short layout viewport in
+         standalone mode — focusing it makes WebKit scroll the whole app
+         up and snap back. -->
+    <Dialog.Content
+      class="action-sheet"
+      aria-describedby={undefined}
+      onOpenAutoFocus={(e) => e.preventDefault()}
+    >
       {#if sheet.current}
         <div class="as-group">
           <Dialog.Title class="as-header">{sheet.current.header}</Dialog.Title>

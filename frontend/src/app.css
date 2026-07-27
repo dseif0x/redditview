@@ -259,13 +259,13 @@ button {
   max-width: 7rem;
 }
 
-/* the sort button is a pill chip that fills the row up to the controls;
-   zero flex-basis + inline-size containment so a long label can never
-   push the controls onto their own row */
+/* the sort button is a pill chip that hugs its label (the chevron sits
+   right next to it); long sort labels ellipsize instead of pushing the
+   controls off the row */
 #sort-btn {
-  flex: 1 1 0px;
-  contain: inline-size;
-  min-width: 4.5rem;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 12rem;
   min-height: 2.1rem;
   display: inline-flex;
   align-items: center;
@@ -283,7 +283,7 @@ button {
 }
 
 #sort-btn span {
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;

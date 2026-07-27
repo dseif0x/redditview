@@ -51,7 +51,14 @@
 >
   <Dialog.Portal>
     <Dialog.Overlay class="comments-backdrop" />
-    <Dialog.Content class="comments-sheet" aria-describedby={undefined}>
+    <!-- No auto-focus on open: the sheet reaches the real screen bottom,
+         below iOS's cut-short standalone layout viewport — focusing it
+         makes WebKit scroll the whole app up and snap back. -->
+    <Dialog.Content
+      class="comments-sheet"
+      aria-describedby={undefined}
+      onOpenAutoFocus={(e) => e.preventDefault()}
+    >
       <header id="comments-header">
         <Dialog.Title class="comments-title">
           {P.commentsPost?.numComments ? `Comments (${P.commentsPost.numComments})` : 'Comments'}
