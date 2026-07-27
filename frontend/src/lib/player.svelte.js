@@ -562,6 +562,7 @@ export function showSlide(pos, dir = 0) {
   const oldCtrl = activeController();
   const oldEntry = P.activeUid != null ? P.window.find((e) => e.uid === P.activeUid) : null;
   if (oldEntry && oldEntry.pos !== pos) oldCtrl?.deactivate?.();
+  const hadSlides = P.window.some((e) => !e.evicted);
 
   const want = [{ pos, off: 0 }];
   const pp = prevPosOf(pos);
@@ -592,6 +593,18 @@ export function showSlide(pos, dir = 0) {
     if (!entry) {
       if (animate && w.off !== 0) {
         deferred.push(w);
+        continue;
+      }
+      if (animate && w.off === 0 && hadSlides) {
+        // Swiping faster than the deferred neighbor mount: the destination
+        // isn't mounted yet. Mount it at the incoming side, commit that
+        // layout, then slide it to center — otherwise it pops in place and
+        // the swipe animation is lost.
+        const e = timed('build ' + keyOf(w.pos), () => addEntry(w.pos, dir > 0 ? 100 : -100));
+        flushSync();
+        controllers.get(e.uid)?.reflow?.();
+        e.off = 0;
+        e.animate = true;
         continue;
       }
       timed('build ' + keyOf(w.pos), () => addEntry(w.pos, w.off)); // fresh mounts appear in place

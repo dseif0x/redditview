@@ -208,6 +208,11 @@
         const img = post.kind === 'gallery' ? galleryEls[gidx] : slideEl?.querySelector('img');
         return img ? { el: img, setZooming: (z) => (zooming = z) } : null;
       },
+      // Commit the current layout so a transform set right after mounting
+      // becomes the transition's start point (fresh slide-in animation).
+      reflow() {
+        if (slideEl) void slideEl.offsetWidth;
+      },
     });
 
     if (post.kind === 'video') {
