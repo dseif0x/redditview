@@ -213,17 +213,15 @@ button {
   display: flex;
   gap: 0.3rem;
   align-items: center;
-  /* Shrinks to wrap the other rows onto their own line on narrow screens. */
-  flex: 1 1 14rem;
-  max-width: 30rem;
+  /* Full-width so the search field always gets its own row; the tool icons
+     and playback controls share the row below. */
+  flex: 1 1 100%;
 }
 
 #feed-tools {
   display: flex;
   gap: 0.3rem;
   align-items: center;
-  /* grows so the sort pill can stretch across the row up to the controls */
-  flex: 1 1 auto;
   min-width: 0;
 }
 
