@@ -18,6 +18,10 @@
 
   const available = (s) => !s.needsCookie || !!settings.cookie.trim();
 
+  // Pinned sources have no chip: their items ARE the panel's initial view.
+  const chipSources = SOURCES.filter((s) => !s.pinned);
+  const pinnedSources = $derived(SOURCES.filter((s) => s.pinned && available(s)));
+
   // Static sources fetch their full list once per panel open and are
   // filtered client-side while typing. The body only depends on `open`:
   // it writes `results`, so everything else stays untracked to avoid
@@ -83,7 +87,7 @@
 
 {#snippet row(s, it)}
   <button type="button" class="sg-item" onclick={() => pick(it)}>
-    <Icon name={s.icon} />
+    <Icon name={it.icon || s.icon} />
     <span class="sg-label">{it.label}</span>
     {#if it.sublabel}<span class="sg-sub">{it.sublabel}</span>{/if}
   </button>
@@ -94,7 +98,7 @@
 {#if open}
   <div id="suggest" onpointerdown={(e) => e.preventDefault()}>
     <div class="sg-chips">
-      {#each SOURCES as s (s.id)}
+      {#each chipSources as s (s.id)}
         <button
           type="button"
           class="sg-chip"
@@ -123,10 +127,18 @@
           {/each}
         {/if}
       {:else if !q}
-        <p class="sg-note">
-          Search your followed users, subscribed subreddits and saved feeds — or pick a source
-          above.
-        </p>
+        {#if pinnedSources.length === 0}
+          <p class="sg-note">
+            Search your followed users, subscribed subreddits and saved feeds — or pick a source
+            above.
+          </p>
+        {:else}
+          {#each pinnedSources as s (s.id)}
+            {#each itemsFor(s) as it (it.path)}
+              {@render row(s, it)}
+            {/each}
+          {/each}
+        {/if}
       {:else if sections.length === 0}
         <p class="sg-note">No matches — press Go to open “{query.trim()}” directly.</p>
       {:else}
