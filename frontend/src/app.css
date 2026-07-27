@@ -25,6 +25,19 @@ body {
   touch-action: pan-x pan-y;
 }
 
+/* iOS standalone PWAs can leave the layout viewport scrolled after the
+   on-screen keyboard closes; position:fixed chrome anchors to the layout
+   viewport there, so the tab bar floats above the home indicator with a
+   strip of background below it. Pinning the body makes the document
+   exactly viewport-sized so it can never scroll — the shell lock Ionic's
+   structure CSS used to provide. */
+body {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  overscroll-behavior: none;
+}
+
 button {
   font-family: inherit;
   -webkit-tap-highlight-color: transparent;
