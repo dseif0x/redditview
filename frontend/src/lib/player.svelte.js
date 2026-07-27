@@ -722,6 +722,7 @@ export function slideTap(node, params) {
     if (Math.hypot(e.clientX - downX, e.clientY - downY) > 12) return; // a drag, not a tap
     if (P.activeUid !== params.uid || clickWasScrub() || pinch || Date.now() - lastPinchEnd < 400) return;
     if (Date.now() - lastMouseDragEnd < 400) return;
+    if (Date.now() - chromeDismissAt < 400) return; // the tap only closed the search panel
     const now = Date.now();
     if (now - lastTap < DOUBLE_TAP_MS) {
       lastTap = 0;
@@ -1049,11 +1050,27 @@ let touchStartX = 0;
 let touchStartY = 0;
 let dragMode = null; // null | 'main' | 'gallery'
 let canDrag = false;
+let chromeDismissAt = 0; // last gesture spent on closing the search panel
+// A gesture that must not navigate at all — canDrag=false alone isn't
+// enough, because gestureEnd's flick fallback fires on plain distance.
+let suppressGesture = false;
 
 function gestureBegin(x, y, target, isTouch = false) {
   touchStartX = x;
   touchStartY = y;
   dragMode = null;
+  suppressGesture = false;
+  // While the search field is focused (suggestion panel open, keyboard up
+  // on phones) the first gesture on the feed dismisses that UI instead of
+  // navigating — swipes during the keyboard's resize dance land somewhere
+  // unpredictable. The next gesture behaves normally.
+  if (feedInputEl && document.activeElement === feedInputEl) {
+    feedInputEl.blur();
+    chromeDismissAt = Date.now();
+    suppressGesture = true;
+    canDrag = false;
+    return;
+  }
   canDrag =
     settings.smoothScroll &&
     P.window.length > 0 &&
@@ -1085,6 +1102,12 @@ function gestureMove(x, y) {
 // Returns true when the gesture engaged a drag (used to suppress the click
 // browsers fire after a mouse drag).
 function gestureEnd(x, y) {
+  if (suppressGesture) {
+    suppressGesture = false;
+    dragMode = null;
+    canDrag = false;
+    return false;
+  }
   const dx = x - touchStartX;
   const dy = y - touchStartY;
   const main = settings.vertical ? dy : dx;
@@ -1359,7 +1382,11 @@ export function initPlayer() {
   document.addEventListener(
     'touchstart',
     (e) => {
-      if (e.touches.length !== 1 || P.tab === 'settings' || P.commentsOpen) {
+      // With the keyboard up (any text field focused) a stray edge touch
+      // must not navigate history out from under the search UI.
+      const ae = document.activeElement;
+      const editing = ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA');
+      if (e.touches.length !== 1 || P.tab === 'settings' || P.commentsOpen || editing) {
         edgeSwipe = null;
         return;
       }
@@ -1411,6 +1438,9 @@ export function initPlayer() {
     'wheel',
     (e) => {
       if (P.tab === 'settings' || P.commentsOpen) return;
+      // Scrolling over the top bar (feed input, suggestion panel) is for
+      // that UI, never for flipping posts.
+      if (e.target instanceof Element && e.target.closest('#topbar')) return;
       const now = Date.now();
       if (now < wheelLockUntil) return;
       if (settings.vertical && Math.abs(e.deltaX) > Math.abs(e.deltaY) && Math.abs(e.deltaX) >= 20) {
