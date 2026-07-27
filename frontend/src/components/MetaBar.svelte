@@ -1,5 +1,16 @@
 <script>
-  import { P, goToFeed, vote, toggleSave, openComments } from '../lib/player.svelte.js';
+  import {
+    P,
+    goToFeed,
+    vote,
+    toggleSave,
+    openComments,
+    viewerTouchStart,
+    viewerTouchMove,
+    viewerTouchEnd,
+    viewerPointerDown,
+    recentDragEnd,
+  } from '../lib/player.svelte.js';
   import Icon from './Icon.svelte';
 
   const post = $derived(!P.message && P.idx >= 0 ? P.posts[P.idx] : null);
@@ -36,13 +47,22 @@
 {#if post}
   <footer id="meta">
     <div id="meta-text">
+      <!-- The title sits above #viewer, so it feeds the same gesture engine:
+           swipes that start on it still navigate, while a clean tap (no drag)
+           expands the clamped text. -->
       <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
       <div
         id="meta-title"
         bind:this={titleEl}
         class:expanded
         class:truncatable
-        onclick={() => (expanded = !expanded)}
+        onclick={() => {
+          if (!recentDragEnd()) expanded = !expanded;
+        }}
+        ontouchstart={viewerTouchStart}
+        ontouchmove={viewerTouchMove}
+        ontouchend={viewerTouchEnd}
+        onpointerdown={viewerPointerDown}
       >
         {post.title}
       </div>
