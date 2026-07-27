@@ -1,5 +1,5 @@
 import { Platform } from 'react-native';
-import { getSettings } from './settings';
+import { activeCookie, getSettings } from './settings';
 
 // Mirrors the Post shape the Go backend serves (backend/feed.go).
 export type Post = {
@@ -21,24 +21,49 @@ export type Post = {
   redgifsMp4?: string;
   poster?: string;
   text?: string;
+  // Client-side: the `after` cursor that fetched this post, for resume.
+  _cursor?: string;
 };
 
 export type FeedPage = { after: string; posts: Post[] };
+
+// Mirrors backend/comments.go.
+export type Comment = {
+  id: string;
+  author: string;
+  body: string;
+  score: number;
+  scoreHidden: boolean;
+  createdUtc: number;
+  isSubmitter: boolean;
+  distinguished?: string;
+  stickied: boolean;
+  replies?: Comment[];
+  moreCount?: number;
+};
+
+export type CommentsPage = { comments: Comment[]; more: number };
+
+export function qs(params: Record<string, string>): string {
+  return Object.entries(params)
+    .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
+    .join('&');
+}
 
 export function apiBase(): string {
   return getSettings().serverUrl.trim().replace(/\/+$/, '');
 }
 
-// Backend API fetch: attaches the reddit cookie, POSTs a JSON body when one
-// is given, and turns error responses into thrown Errors. On web an empty
-// server URL means same origin (the backend serving this app); native has no
-// same-origin backend, so there the server URL is required.
+// Backend API fetch: attaches the active account's reddit cookie, POSTs a
+// JSON body when one is given, and turns error responses into thrown Errors.
+// On web an empty server URL means same origin (the backend serving this
+// app); native has no same-origin backend, so there the URL is required.
 export async function api<T>(path: string, body?: unknown): Promise<T> {
   const base = apiBase();
   if (!base && Platform.OS !== 'web') {
     throw new Error('Set your server URL in settings (gear icon) first.');
   }
-  const cookie = getSettings().cookie.trim();
+  const cookie = activeCookie();
   const headers: Record<string, string> = {};
   if (cookie) headers['X-Reddit-Cookie'] = cookie;
   let init: RequestInit = { headers };
