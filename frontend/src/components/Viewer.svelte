@@ -24,9 +24,9 @@
   {#each P.window as entry (entry.uid)}
     <Slide {entry} />
   {/each}
-  {#if P.rateBoost}
-    <div id="rate-boost">2×</div>
-  {/if}
+  <!-- always mounted: creating a blurred layer over a playing video
+       mid-composite is a visible hitch, toggling opacity is free -->
+  <div id="rate-boost" class:show={P.rateBoost}>2×</div>
   {#if P.message}
     {#if P.message.kind === 'intro'}
       <div id="empty-state">
