@@ -391,13 +391,13 @@ button {
   transition: color 0.15s ease;
 }
 
-.sg-chip.active {
+.sg-chip[data-state='on'] {
   background: rgba(255, 255, 255, 0.15);
   border-color: rgba(255, 255, 255, 0.18);
   color: #fff;
 }
 
-.sg-chip.active .icon {
+.sg-chip[data-state='on'] .icon {
   color: #fff;
 }
 
