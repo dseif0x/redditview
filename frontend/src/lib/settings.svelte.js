@@ -8,6 +8,7 @@ export const DEFAULTS = {
   accounts: [],
   activeAccount: 0,
   imageSeconds: 8,
+  preloadCount: 1, // posts mounted (and loading) ahead of the current one
   autoscroll: false,
   lastFeed: '',
   showImages: true,

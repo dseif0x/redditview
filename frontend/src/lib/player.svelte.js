@@ -569,9 +569,14 @@ export function showSlide(pos, dir = 0) {
 
   const want = [{ pos, off: 0 }];
   const pp = prevPosOf(pos);
-  const np = nextPosOf(pos);
   if (pp != null) want.push({ pos: pp, off: -100 });
-  if (np != null) want.push({ pos: np, off: 100 });
+  // Posts ahead stay mounted per the preload setting, parked at their slide
+  // offsets — mounting is what makes their media load, so skipping forward
+  // lands on content instead of a black frame.
+  const ahead = Math.max(1, Math.min(4, Math.round(settings.preloadCount) || 1));
+  for (let k = 1; k <= ahead && P.posts[pos + k]; k++) {
+    want.push({ pos: pos + k, off: 100 * k });
+  }
   const wantPos = new Set(want.map((w) => w.pos));
 
   const animate = settings.smoothScroll && dir !== 0;
@@ -594,7 +599,10 @@ export function showSlide(pos, dir = 0) {
   for (const w of want) {
     const entry = byPos.get(w.pos);
     if (!entry) {
-      if (animate && w.off !== 0) {
+      // Buffer slides beyond the direct neighbors always mount deferred —
+      // even on a fresh (non-animated) feed start they must not delay the
+      // first post.
+      if ((animate && w.off !== 0) || Math.abs(w.off) > 100) {
         deferred.push(w);
         continue;
       }
@@ -628,10 +636,13 @@ export function showSlide(pos, dir = 0) {
     const mountOne = (w) => {
       if (P.activeUid !== forUid) return; // moved on; the newer showSlide owns the window
       if (byPos.has(w.pos) || !P.posts[w.pos]) return;
-      // The prev neighbor is the less likely destination; don't buffer it.
-      timed('deferred build ' + keyOf(w.pos), () => addEntry(w.pos, w.off, w.off === -100 ? 'metadata' : null));
+      // Only the likely-next neighbor buffers fully; the prev neighbor and
+      // the far-ahead buffer slides load metadata/posters, enough to land
+      // on real content instead of a black frame.
+      timed('deferred build ' + keyOf(w.pos), () => addEntry(w.pos, w.off, w.off === 100 ? null : 'metadata'));
     };
-    deferred.sort((a, b) => b.off - a.off); // next (+100) before prev (-100)
+    // Nearest first, and at equal distance the next side before prev.
+    deferred.sort((a, b) => Math.abs(a.off) - Math.abs(b.off) || b.off - a.off);
     deferred.forEach((w, i) => setTimeout(() => mountOne(w), SLIDE_MS + 250 + i * 350));
     setTimeout(() => {
       if (P.activeUid === forUid) preloadUpcoming();
@@ -676,7 +687,8 @@ export function prev() {
 }
 
 function preloadUpcoming() {
-  for (let i = P.idx + 1; i <= Math.min(P.idx + 2, P.posts.length - 1); i++) {
+  const reach = Math.max(2, (Math.round(settings.preloadCount) || 1) + 1);
+  for (let i = P.idx + 1; i <= Math.min(P.idx + reach, P.posts.length - 1); i++) {
     const p = P.posts[i];
     if ((p.kind === 'image' || p.kind === 'gallery') && p.images?.[0]) {
       new Image().src = mediaUrl(p.images[0]);

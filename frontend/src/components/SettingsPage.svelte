@@ -53,6 +53,7 @@
   let cookieMasked = $state(false);
   let serverUrl = $state(settings.serverUrl);
   let imageSeconds = $state(settings.imageSeconds);
+  let preloadCount = $state(settings.preloadCount);
   let ioVisible = $state(false);
   let ioValue = $state('');
   let ioEl = $state(null);
@@ -170,6 +171,12 @@
     saveSettings();
   }
 
+  function commitPreloadCount() {
+    settings.preloadCount = Math.max(1, Math.min(4, Math.round(preloadCount) || DEFAULTS.preloadCount));
+    preloadCount = settings.preloadCount;
+    saveSettings();
+  }
+
   function applyToggle(key, value) {
     if (settings[key] === value) return;
     settings[key] = value;
@@ -275,6 +282,7 @@
     // Refresh the form's local state from the imported settings.
     serverUrl = settings.serverUrl;
     imageSeconds = settings.imageSeconds;
+    preloadCount = settings.preloadCount;
     editingAccount = settings.accounts.length ? settings.activeAccount : -1;
     loadAccountFields();
     ioVisible = false;
@@ -414,6 +422,19 @@
           step="0.5"
           bind:value={imageSeconds}
           onchange={commitImageSeconds}
+        />
+      </div>
+      <div class="item">
+        <label class="item-label" for="preload-count-input">Posts preloaded ahead</label>
+        <input
+          id="preload-count-input"
+          class="item-input num"
+          type="number"
+          min="1"
+          max="4"
+          step="1"
+          bind:value={preloadCount}
+          onchange={commitPreloadCount}
         />
       </div>
       <div class="item">
