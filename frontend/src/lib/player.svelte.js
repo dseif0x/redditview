@@ -1640,9 +1640,15 @@ export function initPlayer() {
       if (!editing && Date.now() - chromeDismissAt > 700) return;
       if (e.target instanceof Element) {
         const scroller = e.target.closest(
-          '#suggest .sg-body, #settings-page, #comments-list, .as-group, textarea'
+          '#suggest .sg-body, #suggest .sg-chips, #settings-page, #comments-list, .as-group, textarea'
         );
-        if (scroller && scroller.scrollHeight > scroller.clientHeight + 1) return;
+        // Either axis counts: the chip row overflows horizontally.
+        if (
+          scroller &&
+          (scroller.scrollHeight > scroller.clientHeight + 1 ||
+            scroller.scrollWidth > scroller.clientWidth + 1)
+        )
+          return;
       }
       e.preventDefault();
     },
