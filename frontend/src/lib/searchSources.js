@@ -8,17 +8,27 @@
 //   needsCookie gated behind a reddit cookie
 //   empty       message when the source has no entries at all
 //   items(q)    resolves to [{ label, path, sublabel?, icon?, applySort? }]
-//   live        set true for query-driven sources (e.g. a future backend
-//               subreddit/user search): they are re-called with the current
-//               query (debounced by `debounce` ms, default 250) as the user
-//               types, and their results are shown as-is. Sources without
-//               `live` are fetched once per panel open with an empty query
-//               and filtered client-side.
+//   live        set true for query-driven sources (like the reddit search):
+//               they are re-called with the current query (debounced by
+//               `debounce` ms, default 250) as the user types, and their
+//               results are shown as-is. Sources without `live` are fetched
+//               once per panel open with an empty query and filtered
+//               client-side.
+//   minQuery    live only: queries shorter than this show `empty` instead
+//               of "no matches"
 //
 // Picking an item loads `path`; `applySort` (when present) replaces the
 // active sort first — saved feeds remember the sort they were starred with.
 import { settings } from './settings.svelte.js';
 import { getSubscriptions } from './subscriptions.js';
+import { api } from './api.js';
+
+function fmtMembers(n) {
+  if (!n) return '';
+  if (n >= 1e6) return (n / 1e6).toFixed(n < 1e7 ? 1 : 0).replace(/\.0$/, '') + 'M members';
+  if (n >= 1000) return (n / 1000).toFixed(n < 1e5 ? 1 : 0).replace(/\.0$/, '') + 'K members';
+  return n + ' members';
+}
 
 export const SOURCES = [
   {
@@ -77,6 +87,31 @@ export const SOURCES = [
         path: b.path,
         applySort: b.sort || '',
       }));
+    },
+  },
+  {
+    // Backend-backed reddit search: live sources are re-queried with the
+    // typed text instead of being fetched once and filtered client-side.
+    id: 'reddit',
+    label: 'Reddit',
+    icon: 'search',
+    needsCookie: false,
+    live: true,
+    debounce: 300,
+    minQuery: 2,
+    empty: 'Type at least two characters to search all of reddit',
+    async items(q) {
+      q = q.trim();
+      if (q.length < 2) return [];
+      const r = await api('/api/search?q=' + encodeURIComponent(q));
+      return [
+        ...(r.subreddits || []).map((s) => ({
+          label: 'r/' + s.name,
+          path: 'r/' + s.name,
+          sublabel: fmtMembers(s.subscribers),
+        })),
+        ...(r.users || []).map((u) => ({ label: 'u/' + u, path: `user/${u}/submitted` })),
+      ];
     },
   },
 ];

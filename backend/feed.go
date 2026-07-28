@@ -342,6 +342,57 @@ func handleSubscriptions(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(map[string]any{"subreddits": subreddits, "following": following})
 }
 
+// handleSearch backs the suggestion panel's reddit search. One autocomplete
+// call yields subreddits and user profiles alike — profiles come back as
+// t5 entries named u_<name> with subreddit_type "user".
+func handleSearch(w http.ResponseWriter, r *http.Request) {
+	query := strings.TrimSpace(r.URL.Query().Get("q"))
+	if query == "" {
+		http.Error(w, "q required", http.StatusBadRequest)
+		return
+	}
+	q := url.Values{}
+	q.Set("raw_json", "1")
+	q.Set("query", query)
+	q.Set("limit", "10")
+	q.Set("include_profiles", "true")
+	q.Set("include_over_18", "true")
+	var l struct {
+		Data struct {
+			Children []struct {
+				Data struct {
+					DisplayName   string `json:"display_name"`
+					Subscribers   int64  `json:"subscribers"`
+					SubredditType string `json:"subreddit_type"`
+				} `json:"data"`
+			} `json:"children"`
+		} `json:"data"`
+	}
+	if err := redditGetJSON(r, "api/subreddit_autocomplete_v2.json", q, r.Header.Get("X-Reddit-Cookie"), &l); err != nil {
+		http.Error(w, "search failed: "+err.Error(), http.StatusBadGateway)
+		return
+	}
+	type sub struct {
+		Name        string `json:"name"`
+		Subscribers int64  `json:"subscribers,omitempty"`
+	}
+	subreddits := []sub{}
+	users := []string{}
+	for _, c := range l.Data.Children {
+		name := c.Data.DisplayName
+		if stripped, ok := strings.CutPrefix(name, "u_"); ok || c.Data.SubredditType == "user" {
+			if ok {
+				name = stripped
+			}
+			users = append(users, name)
+		} else if name != "" {
+			subreddits = append(subreddits, sub{name, c.Data.Subscribers})
+		}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{"subreddits": subreddits, "users": users})
+}
+
 // extractPost classifies a reddit post into one of our media kinds.
 func extractPost(d postData) (Post, bool) {
 	p := Post{

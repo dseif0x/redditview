@@ -112,7 +112,7 @@
 </script>
 
 <header id="topbar">
-  <form id="feed-form" onsubmit={submit}>
+  <form id="feed-form" class:searching={searchFocused} onsubmit={submit}>
     <input
       id="feed-input"
       bind:this={inputEl}
@@ -127,7 +127,15 @@
         if (e.key === 'Escape') inputEl?.blur();
       }}
     />
-    <button id="go-btn" class="btn-solid" type="submit" title="Load feed">Go</button>
+    <!-- pointerdown is swallowed so tapping Go doesn't blur the input first
+         (the button would collapse out from under the tap) -->
+    <button
+      id="go-btn"
+      class="btn-solid"
+      type="submit"
+      title="Load feed"
+      onpointerdown={(e) => e.preventDefault()}>Go</button
+    >
   </form>
   <SearchSuggest open={searchFocused} query={P.feedInput} onpick={() => inputEl?.blur()} />
   <div id="feed-tools">

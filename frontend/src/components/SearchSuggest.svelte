@@ -120,7 +120,7 @@
         {:else if results[s.id]?.status === 'error'}
           <p class="sg-note">Couldn't load this right now — try again in a moment.</p>
         {:else if itemsFor(s).length === 0}
-          <p class="sg-note">{q ? 'No matches here.' : s.empty}</p>
+          <p class="sg-note">{q.length >= (s.minQuery || 1) ? 'No matches here.' : s.empty}</p>
         {:else}
           {#each itemsFor(s) as it (it.path + (it.sublabel || ''))}
             {@render row(s, it)}

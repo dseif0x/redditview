@@ -34,6 +34,7 @@ func main() {
 	mux.HandleFunc("GET /api/redgifs", handleRedgifs)
 	mux.HandleFunc("GET /api/comments", handleComments)
 	mux.HandleFunc("GET /api/subscriptions", handleSubscriptions)
+	mux.HandleFunc("GET /api/search", handleSearch)
 	mux.HandleFunc("POST /api/vote", handleVote)
 	mux.HandleFunc("POST /api/save", handleSave)
 	mux.HandleFunc("POST /api/subscribe", handleSubscribe)

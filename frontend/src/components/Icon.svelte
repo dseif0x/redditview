@@ -23,6 +23,7 @@
   import Heart from '@lucide/svelte/icons/heart';
   import Bookmark from '@lucide/svelte/icons/bookmark';
   import EyeOff from '@lucide/svelte/icons/eye-off';
+  import Search from '@lucide/svelte/icons/search';
 
   const ICONS = {
     play: Play,
@@ -46,6 +47,7 @@
     heart: Heart,
     bookmark: Bookmark,
     'eye-off': EyeOff,
+    search: Search,
   };
 </script>
 
