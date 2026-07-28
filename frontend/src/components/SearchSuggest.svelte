@@ -12,11 +12,36 @@
   let sel = $state(null); // selected source id, or null = search everything
   let results = $state({}); // source id -> { status, items }
 
+  // Scroll positions survive too ({#if open} unmounts the DOM, so they'd
+  // otherwise reset). Plain vars: nothing renders from them.
+  let bodyEl = $state(null);
+  let chipsEl = $state(null);
+  let bodyScroll = 0;
+  let chipsScroll = 0;
+  $effect(() => {
+    if (bodyEl) bodyEl.scrollTop = bodyScroll;
+  });
+  $effect(() => {
+    if (chipsEl) chipsEl.scrollLeft = chipsScroll;
+  });
+
   // The input doubles as the current feed path, so text matching the loaded
   // feed is not a search — only other text counts as the query. (Derived
   // from the feed path rather than captured at open, so an abandoned search
   // is still a search when the panel reopens.)
   const q = $derived(query.trim() === (P.feedPath || '').trim() ? '' : query.trim().toLowerCase());
+
+  // A genuinely new view (different chip or query) starts at the top —
+  // the remembered offset belongs to the view it was scrolled in.
+  let prevView = null;
+  $effect(() => {
+    const view = sel + '|' + q;
+    if (prevView !== null && view !== prevView) {
+      bodyScroll = 0;
+      if (bodyEl) bodyEl.scrollTop = 0;
+    }
+    prevView = view;
+  });
 
   const available = (s) => !s.needsCookie || !!settings.cookie.trim();
 
@@ -100,7 +125,11 @@
      (blur is what closes the panel) -->
 {#if open}
   <div id="suggest" onpointerdown={(e) => e.preventDefault()}>
-    <div class="sg-chips">
+    <div
+      class="sg-chips"
+      bind:this={chipsEl}
+      onscroll={() => (chipsScroll = chipsEl?.scrollLeft ?? 0)}
+    >
       {#each chipSources as s (s.id)}
         <button
           type="button"
@@ -113,7 +142,11 @@
         </button>
       {/each}
     </div>
-    <div class="sg-body">
+    <div
+      class="sg-body"
+      bind:this={bodyEl}
+      onscroll={() => (bodyScroll = bodyEl?.scrollTop ?? 0)}
+    >
       {#if sel}
         {@const s = SOURCES.find((x) => x.id === sel)}
         {#if !available(s)}
