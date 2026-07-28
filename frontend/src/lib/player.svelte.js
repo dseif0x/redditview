@@ -1542,6 +1542,29 @@ export function initPlayer() {
     },
     { passive: true }
   );
+  // With the keyboard up the occluded half makes the document genuinely
+  // scrollable, and iOS pans the whole shell on any drag — the clamp above
+  // only snaps it back afterwards, which reads as a broken feed swipe.
+  // While an editable element has focus, kill viewport panning at the
+  // source; touches inside surfaces that really scroll keep working.
+  document.addEventListener(
+    'touchmove',
+    (e) => {
+      const ae = document.activeElement;
+      const editing = ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA');
+      // The dismissing gesture itself blurs on touchstart, and the keyboard
+      // takes a beat to animate away — keep blocking through that window.
+      if (!editing && Date.now() - chromeDismissAt > 700) return;
+      if (e.target instanceof Element) {
+        const scroller = e.target.closest(
+          '#suggest .sg-body, #settings-page, #comments-list, .as-group, textarea'
+        );
+        if (scroller && scroller.scrollHeight > scroller.clientHeight + 1) return;
+      }
+      e.preventDefault();
+    },
+    { passive: false }
+  );
 
   // Resume the last session's feed and position.
   const r = settings.resume;
