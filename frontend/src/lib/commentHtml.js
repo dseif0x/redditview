@@ -18,15 +18,22 @@ const ALLOWED = new Set([
 const DROP = new Set(['SCRIPT', 'STYLE', 'IFRAME', 'OBJECT', 'EMBED', 'LINK', 'META', 'FORM', 'INPUT', 'BUTTON', 'TEXTAREA', 'SELECT', 'VIDEO', 'AUDIO', 'SVG', 'MATH', 'TEMPLATE']);
 
 // Links that ARE an image: rendered inline instead of as a link.
-const IMG_LINK = /^https:\/\/((preview|i)\.redd\.it|media\d*\.giphy\.com)\/[^?#]+\.(png|jpe?g|gif|webp)([?#]|$)/i;
+const IMG_LINK = /^https:\/\/((preview|i)\.redd\.it|(media\d*|i)\.giphy\.com)\/[^?#]+\.(png|jpe?g|gif|webp)([?#]|$)/i;
+// Giphy PAGE links (giphy.com/gifs/slug-<id>): the id resolves to the gif —
+// via the comment's media_metadata entry when reddit provided one, else
+// giphy's direct-file host.
+const GIPHY_PAGE = /^https?:\/\/(?:www\.)?giphy\.com\/(?:gifs|embed|clips)\/(?:[\w-]*-)?([a-zA-Z0-9]+)\/?(?:[?#].*)?$/i;
 // Sources allowed for <img> tags reddit itself emits (emotes etc.).
 const IMG_SRC = /^https:\/\/[^/]*(redd\.it|redditmedia\.com|redditstatic\.com|giphy\.com)\//i;
 
+// Dedupe key for a media URL: the filename (query-insensitive, so a
+// media_metadata variant matches the body's differently-sized link), with
+// the whole string as fallback for URLs that don't parse (data: URIs).
 const fileOf = (u) => {
   try {
-    return new URL(u).pathname.split('/').pop() || '';
+    return new URL(u).pathname.split('/').pop() || u;
   } catch {
-    return '';
+    return u;
   }
 };
 
@@ -70,6 +77,14 @@ export function renderCommentHtml(bodyHtml, media = []) {
         if (IMG_LINK.test(abs)) {
           shown.add(fileOf(abs));
           el.replaceWith(inlineImg(doc, abs));
+          continue;
+        }
+        const giphy = abs.match(GIPHY_PAGE);
+        if (giphy) {
+          const entry = (media || []).find((m) => (m.id || '').includes(giphy[1]));
+          const url = entry?.url || `https://i.giphy.com/${giphy[1]}.gif`;
+          shown.add(fileOf(url));
+          el.replaceWith(inlineImg(doc, url));
           continue;
         }
         el.setAttribute('href', abs);
