@@ -362,7 +362,6 @@ export function releasePooledVideo(v) {
   }
   v.muted = true;
   v.loop = false;
-  cancelAnimationFrame(v.__rateRaf || 0);
   v.playbackRate = 1;
   v.removeAttribute('poster');
   v.remove();
@@ -518,9 +517,10 @@ function activateEntry(entry, animating = false) {
     P.currentVideo = video;
     video.muted = P.muted;
     video.loop = !settings.autoscroll;
-    cancelAnimationFrame(video.__rateRaf || 0);
     video.playbackRate = 1; // pooled elements may carry a hold-boost rate
-    // pitch DSP stays off so hold-to-2x rate glides can't stutter
+    // Varispeed (no pitch-correction DSP) from the first frame: Safari maps
+    // this to the cheapest audio path, which is what lets the 2x hold
+    // switch rates without stalling the renderer.
     video.preservesPitch = false;
     if ('webkitPreservesPitch' in video) video.webkitPreservesPitch = false;
     alog(`activate ${keyOf(entry.pos)}: muted=${P.muted} animating=${animating}`);
@@ -720,21 +720,28 @@ const DOUBLE_TAP_MS = 320;
 const HOLD_BOOST_MS = 300;
 const BOOST_RATE = 2;
 
-// Glide playbackRate instead of jumping it: an abrupt change makes the
-// audio pipeline hiccup. Pitch preservation is switched off at activation
-// (its time-stretch DSP engaging is itself a stutter source); 1x audio is
-// unaffected, and the 2x hold gets the classic sped-up sound.
-function rampRate(video, target, ms = 180) {
-  cancelAnimationFrame(video.__rateRaf || 0);
-  const from = video.playbackRate;
-  if (from === target) return;
-  const t0 = performance.now();
-  const step = (now) => {
-    const k = Math.min(1, (now - t0) / ms);
-    video.playbackRate = from + (target - from) * k * (2 - k); // ease-out
-    if (k < 1) video.__rateRaf = requestAnimationFrame(step);
-  };
-  video.__rateRaf = requestAnimationFrame(step);
+// Rate changes hiccup only on videos that HAVE an audio track — track-less
+// videos switch cleanly (confirmed on-device) — because the audio
+// renderer's reconfigure stalls the whole pipeline. Mitigation is
+// threefold: varispeed audio (preservesPitch=false at activation, before
+// playback starts) keeps that reconfigure as cheap as it gets, the switch
+// is a SINGLE rate assignment (a ramp is exactly wrong — every step is
+// its own reconfigure; that's what made the first attempt worse), and a
+// ~140ms mute blink around the switch masks whatever remains.
+let rateMuteUntil = 0; // rescueAudio must not undo the blink mid-switch
+
+function setRateSmooth(video, rate) {
+  if (video.playbackRate === rate) return;
+  if (video.muted) {
+    video.playbackRate = rate;
+    return;
+  }
+  video.muted = true;
+  rateMuteUntil = Date.now() + 200;
+  video.playbackRate = rate;
+  setTimeout(() => {
+    if (!P.muted && P.currentVideo === video && !video.paused) video.muted = false;
+  }, 140);
 }
 
 export function slideTap(node, params) {
@@ -750,7 +757,7 @@ export function slideTap(node, params) {
   };
   const endBoost = () => {
     if (!boostEl) return false;
-    rampRate(boostEl, 1);
+    setRateSmooth(boostEl, 1);
     boostEl = null;
     P.rateBoost = false;
     return true;
@@ -767,7 +774,7 @@ export function slideTap(node, params) {
       holdTimer = null;
       if (P.activeUid !== params.uid || pinch || P.currentVideo !== video || video.paused) return;
       boostEl = video;
-      rampRate(video, BOOST_RATE);
+      setRateSmooth(video, BOOST_RATE);
       P.rateBoost = true;
     }, HOLD_BOOST_MS);
   };
@@ -1002,6 +1009,10 @@ export function toggleFill() {
 // on-device: running this on pointerdown made the cycle's play() reject and
 // left the video frozen.
 function rescueAudio() {
+  // The hold-to-2x audio blink mutes on purpose; the release gesture's
+  // touchend must not "rescue" it early (its pause/play cycle would be a
+  // far bigger hitch than the one the blink hides).
+  if (Date.now() < rateMuteUntil) return;
   if (P.currentVideo && P.currentVideo.muted && !P.muted) {
     P.currentVideo.muted = false;
     alog('rescue: unmuted element');
