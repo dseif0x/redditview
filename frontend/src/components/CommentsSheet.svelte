@@ -4,9 +4,9 @@
   import { Dialog } from 'bits-ui';
   import { P, closeComments } from '../lib/player.svelte.js';
   import { api } from '../lib/api.js';
-  import { presentActionSheet } from '../lib/sheet.svelte.js';
   import Comment from './Comment.svelte';
   import Icon from './Icon.svelte';
+  import PickerSelect from './PickerSelect.svelte';
 
   const SORTS = [
     { text: 'Best', value: 'confidence' },
@@ -35,12 +35,6 @@
     if (P.commentsOpen && P.commentsPost) load(P.commentsPost, sort);
   });
 
-  async function pickSort() {
-    const v = await presentActionSheet('Sort comments', SORTS, sort);
-    if (v !== undefined) sort = v;
-  }
-
-  const sortText = $derived(SORTS.find((s) => s.value === sort)?.text || 'Best');
 </script>
 
 <Dialog.Root
@@ -63,9 +57,14 @@
         <Dialog.Title class="comments-title">
           {P.commentsPost?.numComments ? `Comments (${P.commentsPost.numComments})` : 'Comments'}
         </Dialog.Title>
-        <button id="comments-sort" class="pill" type="button" title="Comment sort" onclick={pickSort}>
-          {sortText}
-        </button>
+        <PickerSelect
+          id="comments-sort"
+          items={SORTS}
+          value={sort}
+          onchange={(v) => {
+            if (v) sort = v;
+          }}
+        />
         <Dialog.Close class="icon-btn comments-close" title="Close (Esc)">
           <Icon name="x" />
         </Dialog.Close>

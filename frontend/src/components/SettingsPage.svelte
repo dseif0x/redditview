@@ -25,6 +25,7 @@
     syncDeleteAccount,
   } from '../lib/syncAccount.svelte.js';
   import Icon from './Icon.svelte';
+  import PickerSelect from './PickerSelect.svelte';
 
   const TOGGLES = [
     { key: 'fillScreen', label: 'Fill screen (crop to fill)' },
@@ -66,15 +67,6 @@
   }
   loadAccountFields();
 
-  const accountLabel = $derived.by(() => {
-    if (editingAccount === -1) return '+ Add account…';
-    const a = settings.accounts[editingAccount];
-    return (
-      (a?.name || `Account ${editingAccount + 1}`) +
-      (editingAccount === settings.activeAccount ? ' (active)' : '')
-    );
-  });
-
   // Re-derive the request cookie from the active account; a change reloads
   // the feed, since it changes what the backend returns.
   function applyActiveCookie() {
@@ -91,18 +83,16 @@
     applyActiveCookie();
   }
 
-  async function pickAccount() {
-    const options = settings.accounts.map((a, i) => ({
+  const accountItems = $derived([
+    ...settings.accounts.map((a, i) => ({
       text: (a.name || `Account ${i + 1}`) + (i === settings.activeAccount ? ' (active)' : ''),
       value: String(i),
-    }));
-    options.push({ text: '+ Add account…', value: 'new' });
-    const v = await presentActionSheet(
-      'Account',
-      options,
-      editingAccount === -1 ? 'new' : String(editingAccount)
-    );
-    if (v === undefined) return;
+    })),
+    { text: '+ Add account…', value: 'new' },
+  ]);
+
+  function pickAccount(v) {
+    if (v === undefined || v === '') return;
     editingAccount = v === 'new' ? -1 : Number(v);
     // Picking an account makes it the active one right away.
     if (editingAccount >= 0) {
@@ -208,15 +198,8 @@
     { text: 'Right', value: 'right' },
     { text: 'Automatic (tap near an edge)', value: 'auto' },
   ];
-  const barModeLabel = $derived(
-    settings.barMode === 'auto'
-      ? 'Automatic'
-      : BAR_MODES.find((m) => m.value === settings.barMode)?.text || 'Bottom'
-  );
-
-  async function pickBarMode() {
-    const v = await presentActionSheet('Progress bar position', BAR_MODES, settings.barMode);
-    if (v === undefined || v === settings.barMode) return;
+  function pickBarMode(v) {
+    if (!v || v === settings.barMode) return;
     settings.barMode = v;
     saveSettings();
   }
@@ -298,7 +281,12 @@
     <div class="list">
       <div class="item">
         <span class="item-label">Account</span>
-        <button type="button" class="pill account-pill" onclick={pickAccount}>{accountLabel}</button>
+        <PickerSelect
+          triggerClass="account-pill"
+          items={accountItems}
+          value={editingAccount === -1 ? 'new' : String(editingAccount)}
+          onchange={pickAccount}
+        />
       </div>
       <div class="item">
         <label class="item-label" for="account-name-input">Account name</label>
@@ -439,7 +427,12 @@
       </div>
       <div class="item">
         <span class="item-label">Progress bar position</span>
-        <button type="button" class="pill bar-mode-pill" onclick={pickBarMode}>{barModeLabel}</button>
+        <PickerSelect
+          triggerClass="bar-mode-pill"
+          items={BAR_MODES}
+          value={settings.barMode}
+          onchange={pickBarMode}
+        />
       </div>
       {#each TOGGLES as t (t.key)}
         <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
