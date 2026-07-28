@@ -518,11 +518,6 @@ function activateEntry(entry, animating = false) {
     video.muted = P.muted;
     video.loop = !settings.autoscroll;
     video.playbackRate = 1; // pooled elements may carry a hold-boost rate
-    // Varispeed (no pitch-correction DSP) from the first frame: Safari maps
-    // this to the cheapest audio path, which is what lets the 2x hold
-    // switch rates without stalling the renderer.
-    video.preservesPitch = false;
-    if ('webkitPreservesPitch' in video) video.webkitPreservesPitch = false;
     alog(`activate ${keyOf(entry.pos)}: muted=${P.muted} animating=${animating}`);
     P.seekable = true;
     paintFill('0%');
@@ -722,12 +717,11 @@ const BOOST_RATE = 2;
 
 // Rate changes hiccup only on videos that HAVE an audio track — track-less
 // videos switch cleanly (confirmed on-device) — because the audio
-// renderer's reconfigure stalls the whole pipeline. Mitigation is
-// threefold: varispeed audio (preservesPitch=false at activation, before
-// playback starts) keeps that reconfigure as cheap as it gets, the switch
-// is a SINGLE rate assignment (a ramp is exactly wrong — every step is
-// its own reconfigure; that's what made the first attempt worse), and a
-// ~140ms mute blink around the switch masks whatever remains.
+// renderer's reconfigure stalls the whole pipeline. So the switch is a
+// SINGLE rate assignment (a ramp is exactly wrong — every step is its own
+// reconfigure; that's what made the first attempt worse) hidden inside a
+// ~140ms mute blink. Pitch correction stays ON: 2x speech has to remain
+// intelligible, and the DSP's engage happens while the blink is silent.
 let rateMuteUntil = 0; // rescueAudio must not undo the blink mid-switch
 
 function setRateSmooth(video, rate) {
