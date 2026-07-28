@@ -206,6 +206,59 @@ button {
   white-space: nowrap;
 }
 
+/* ---- select dropdowns (Bits UI Select, pill trigger) ---- */
+.select-trigger {
+  gap: 0.4rem;
+}
+
+.select-trigger .select-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.select-trigger .icon {
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin-left: auto;
+}
+
+.select-content {
+  z-index: 120;
+  min-width: var(--bits-select-anchor-width);
+  max-height: min(20rem, var(--bits-select-content-available-height));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0.3rem;
+  border-radius: 0.9rem;
+  border: 1px solid var(--border);
+  background: var(--sheet-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.5);
+  animation: suggest-in 0.14s ease;
+}
+
+.select-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.55rem 0.75rem;
+  border-radius: 0.6rem;
+  font-size: 0.9rem;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.select-item[data-highlighted] {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.select-item .icon {
+  font-size: 0.95rem;
+  color: var(--primary);
+}
+
 /* ---- top bar ---- */
 #topbar {
   position: absolute;

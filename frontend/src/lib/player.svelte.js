@@ -1553,6 +1553,9 @@ export function initPlayer() {
   document.addEventListener('keydown', (e) => {
     const ae = document.activeElement;
     if (ae === feedInputEl || (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA'))) return;
+    // An open select dropdown owns Escape — it must close the dropdown, not
+    // leave the settings tab or dismiss the comments sheet underneath.
+    if (e.key === 'Escape' && document.querySelector('[data-select-content]')) return;
     if (P.tab === 'settings') {
       if (e.key === 'Escape') showTab('posts');
       return;

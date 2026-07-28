@@ -26,6 +26,8 @@
   import Search from '@lucide/svelte/icons/search';
   import Folder from '@lucide/svelte/icons/folder';
   import Share from '@lucide/svelte/icons/share';
+  import ChevronDown from '@lucide/svelte/icons/chevron-down';
+  import Check from '@lucide/svelte/icons/check';
 
   const ICONS = {
     play: Play,
@@ -52,6 +54,8 @@
     search: Search,
     folder: Folder,
     share: Share,
+    'chevron-down': ChevronDown,
+    check: Check,
   };
 </script>
 
