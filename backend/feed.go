@@ -31,7 +31,10 @@ type Post struct {
 	Poster      string   `json:"poster,omitempty"`
 	Duration    float64  `json:"duration,omitempty"`
 	Text        string   `json:"text,omitempty"`
-	LinkURL     string   `json:"linkUrl,omitempty"`
+	// Reddit's rendered selftext (media posts can carry body text too);
+	// the client sanitizes and shows it as the caption under the title.
+	BodyHTML string `json:"bodyHtml,omitempty"`
+	LinkURL  string `json:"linkUrl,omitempty"`
 }
 
 type feedResponse struct {
@@ -90,6 +93,7 @@ type postData struct {
 	URL           string `json:"url"`
 	URLOverridden string `json:"url_overridden_by_dest"`
 	Selftext      string `json:"selftext"`
+	SelftextHTML  string `json:"selftext_html"`
 
 	MediaMetadata map[string]mediaMeta `json:"media_metadata"`
 	GalleryData   *struct {
@@ -442,6 +446,7 @@ func extractPost(d postData) (Post, bool) {
 		NSFW:        d.Over18,
 		Score:       d.Score,
 		NumComments: d.NumComments,
+		BodyHTML:    d.SelftextHTML,
 	}
 
 	poster := ""

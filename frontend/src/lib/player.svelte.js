@@ -1166,9 +1166,9 @@ function gestureBegin(x, y, target, isTouch = false) {
   canDrag =
     settings.smoothScroll &&
     P.window.length > 0 &&
-    // Scrollable reading surfaces own their touches (an expanded title
-    // scrolls its overflow just like a text post's body).
-    !target.closest('.text-post, #meta-title.expanded') &&
+    // Scrollable reading surfaces own their touches (an expanded title or
+    // caption scrolls its overflow just like a text post's body).
+    !target.closest('.text-post, #meta-title.expanded, #meta-body.expanded') &&
     // Touches starting at the screen edge belong to history back/forward.
     !(isTouch && (x <= EDGE_SWIPE_PX || x >= window.innerWidth - EDGE_SWIPE_PX));
 }
