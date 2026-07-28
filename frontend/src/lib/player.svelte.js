@@ -37,6 +37,7 @@ export const P = $state({
   message: { kind: 'intro' },
   seekable: false,
   currentVideo: null,
+  rateBoost: false, // holding down on a playing video runs it at 2x
   commentsOpen: false,
   commentsPost: null,
   tab: 'posts',
@@ -516,6 +517,7 @@ function activateEntry(entry, animating = false) {
     P.currentVideo = video;
     video.muted = P.muted;
     video.loop = !settings.autoscroll;
+    video.playbackRate = 1; // pooled elements may carry a hold-boost rate
     alog(`activate ${keyOf(entry.pos)}: muted=${P.muted} animating=${animating}`);
     P.seekable = true;
     paintFill('0%');
@@ -708,17 +710,63 @@ export function galleryStep(dir) {
 // making double-tap unreliable.
 // ---------------------------------------------------------------------------
 const DOUBLE_TAP_MS = 320;
+// Hold-to-fast-forward: keeping a finger (or mouse button) down on a
+// playing video runs it at 2x until release, reels-style.
+const HOLD_BOOST_MS = 300;
+const BOOST_RATE = 2;
 
 export function slideTap(node, params) {
   let tapTimer = null;
   let lastTap = 0;
   let downX = 0;
   let downY = 0;
+  let holdTimer = null;
+  let boostEl = null; // the video element currently forced to 2x
+  const cancelHold = () => {
+    clearTimeout(holdTimer);
+    holdTimer = null;
+  };
+  const endBoost = () => {
+    if (!boostEl) return false;
+    boostEl.playbackRate = 1;
+    boostEl = null;
+    P.rateBoost = false;
+    return true;
+  };
   const onDown = (e) => {
     downX = e.clientX;
     downY = e.clientY;
+    cancelHold();
+    endBoost(); // a second pointer landing means pinch, not hold
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    const video = P.currentVideo;
+    if (P.activeUid !== params.uid || !video || video.paused) return;
+    holdTimer = setTimeout(() => {
+      holdTimer = null;
+      if (P.activeUid !== params.uid || pinch || P.currentVideo !== video || video.paused) return;
+      boostEl = video;
+      video.playbackRate = BOOST_RATE;
+      P.rateBoost = true;
+    }, HOLD_BOOST_MS);
+  };
+  const onMove = (e) => {
+    if (!holdTimer && !boostEl) return;
+    if (Math.hypot(e.clientX - downX, e.clientY - downY) > 12) {
+      cancelHold();
+      endBoost(); // the press became a drag
+    }
+  };
+  const onCancel = () => {
+    cancelHold();
+    endBoost();
+  };
+  const onContextMenu = (e) => {
+    // Android long-press fires contextmenu, which would kill the hold.
+    if (holdTimer || boostEl) e.preventDefault();
   };
   const onUp = (e) => {
+    cancelHold();
+    if (endBoost()) return; // releasing a fast-forward hold is not a tap
     if (Math.hypot(e.clientX - downX, e.clientY - downY) > 12) return; // a drag, not a tap
     if (P.activeUid !== params.uid || clickWasScrub() || pinch || Date.now() - lastPinchEnd < 400) return;
     if (Date.now() - lastMouseDragEnd < 400) return;
@@ -739,12 +787,20 @@ export function slideTap(node, params) {
     }, DOUBLE_TAP_MS + 30);
   };
   node.addEventListener('pointerdown', onDown);
+  node.addEventListener('pointermove', onMove);
   node.addEventListener('pointerup', onUp);
+  node.addEventListener('pointercancel', onCancel);
+  node.addEventListener('contextmenu', onContextMenu);
   return {
     destroy() {
       node.removeEventListener('pointerdown', onDown);
+      node.removeEventListener('pointermove', onMove);
       node.removeEventListener('pointerup', onUp);
+      node.removeEventListener('pointercancel', onCancel);
+      node.removeEventListener('contextmenu', onContextMenu);
       clearTimeout(tapTimer);
+      cancelHold();
+      endBoost();
     },
   };
 }
