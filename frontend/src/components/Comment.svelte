@@ -1,9 +1,14 @@
 <script>
   // One comment with its subtree; tap to collapse/expand. Recursive.
   import Comment from './Comment.svelte';
+  import { renderCommentHtml } from '../lib/commentHtml.js';
 
   let { c, depth } = $props();
   let collapsed = $state(false);
+
+  // Reddit's rendered body, sanitized + media inlined; plain text fallback
+  // for anything without body_html.
+  const rendered = $derived(c.bodyHtml ? renderCommentHtml(c.bodyHtml, c.media) : '');
 
   function countReplies(x) {
     let n = x.replies?.length || 0;
@@ -28,6 +33,12 @@
   class:collapsed
   onclick={(e) => {
     e.stopPropagation(); // innermost comment wins, don't toggle ancestors
+    const spoiler = e.target.closest?.('.md-spoiler-text');
+    if (spoiler) {
+      spoiler.classList.toggle('revealed');
+      return;
+    }
+    if (e.target.closest?.('a, img')) return; // links and media are their own tap targets
     collapsed = !collapsed;
   }}
 >
@@ -39,7 +50,12 @@
     <span class="c-meta">{c.scoreHidden ? '·' : c.score + ' pts'} · {timeAgo(c.createdUtc)}</span>
     <span class="c-collapsed-hint">[+{kidCount + 1}]</span>
   </div>
-  <div class="c-body">{c.body}</div>
+  {#if rendered}
+    <!-- eslint-disable-next-line svelte/no-at-html-tags -- sanitized in renderCommentHtml -->
+    <div class="c-body html">{@html rendered}</div>
+  {:else}
+    <div class="c-body">{c.body}</div>
+  {/if}
   <div class="c-kids">
     {#each c.replies || [] as r}
       <Comment c={r} depth={depth + 1} />
