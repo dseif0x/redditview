@@ -10,7 +10,6 @@ import Hls from 'hls.js';
 import { settings, saveSettings, markSeen, hasSeen } from './settings.svelte.js';
 import { api, mediaUrl } from './api.js';
 import { showToast } from './toast.svelte.js';
-import { presentActionSheet } from './sheet.svelte.js';
 import { alog, timed, profileTransition } from './debug.svelte.js';
 
 export const SLIDE_MS = 350;
@@ -1034,20 +1033,9 @@ function rescueAudio() {
 }
 
 // ---------------------------------------------------------------------------
-// Sort picker: two SHORT action sheets (sort, then time range for top/
-// controversial) instead of one 15-option sheet. A sheet that needs
-// scrolling is a trap on iOS — releasing the scroll can fire the tap on
-// whatever ends up under the finger; keeping every sheet short avoids
-// scrolling entirely.
+// Sort picker: one grouped select dropdown — the flat sorts up top, then a
+// group per ranged sort (top/controversial) listing its time ranges.
 // ---------------------------------------------------------------------------
-const SORT_BASES = [
-  { text: 'Default', value: '' },
-  { text: 'Hot', value: 'hot' },
-  { text: 'New', value: 'new' },
-  { text: 'Rising', value: 'rising' },
-  { text: 'Top…', value: 'top' },
-  { text: 'Controversial…', value: 'controversial' },
-];
 const SORT_TIMES = [
   { text: 'Past hour', value: 'hour' },
   { text: 'Past day', value: 'day' },
@@ -1055,6 +1043,23 @@ const SORT_TIMES = [
   { text: 'Past month', value: 'month' },
   { text: 'Past year', value: 'year' },
   { text: 'All time', value: 'all' },
+];
+const rangedSort = (base) => SORT_TIMES.map((t) => ({ text: t.text, value: `${base}:${t.value}` }));
+
+// 'default' stands in for the empty sort: a Select treats '' as "nothing
+// selected", which would leave Default permanently uncheckable.
+export const SORT_SECTIONS = [
+  {
+    label: null,
+    items: [
+      { text: 'Default', value: 'default' },
+      { text: 'Hot', value: 'hot' },
+      { text: 'New', value: 'new' },
+      { text: 'Rising', value: 'rising' },
+    ],
+  },
+  { label: 'Top', items: rangedSort('top') },
+  { label: 'Controversial', items: rangedSort('controversial') },
 ];
 
 export function sortLabel(s) {
@@ -1064,16 +1069,8 @@ export function sortLabel(s) {
   return t ? `${cap} · ${t === 'all' ? 'all time' : t}` : cap;
 }
 
-export async function openSortPicker() {
-  const [curBase, curTime] = (settings.sort || '').split(':');
-  const base = await presentActionSheet('Sort', SORT_BASES, curBase || '');
-  if (base === undefined) return;
-  let sort = base;
-  if (base === 'top' || base === 'controversial') {
-    const t = await presentActionSheet('Time range', SORT_TIMES, base === curBase ? curTime : undefined);
-    if (t === undefined) return;
-    sort = `${base}:${t}`;
-  }
+export function setSort(v) {
+  const sort = !v || v === 'default' ? '' : v;
   if (sort === settings.sort) return;
   settings.sort = sort;
   saveSettings();

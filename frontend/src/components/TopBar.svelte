@@ -5,7 +5,8 @@
     toggleAutoscroll,
     toggleMute,
     toggleFill,
-    openSortPicker,
+    SORT_SECTIONS,
+    setSort,
     sortLabel,
     registerFeedInput,
   } from '../lib/player.svelte.js';
@@ -15,6 +16,7 @@
   import { showToast } from '../lib/toast.svelte.js';
   import { presentActionSheet } from '../lib/sheet.svelte.js';
   import Icon from './Icon.svelte';
+  import PickerSelect from './PickerSelect.svelte';
   import SearchSuggest from './SearchSuggest.svelte';
 
   let inputEl = $state(null);
@@ -149,16 +151,18 @@
     >
       <Icon name="star" filled={marked} />
     </button>
-    <button
+    <PickerSelect
       id="sort-btn"
-      class="icon-btn"
-      class:active={!!settings.sort}
-      type="button"
+      triggerClass="icon-btn{settings.sort ? ' active' : ''}"
       title="Sort: {sortLabel(settings.sort)}"
-      onclick={openSortPicker}
+      sections={SORT_SECTIONS}
+      value={settings.sort || 'default'}
+      onchange={setSort}
     >
-      <Icon name="sort" />
-    </button>
+      {#snippet trigger()}
+        <Icon name="sort" />
+      {/snippet}
+    </PickerSelect>
   </div>
   <div class="controls">
     <button
