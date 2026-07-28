@@ -2,19 +2,21 @@
   import { untrack } from 'svelte';
   import { SOURCES, matchesQuery } from '../lib/searchSources.js';
   import { settings, saveSettings } from '../lib/settings.svelte.js';
-  import { goToFeed } from '../lib/player.svelte.js';
+  import { P, goToFeed } from '../lib/player.svelte.js';
   import Icon from './Icon.svelte';
 
   let { open = false, query = '', onpick } = $props();
 
+  // Selected source and fetched results deliberately survive close/reopen:
+  // dismissing the panel and coming back shows the exact same view.
   let sel = $state(null); // selected source id, or null = search everything
   let results = $state({}); // source id -> { status, items }
 
-  // The input doubles as the current feed path, so whatever it held when
-  // the panel opened is not a search — only text the user types after
-  // focusing counts as the query.
-  let baseline = $state('');
-  const q = $derived(query === baseline ? '' : query.trim().toLowerCase());
+  // The input doubles as the current feed path, so text matching the loaded
+  // feed is not a search — only other text counts as the query. (Derived
+  // from the feed path rather than captured at open, so an abandoned search
+  // is still a search when the panel reopens.)
+  const q = $derived(query.trim() === (P.feedPath || '').trim() ? '' : query.trim().toLowerCase());
 
   const available = (s) => !s.needsCookie || !!settings.cookie.trim();
 
@@ -22,24 +24,22 @@
   const chipSources = SOURCES.filter((s) => !s.pinned);
   const pinnedSources = $derived(SOURCES.filter((s) => s.pinned && available(s)));
 
-  // Static sources fetch their full list once per panel open and are
-  // filtered client-side while typing. The body only depends on `open`:
-  // it writes `results`, so everything else stays untracked to avoid
-  // re-triggering itself.
+  // Static sources refresh on every open, but in place: the previous list
+  // stays rendered until the (cached-first, usually instant) reload lands,
+  // so reopening never flashes. The body only depends on `open`: it writes
+  // `results`, so everything else stays untracked to avoid re-triggering
+  // itself.
   $effect(() => {
-    if (!open) {
-      untrack(() => (sel = null));
-      return;
-    }
+    if (!open) return;
     untrack(() => {
-      baseline = query;
-      results = {};
       for (const s of SOURCES) {
         if (s.live || !available(s)) continue;
-        results[s.id] = { status: 'loading', items: [] };
+        if (results[s.id]?.status !== 'ready') results[s.id] = { status: 'loading', items: [] };
         s.items('').then(
           (items) => (results[s.id] = { status: 'ready', items }),
-          () => (results[s.id] = { status: 'error', items: [] })
+          () => {
+            if (results[s.id]?.status === 'loading') results[s.id] = { status: 'error', items: [] };
+          }
         );
       }
     });
@@ -61,9 +61,12 @@
     return () => timers.forEach(clearTimeout);
   });
 
+  // Whatever items exist render — including a live source's previous
+  // results while a re-query is in flight, so reopening shows the old
+  // list instead of a spinner.
   function itemsFor(s) {
     const r = results[s.id];
-    if (!r || r.status !== 'ready') return [];
+    if (!r) return [];
     return s.live ? r.items : r.items.filter((it) => matchesQuery(it, q));
   }
 
@@ -115,16 +118,16 @@
         {@const s = SOURCES.find((x) => x.id === sel)}
         {#if !available(s)}
           <p class="sg-note">Set your reddit cookie in the Settings tab to browse this.</p>
+        {:else if itemsFor(s).length > 0}
+          {#each itemsFor(s) as it (it.path + (it.sublabel || ''))}
+            {@render row(s, it)}
+          {/each}
         {:else if results[s.id]?.status === 'loading'}
           <div class="sg-loading"><span class="spinner"></span></div>
         {:else if results[s.id]?.status === 'error'}
           <p class="sg-note">Couldn't load this right now — try again in a moment.</p>
-        {:else if itemsFor(s).length === 0}
-          <p class="sg-note">{q.length >= (s.minQuery || 1) ? 'No matches here.' : s.empty}</p>
         {:else}
-          {#each itemsFor(s) as it (it.path + (it.sublabel || ''))}
-            {@render row(s, it)}
-          {/each}
+          <p class="sg-note">{q.length >= (s.minQuery || 1) ? 'No matches here.' : s.empty}</p>
         {/if}
       {:else if !q}
         {#if pinnedSources.length === 0}
@@ -144,12 +147,12 @@
       {:else}
         {#each sections as sec (sec.s.id)}
           <div class="sg-head"><Icon name={sec.s.icon} />{sec.s.label}</div>
-          {#if results[sec.s.id]?.status === 'loading'}
-            <div class="sg-loading"><span class="spinner"></span></div>
-          {:else}
+          {#if sec.items.length > 0}
             {#each sec.items as it (it.path + (it.sublabel || ''))}
               {@render row(sec.s, it)}
             {/each}
+          {:else}
+            <div class="sg-loading"><span class="spinner"></span></div>
           {/if}
         {/each}
       {/if}
