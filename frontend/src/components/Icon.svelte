@@ -25,6 +25,7 @@
   import EyeOff from '@lucide/svelte/icons/eye-off';
   import Search from '@lucide/svelte/icons/search';
   import Folder from '@lucide/svelte/icons/folder';
+  import Share from '@lucide/svelte/icons/share';
 
   const ICONS = {
     play: Play,
@@ -50,6 +51,7 @@
     'eye-off': EyeOff,
     search: Search,
     folder: Folder,
+    share: Share,
   };
 </script>
 
