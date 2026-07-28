@@ -32,6 +32,17 @@
   const bodyRendered = $derived(
     post && post.kind !== 'text' && post.bodyHtml ? renderCommentHtml(post.bodyHtml, []) : ''
   );
+
+  // Link posts show a preview image as the media — surface the actual
+  // destination as a labeled link, like reddit's domain row.
+  const linkHost = $derived.by(() => {
+    if (!post?.linkUrl) return '';
+    try {
+      return new URL(post.linkUrl).hostname.replace(/^www\./, '');
+    } catch {
+      return post.linkUrl;
+    }
+  });
   $effect(() => {
     void bodyRendered;
     bodyExpanded = false;
@@ -155,6 +166,18 @@
       >
         {post.title}
       </div>
+      {#if post.linkUrl}
+        <div id="meta-link">
+          <a
+            href={post.linkUrl}
+            target="_blank"
+            rel="noopener"
+            onclick={(e) => {
+              if (recentDragEnd()) e.preventDefault();
+            }}>{linkHost} ↗</a
+          >
+        </div>
+      {/if}
       {#if bodyRendered}
         <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
         <div
