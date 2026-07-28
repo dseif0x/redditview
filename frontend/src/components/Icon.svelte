@@ -24,6 +24,7 @@
   import Bookmark from '@lucide/svelte/icons/bookmark';
   import EyeOff from '@lucide/svelte/icons/eye-off';
   import Search from '@lucide/svelte/icons/search';
+  import Folder from '@lucide/svelte/icons/folder';
 
   const ICONS = {
     play: Play,
@@ -48,6 +49,7 @@
     bookmark: Bookmark,
     'eye-off': EyeOff,
     search: Search,
+    folder: Folder,
   };
 </script>
 

@@ -338,22 +338,30 @@ button {
 
 .sg-chips {
   display: flex;
-  gap: 0.4rem;
+  gap: 0.35rem;
   padding: 0.6rem 0.6rem 0.5rem;
+  /* five chips don't always fit a phone width — let the row pan */
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.sg-chips::-webkit-scrollbar {
+  display: none;
 }
 
 .sg-chip {
-  flex: 1 1 0;
+  flex: 1 0 auto;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.4rem;
-  padding: 0.5rem 0.4rem;
+  gap: 0.35rem;
+  padding: 0.5rem 0.65rem;
   border-radius: 999px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(255, 255, 255, 0.04);
   color: #cfcfd8;
-  font-size: 0.85rem;
+  font-size: 0.82rem;
+  white-space: nowrap;
   cursor: pointer;
   transition: background 0.15s ease, color 0.15s ease;
 }
