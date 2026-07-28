@@ -901,35 +901,38 @@ button {
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
 }
 
-/* holding a playing video: small fast-forward badge, reels-style */
+/* holding a playing video: small fast-forward badge, reels-style. Kept in
+   the tree permanently and toggled by opacity/visibility — mounting a
+   fresh layer over a playing video causes a compositing hitch. */
 #rate-boost {
   position: absolute;
   top: calc(6.5rem + env(safe-area-inset-top));
   left: 50%;
-  transform: translateX(-50%);
   z-index: 12;
   padding: 0.3rem 0.75rem;
   border-radius: 999px;
   border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(16, 16, 22, 0.72);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  background: rgba(16, 16, 22, 0.82);
   font-size: 0.9rem;
   font-weight: 700;
   letter-spacing: 0.04em;
   pointer-events: none;
-  animation: rate-boost-in 0.15s ease;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateX(-50%) scale(0.85);
+  transition:
+    opacity 0.15s ease,
+    transform 0.15s ease,
+    visibility 0s linear 0.15s;
 }
 
-@keyframes rate-boost-in {
-  from {
-    opacity: 0;
-    transform: translateX(-50%) scale(0.85);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(-50%) scale(1);
-  }
+#rate-boost.show {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) scale(1);
+  transition:
+    opacity 0.15s ease,
+    transform 0.15s ease;
 }
 
 /* ---- nav zones ---- */

@@ -362,6 +362,7 @@ export function releasePooledVideo(v) {
   }
   v.muted = true;
   v.loop = false;
+  cancelAnimationFrame(v.__rateRaf || 0);
   v.playbackRate = 1;
   v.removeAttribute('poster');
   v.remove();
@@ -517,7 +518,11 @@ function activateEntry(entry, animating = false) {
     P.currentVideo = video;
     video.muted = P.muted;
     video.loop = !settings.autoscroll;
+    cancelAnimationFrame(video.__rateRaf || 0);
     video.playbackRate = 1; // pooled elements may carry a hold-boost rate
+    // pitch DSP stays off so hold-to-2x rate glides can't stutter
+    video.preservesPitch = false;
+    if ('webkitPreservesPitch' in video) video.webkitPreservesPitch = false;
     alog(`activate ${keyOf(entry.pos)}: muted=${P.muted} animating=${animating}`);
     P.seekable = true;
     paintFill('0%');
@@ -715,6 +720,23 @@ const DOUBLE_TAP_MS = 320;
 const HOLD_BOOST_MS = 300;
 const BOOST_RATE = 2;
 
+// Glide playbackRate instead of jumping it: an abrupt change makes the
+// audio pipeline hiccup. Pitch preservation is switched off at activation
+// (its time-stretch DSP engaging is itself a stutter source); 1x audio is
+// unaffected, and the 2x hold gets the classic sped-up sound.
+function rampRate(video, target, ms = 180) {
+  cancelAnimationFrame(video.__rateRaf || 0);
+  const from = video.playbackRate;
+  if (from === target) return;
+  const t0 = performance.now();
+  const step = (now) => {
+    const k = Math.min(1, (now - t0) / ms);
+    video.playbackRate = from + (target - from) * k * (2 - k); // ease-out
+    if (k < 1) video.__rateRaf = requestAnimationFrame(step);
+  };
+  video.__rateRaf = requestAnimationFrame(step);
+}
+
 export function slideTap(node, params) {
   let tapTimer = null;
   let lastTap = 0;
@@ -728,7 +750,7 @@ export function slideTap(node, params) {
   };
   const endBoost = () => {
     if (!boostEl) return false;
-    boostEl.playbackRate = 1;
+    rampRate(boostEl, 1);
     boostEl = null;
     P.rateBoost = false;
     return true;
@@ -745,7 +767,7 @@ export function slideTap(node, params) {
       holdTimer = null;
       if (P.activeUid !== params.uid || pinch || P.currentVideo !== video || video.paused) return;
       boostEl = video;
-      video.playbackRate = BOOST_RATE;
+      rampRate(video, BOOST_RATE);
       P.rateBoost = true;
     }, HOLD_BOOST_MS);
   };
