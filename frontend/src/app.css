@@ -340,6 +340,9 @@ button {
   display: flex;
   gap: 0.35rem;
   padding: 0.6rem 0.6rem 0.5rem;
+  /* the panel is a capped-height column flex: a tall result list must
+     scroll in the body, never squeeze the chip row */
+  flex-shrink: 0;
   /* five chips don't always fit a phone width — let the row pan */
   overflow-x: auto;
   scrollbar-width: none;
@@ -388,6 +391,7 @@ button {
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 0 0.45rem 0.5rem;
+  min-height: 0; /* the body is the part that shrinks and scrolls */
 }
 
 .sg-head {
