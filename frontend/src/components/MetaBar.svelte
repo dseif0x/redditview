@@ -13,6 +13,7 @@
   } from '../lib/player.svelte.js';
   import { showToast } from '../lib/toast.svelte.js';
   import { mediaUrl } from '../lib/api.js';
+  import { renderCommentHtml } from '../lib/commentHtml.js';
   import Icon from './Icon.svelte';
 
   const post = $derived(!P.message && P.idx >= 0 ? P.posts[P.idx] : null);
@@ -20,6 +21,26 @@
   let titleEl = $state(null);
   let expanded = $state(false);
   let truncatable = $state(false);
+
+  // Media posts can carry body text; it shows as an Instagram-style caption
+  // under the title — clamped with an ellipsis, tap to read it all — using
+  // the same sanitized reddit HTML pipeline as comments. Text posts render
+  // their body in the slide itself, so no caption there.
+  let bodyBoxEl = $state(null);
+  let bodyExpanded = $state(false);
+  let bodyTruncatable = $state(false);
+  const bodyRendered = $derived(
+    post && post.kind !== 'text' && post.bodyHtml ? renderCommentHtml(post.bodyHtml, []) : ''
+  );
+  $effect(() => {
+    void bodyRendered;
+    bodyExpanded = false;
+    const el = bodyBoxEl;
+    if (!el) return;
+    requestAnimationFrame(() => {
+      bodyTruncatable = el.scrollHeight > el.clientHeight + 1;
+    });
+  });
 
   // Only clamped titles get the pointer affordance; re-measure per post.
   $effect(() => {
@@ -134,6 +155,27 @@
       >
         {post.title}
       </div>
+      {#if bodyRendered}
+        <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+        <div
+          id="meta-body"
+          bind:this={bodyBoxEl}
+          class:expanded={bodyExpanded}
+          class:truncatable={bodyTruncatable}
+          onclick={(e) => {
+            const spoiler = e.target.closest?.('.md-spoiler-text');
+            if (spoiler) {
+              spoiler.classList.toggle('revealed');
+              return;
+            }
+            if (e.target.closest?.('a, img')) return;
+            if (!recentDragEnd()) bodyExpanded = !bodyExpanded;
+          }}
+        >
+          <!-- eslint-disable-next-line svelte/no-at-html-tags -- sanitized in renderCommentHtml -->
+          {@html bodyRendered}
+        </div>
+      {/if}
       <div id="meta-sub">
         {#if post.subreddit}<a
             href="#{post.subreddit}"
