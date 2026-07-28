@@ -254,6 +254,15 @@ button {
   background: rgba(255, 255, 255, 0.08);
 }
 
+.select-heading {
+  padding: 0.5rem 0.75rem 0.2rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
 .select-item .icon {
   font-size: 0.95rem;
   color: var(--primary);
