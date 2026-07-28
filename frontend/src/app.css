@@ -466,7 +466,8 @@ button {
 .sg-body {
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 0 0.45rem 0.5rem;
+  /* keyboard inset: the panel is open exactly while the keyboard is up */
+  padding: 0 0.45rem calc(0.5rem + var(--kb-inset, 0px));
   min-height: 0; /* the body is the part that shrinks and scrolls */
 }
 
@@ -1420,7 +1421,8 @@ h2.as-header,
   width: 100%;
   max-width: 34rem;
   margin: 0 auto;
-  padding: 0.5rem 0 calc(var(--tabbar-h) + 1rem);
+  /* --kb-inset: room to scroll the last rows clear of the on-screen keyboard */
+  padding: 0.5rem 0 calc(var(--tabbar-h) + 1rem + var(--kb-inset, 0px));
 }
 
 #settings-page h2 {

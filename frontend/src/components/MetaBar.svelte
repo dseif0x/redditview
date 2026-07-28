@@ -12,6 +12,7 @@
     recentDragEnd,
   } from '../lib/player.svelte.js';
   import { showToast } from '../lib/toast.svelte.js';
+  import { mediaUrl } from '../lib/api.js';
   import Icon from './Icon.svelte';
 
   const post = $derived(!P.message && P.idx >= 0 ? P.posts[P.idx] : null);
@@ -37,19 +38,62 @@
     goToFeed(feed);
   }
 
-  // Native share sheet with the post's reddit link; clipboard fallback
-  // where Web Share isn't available (desktop browsers).
+  // Native share sheet with the post's MEDIA when it's a plain file (the
+  // shown image, the gallery's current image, an mp4): the recipient gets
+  // the content, not a reddit link. HLS-only videos and text posts fall
+  // back to sharing the permalink; no Web Share at all falls back to
+  // copying the link.
+  async function mediaShareFile() {
+    const fileUrl =
+      post.kind === 'video'
+        ? post.videoMp4 || ''
+        : (post.images || [])[post.kind === 'gallery' ? P.galleryIdx : 0] || '';
+    if (!fileUrl || !navigator.canShare) return null;
+    // Same proxied URL the slide rendered, so this is usually a cache hit —
+    // important, because a slow fetch here would outlive the tap's transient
+    // activation and iOS would refuse the share.
+    const resp = await fetch(mediaUrl(fileUrl));
+    if (!resp.ok) return null;
+    const blob = await resp.blob();
+    const type = blob.type || 'application/octet-stream';
+    const ext =
+      type.includes('mp4') ? 'mp4'
+      : type.includes('png') ? 'png'
+      : type.includes('gif') ? 'gif'
+      : type.includes('webp') ? 'webp'
+      : type.includes('svg') ? 'svg'
+      : 'jpg';
+    const name = (post.title || 'media').replace(/[^\w -]+/g, '').trim().slice(0, 40) || 'media';
+    const file = new File([blob], `${name}.${ext}`, { type });
+    return navigator.canShare({ files: [file] }) ? file : null;
+  }
+
   async function sharePost() {
     if (!post) return;
     try {
       if (navigator.share) {
-        await navigator.share({ title: post.title, url: post.permalink });
+        let file = null;
+        try {
+          file = await mediaShareFile();
+        } catch {
+          /* media not fetchable — share the link instead */
+        }
+        if (file) await navigator.share({ files: [file], title: post.title });
+        else await navigator.share({ title: post.title, url: post.permalink });
       } else {
         await navigator.clipboard.writeText(post.permalink);
         showToast('Link copied', 1500);
       }
     } catch (err) {
-      if (err?.name !== 'AbortError') showToast('Could not share'); // dismissing the sheet is not an error
+      if (err?.name === 'AbortError') return; // dismissing the sheet is not an error
+      // e.g. the file share lost the tap's activation window on a slow
+      // fetch — leave the user with the link at least.
+      try {
+        await navigator.clipboard.writeText(post.permalink);
+        showToast('Link copied', 1500);
+      } catch {
+        showToast('Could not share');
+      }
     }
   }
 
