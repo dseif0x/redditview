@@ -24,6 +24,9 @@
   {#each P.window as entry (entry.uid)}
     <Slide {entry} />
   {/each}
+  {#if P.rateBoost}
+    <div id="rate-boost">2×</div>
+  {/if}
   {#if P.message}
     {#if P.message.kind === 'intro'}
       <div id="empty-state">
