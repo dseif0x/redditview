@@ -1,5 +1,6 @@
 <script>
   import { untrack } from 'svelte';
+  import { ToggleGroup } from 'bits-ui';
   import { SOURCES, matchesQuery } from '../lib/searchSources.js';
   import { settings, saveSettings } from '../lib/settings.svelte.js';
   import { P, goToFeed } from '../lib/player.svelte.js';
@@ -125,23 +126,23 @@
      (blur is what closes the panel) -->
 {#if open}
   <div id="suggest" onpointerdown={(e) => e.preventDefault()}>
-    <div
+    <!-- single-select with tap-again-to-deselect is exactly a ToggleGroup;
+         it also brings the radiogroup semantics and arrow-key navigation -->
+    <ToggleGroup.Root
+      type="single"
+      value={sel ?? ''}
+      onValueChange={(v) => (sel = v || null)}
       class="sg-chips"
-      bind:this={chipsEl}
+      bind:ref={chipsEl}
       onscroll={() => (chipsScroll = chipsEl?.scrollLeft ?? 0)}
     >
       {#each chipSources as s (s.id)}
-        <button
-          type="button"
-          class="sg-chip"
-          class:active={sel === s.id}
-          onclick={() => (sel = sel === s.id ? null : s.id)}
-        >
+        <ToggleGroup.Item value={s.id} class="sg-chip">
           <Icon name={s.icon} />
           {s.label}
-        </button>
+        </ToggleGroup.Item>
       {/each}
-    </div>
+    </ToggleGroup.Root>
     <div
       class="sg-body"
       bind:this={bodyEl}
