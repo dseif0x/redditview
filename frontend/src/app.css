@@ -466,8 +466,7 @@ button {
 .sg-body {
   overflow-y: auto;
   overscroll-behavior: contain;
-  /* keyboard inset: the panel is open exactly while the keyboard is up */
-  padding: 0 0.45rem calc(0.5rem + var(--kb-inset, 0px));
+  padding: 0 0.45rem 0.5rem;
   min-height: 0; /* the body is the part that shrinks and scrolls */
 }
 

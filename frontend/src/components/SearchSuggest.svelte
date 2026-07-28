@@ -13,6 +13,30 @@
   let sel = $state(null); // selected source id, or null = search everything
   let results = $state({}); // source id -> { status, items }
 
+  // The panel must never extend under the on-screen keyboard — otherwise
+  // its tail is unreachable, and padding it instead makes it scrollable
+  // past its own content. Cap its height to the visible space above the
+  // keyboard (the CSS max-height stays as the no-keyboard ceiling).
+  let panelEl = $state(null);
+  $effect(() => {
+    if (!open || !panelEl) return;
+    const el = panelEl;
+    const vv = window.visualViewport;
+    const apply = () => {
+      const top = el.getBoundingClientRect().top;
+      const visibleBottom = vv ? vv.offsetTop + vv.height : window.innerHeight;
+      const cssCap = Math.min(24 * 16, window.innerHeight * 0.55);
+      el.style.maxHeight = Math.round(Math.max(140, Math.min(cssCap, visibleBottom - top - 8))) + 'px';
+    };
+    apply();
+    vv?.addEventListener('resize', apply);
+    vv?.addEventListener('scroll', apply);
+    return () => {
+      vv?.removeEventListener('resize', apply);
+      vv?.removeEventListener('scroll', apply);
+    };
+  });
+
   // Scroll positions survive too ({#if open} unmounts the DOM, so they'd
   // otherwise reset). Plain vars: nothing renders from them.
   let bodyEl = $state(null);
@@ -125,7 +149,7 @@
 <!-- pointerdown is swallowed so taps inside the panel never blur the input
      (blur is what closes the panel) -->
 {#if open}
-  <div id="suggest" onpointerdown={(e) => e.preventDefault()}>
+  <div id="suggest" bind:this={panelEl} onpointerdown={(e) => e.preventDefault()}>
     <!-- single-select with tap-again-to-deselect is exactly a ToggleGroup;
          it also brings the radiogroup semantics and arrow-key navigation -->
     <ToggleGroup.Root
