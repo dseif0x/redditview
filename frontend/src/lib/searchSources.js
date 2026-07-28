@@ -90,6 +90,21 @@ export const SOURCES = [
     },
   },
   {
+    id: 'multis',
+    label: 'Multis',
+    icon: 'folder',
+    needsCookie: true,
+    empty: "This account doesn't have any multireddits yet",
+    async items() {
+      const multis = (await getSubscriptions()).multis || [];
+      return multis.map((m) => ({
+        label: m.name,
+        path: m.path,
+        sublabel: m.count ? m.count + ' subreddits' : '',
+      }));
+    },
+  },
+  {
     // Backend-backed reddit search: live sources are re-queried with the
     // typed text instead of being fetched once and filtered client-side.
     id: 'reddit',

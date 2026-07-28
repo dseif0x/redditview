@@ -47,6 +47,7 @@ function refresh(fp) {
             fetchedAt: Date.now(),
             subreddits: data.subreddits || [],
             following: data.following || [],
+            multis: data.multis || [],
           })
         );
         return data;
@@ -74,15 +75,20 @@ export function patchSubscriptions(kind, name, on) {
   localStorage.setItem(CACHE_KEY, JSON.stringify(cached));
 }
 
-// Returns { subreddits, following } — instantly from the cache when it
-// matches the current account (kicking off a background refresh when
-// stale), or from the network on a cache miss.
+// Returns { subreddits, following, multis } — instantly from the cache
+// when it matches the current account (kicking off a background refresh
+// when stale), or from the network on a cache miss. Caches written before
+// multis existed count as misses so the upgrade fills them in.
 export async function getSubscriptions() {
   const fp = await cookieFingerprint();
   const cached = readCache();
-  if (cached && cached.fp === fp) {
+  if (cached && cached.fp === fp && Array.isArray(cached.multis)) {
     if (Date.now() - (cached.fetchedAt || 0) > FRESH_MS) refresh(fp).catch(() => {});
-    return { subreddits: cached.subreddits || [], following: cached.following || [] };
+    return {
+      subreddits: cached.subreddits || [],
+      following: cached.following || [],
+      multis: cached.multis,
+    };
   }
   return refresh(fp);
 }

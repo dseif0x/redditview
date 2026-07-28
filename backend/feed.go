@@ -338,8 +338,43 @@ func handleSubscriptions(w http.ResponseWriter, r *http.Request) {
 	}
 	lessFold(subreddits)
 	lessFold(following)
+	// The account's multireddits ride along; failing to list them must not
+	// take down the subscription lists.
+	type multi struct {
+		Name  string `json:"name"`
+		Path  string `json:"path"`
+		Count int    `json:"count"`
+	}
+	multis := []multi{}
+	var multiResp []struct {
+		Data struct {
+			DisplayName string `json:"display_name"`
+			Path        string `json:"path"`
+			Subreddits  []struct {
+				Name string `json:"name"`
+			} `json:"subreddits"`
+		} `json:"data"`
+	}
+	mq := url.Values{}
+	mq.Set("raw_json", "1")
+	if err := redditGetJSON(r, "api/multi/mine", mq, cookie, &multiResp); err == nil {
+		for _, m := range multiResp {
+			path := strings.Trim(m.Data.Path, "/")
+			if m.Data.DisplayName == "" || path == "" {
+				continue
+			}
+			multis = append(multis, multi{m.Data.DisplayName, path, len(m.Data.Subreddits)})
+		}
+		sort.Slice(multis, func(i, j int) bool {
+			return strings.ToLower(multis[i].Name) < strings.ToLower(multis[j].Name)
+		})
+	}
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]any{"subreddits": subreddits, "following": following})
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"subreddits": subreddits,
+		"following":  following,
+		"multis":     multis,
+	})
 }
 
 // handleSearch backs the suggestion panel's reddit search. One autocomplete
