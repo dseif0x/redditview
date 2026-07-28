@@ -1651,8 +1651,12 @@ export function initPlayer() {
       // takes a beat to animate away — keep blocking through that window.
       if (!editing && Date.now() - chromeDismissAt > 700) return;
       if (e.target instanceof Element) {
+        // These must be the elements that actually scroll — #settings-page
+        // itself is overflow:hidden (the form inside it scrolls), so
+        // matching it would fail the overflow test and freeze the page
+        // while the keyboard is up.
         const scroller = e.target.closest(
-          '#suggest .sg-body, #suggest .sg-chips, #settings-page, #comments-list, .as-group, textarea'
+          '#suggest .sg-body, #suggest .sg-chips, #settings-form, #comments-list, .as-group, textarea'
         );
         // Either axis counts: the chip row overflows horizontally.
         if (
