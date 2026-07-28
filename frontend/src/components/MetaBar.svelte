@@ -11,6 +11,7 @@
     viewerPointerDown,
     recentDragEnd,
   } from '../lib/player.svelte.js';
+  import { showToast } from '../lib/toast.svelte.js';
   import Icon from './Icon.svelte';
 
   const post = $derived(!P.message && P.idx >= 0 ? P.posts[P.idx] : null);
@@ -34,6 +35,22 @@
     e.preventDefault();
     if (recentDragEnd()) return; // the click is a mouse drag's residue, not a tap
     goToFeed(feed);
+  }
+
+  // Native share sheet with the post's reddit link; clipboard fallback
+  // where Web Share isn't available (desktop browsers).
+  async function sharePost() {
+    if (!post) return;
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: post.title, url: post.permalink });
+      } else {
+        await navigator.clipboard.writeText(post.permalink);
+        showToast('Link copied', 1500);
+      }
+    } catch (err) {
+      if (err?.name !== 'AbortError') showToast('Could not share'); // dismissing the sheet is not an error
+    }
   }
 
   // Instagram-style compact counts under the action icons.
@@ -133,6 +150,9 @@
       <button id="comments-btn" class="icon-btn" title="Comments (c)" onclick={openComments}>
         <Icon name="message-circle" />
         <span class="action-count">{fmtCount(post.numComments || 0)}</span>
+      </button>
+      <button id="share-btn" class="icon-btn" title="Share" onclick={sharePost}>
+        <Icon name="share" />
       </button>
     </div>
   </footer>
