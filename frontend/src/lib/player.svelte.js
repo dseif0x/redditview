@@ -1626,6 +1626,17 @@ export function initPlayer() {
   document.addEventListener('focusout', () => setTimeout(resetViewportScroll, 60));
   window.visualViewport?.addEventListener('resize', () => setTimeout(resetViewportScroll, 60));
   window.addEventListener('orientationchange', () => setTimeout(resetViewportScroll, 250));
+  // The on-screen keyboard overlays the layout viewport, so a scroller whose
+  // bottom sits under it can never reach its last rows. Measure the overlap
+  // into --kb-inset; the scrollers pad their ends by it.
+  const syncKeyboardInset = () => {
+    const vv = window.visualViewport;
+    const inset = vv ? Math.max(0, window.innerHeight - vv.height - vv.offsetTop) : 0;
+    document.documentElement.style.setProperty('--kb-inset', Math.round(inset) + 'px');
+  };
+  window.visualViewport?.addEventListener('resize', syncKeyboardInset);
+  window.visualViewport?.addEventListener('scroll', syncKeyboardInset);
+  syncKeyboardInset();
   // The standalone shell is 100vh — taller than iOS's cut-short layout
   // viewport — so the document is technically scrollable by the difference,
   // and anything that scrolls it (focus reveals, scrollIntoView) shifts the
