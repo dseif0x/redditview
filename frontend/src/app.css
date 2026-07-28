@@ -984,6 +984,16 @@ button {
   touch-action: pan-y;
 }
 
+/* link posts: the destination the preview image stands for */
+#meta-link {
+  font-size: 0.82rem;
+  margin-top: 0.2rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+}
+
 /* body text on media posts: Instagram-caption style under the title —
    clamped with an ellipsis, tap to read it all (shares the sanitized
    markdown element styles with comment bodies) */
