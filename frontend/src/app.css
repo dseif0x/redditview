@@ -343,6 +343,8 @@ button {
   /* five chips don't always fit a phone width — let the row pan */
   overflow-x: auto;
   scrollbar-width: none;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 .sg-chips::-webkit-scrollbar {
