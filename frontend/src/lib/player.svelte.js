@@ -139,6 +139,17 @@ let feedSeq = 0;
 // posts in — restart instead.
 let feedCookieSig = '';
 
+// The cookie requests actually send is settings.cookie (api.js) — normally
+// identical to activeCookie(), but the guards must judge what goes on the
+// wire. Any divergence is itself a bug: log it loudly and self-heal.
+function wireCookieSig() {
+  if (settings.cookie.trim() !== activeCookie()) {
+    alog(`COOKIE DESYNC: wire=${cookieSig(settings.cookie.trim())} active=${cookieSig(activeCookie())}`);
+    settings.cookie = activeCookie();
+  }
+  return cookieSig(settings.cookie.trim());
+}
+
 async function fetchPage(seq = feedSeq) {
   if (loadingPage || exhausted) return;
   loadingPage = true;
@@ -146,14 +157,16 @@ async function fetchPage(seq = feedSeq) {
     // A page may contain only filtered-out kinds; keep paging (bounded) until
     // something usable shows up.
     for (let attempts = 0; attempts < 5; attempts++) {
-      if (cookieSig(activeCookie()) !== feedCookieSig) {
-        startFeed(P.feedPath); // account changed under this feed
+      if (wireCookieSig() !== feedCookieSig) {
+        alog(`feed restart: account changed under feed (${feedCookieSig} -> ${wireCookieSig()})`);
+        startFeed(P.feedPath);
         return;
       }
       const params = new URLSearchParams({ path: applySort(P.feedPath) });
       if (after) params.set('after', after);
       const data = await api('/api/feed?' + params.toString());
       if (seq !== feedSeq) return; // a newer feed owns the state now
+      if (data.host === 'www') alog(`page via www fallback (after=${after || 'first'})`);
       const cursorUsed = after || '';
       const added = data.posts.filter(
         (p) =>
@@ -162,11 +175,13 @@ async function fetchPage(seq = feedSeq) {
           (!settings.skipSeen || !hasSeen(p.id) || p.name === resumeExemptName)
       );
       // Remember which cursor fetched each post (for resume) plus fetch
-      // provenance (upstream host, account signature) for the debug overlay.
+      // provenance (upstream host, the signature of the cookie that was
+      // actually sent) for the debug overlay.
+      const sentSig = cookieSig(settings.cookie.trim());
       for (const p of added) {
         p._cursor = cursorUsed;
         p._host = data.host || '?';
-        p._sig = feedCookieSig;
+        p._sig = sentSig;
         loadedNames.add(p.name || p.id);
       }
       P.posts.push(...added);
@@ -184,7 +199,7 @@ async function fetchPage(seq = feedSeq) {
 
 export async function startFeed(path, resume = null) {
   const seq = ++feedSeq;
-  feedCookieSig = cookieSig(activeCookie());
+  feedCookieSig = wireCookieSig();
   // An in-flight page fetch belongs to the previous feed and will discard
   // itself; its loading flag must not block this feed's first page.
   loadingPage = false;
