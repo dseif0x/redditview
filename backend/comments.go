@@ -156,5 +156,6 @@ func handleComments(w http.ResponseWriter, r *http.Request) {
 		comments = []Comment{}
 	}
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store") // per-cookie, shared URL
 	json.NewEncoder(w).Encode(commentsResponse{Comments: comments, More: more})
 }

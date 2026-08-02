@@ -246,6 +246,10 @@ func handleFeed(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
+	// Responses are per-cookie but share a URL; HTTP caches (notably iOS's
+	// NSURLCache behind the native app's fetch) must never reuse them across
+	// accounts.
+	w.Header().Set("Cache-Control", "no-store")
 	json.NewEncoder(w).Encode(out)
 }
 

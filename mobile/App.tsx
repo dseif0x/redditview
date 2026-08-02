@@ -29,7 +29,7 @@ import { GalleryHandle, GalleryPost, ImagePost, TextPost, VideoPost } from './sr
 import { initPWA } from './src/pwa';
 import { SettingsPage } from './src/SettingsPage';
 import { isSeen, loadSeen, markSeen } from './src/seen';
-import { getSettings, loadSettings, Resume, saveSettings, Settings } from './src/settings';
+import { cookieSig, getSettings, loadSettings, Resume, saveSettings, Settings } from './src/settings';
 import { applySort, sortLabel } from './src/sort';
 import { colors } from './src/theme';
 
@@ -116,8 +116,14 @@ function Feed() {
     const before = settingsSnapshot.current;
     settingsSnapshot.current = null;
     // Reload the active feed — or start it for the first time (first-launch
-    // configuration ends by leaving the settings tab).
-    if (before !== null && before !== reloadSnapshot()) loadFeed(getSettings().feed);
+    // configuration ends by leaving the settings tab). The back stack and
+    // resume position belong to the previous account/filter state.
+    if (before !== null && before !== reloadSnapshot()) {
+      history.current = [];
+      setHistoryLen(0);
+      saveSettings({ resume: null });
+      loadFeed(getSettings().feed);
+    }
   };
   const switchTabRef = useRef(switchTab);
   switchTabRef.current = switchTab;
@@ -188,13 +194,17 @@ function Feed() {
   // resume target is exempt) and dedupe against reddit's shifting cursor
   // pagination — ported from the web app.
   // ---------------------------------------------------------------------
-  const fetchBatch = async (): Promise<Post[]> => {
+  const fetchBatch = async (seq: number): Promise<Post[]> => {
     const st = getSettings();
     for (let attempts = 0; attempts < 5; attempts++) {
       if (exhaustedRef.current) break;
       const params: Record<string, string> = { path: applySort(st.feed, st.sort) };
       if (afterRef.current) params.after = afterRef.current;
       const data = await api<FeedPage>('/api/feed?' + qs(params));
+      // A newer loadFeed owns the cursor/dedupe refs now — applying this
+      // response's side effects would leak the previous feed (e.g. the old
+      // account's cursor) into the new one.
+      if (seq !== feedSeq.current) return [];
       const cursorUsed = afterRef.current || '';
       const added = data.posts.filter(
         (p) =>
@@ -229,7 +239,7 @@ function Feed() {
     setLoading(true);
     setActiveIndex(0);
     try {
-      const first = await fetchBatch();
+      const first = await fetchBatch(seq);
       if (seq !== feedSeq.current) return;
       setPosts(first);
       if (first.length === 0) {
@@ -254,7 +264,7 @@ function Feed() {
     const seq = feedSeq.current;
     fetching.current = true;
     try {
-      const added = await fetchBatch();
+      const added = await fetchBatch(seq);
       if (seq !== feedSeq.current) return;
       if (added.length) setPosts((cur) => [...cur, ...added]);
       else if (exhaustedRef.current && pendingAdvance.current) toast('End of feed');
@@ -334,10 +344,17 @@ function Feed() {
       refreshPrefs();
       setReady(true);
       const r = s.resume;
-      if (r && r.name) {
+      const cookie = s.accounts[s.activeAccount]?.cookie.trim() ?? '';
+      // Resume only into a position browsed with the CURRENT account — a
+      // cursor from another account's session would splice its feed in.
+      if (r && r.name && (r.sig === undefined || r.sig === cookieSig(cookie))) {
         setFeedInput(r.path);
         saveSettings({ sort: r.sort });
         loadFeed(r.path, r);
+      } else if (r) {
+        setFeedInput(r.path);
+        saveSettings({ sort: r.sort, resume: null });
+        loadFeed(r.path); // same feed, fresh from the top
       } else if (Platform.OS !== 'web' && !s.serverUrl) {
         switchTabRef.current('settings'); // native first launch: no server yet
       } else if (Platform.OS !== 'web' || s.feed || s.serverUrl || s.accounts.length) {
@@ -365,7 +382,17 @@ function Feed() {
     bookkeepTimer.current = setTimeout(() => {
       const st = getSettings();
       const p = postsRef.current[activeIndexRef.current];
-      if (p) saveSettings({ resume: { path: st.feed, sort: st.sort, cursor: p._cursor || '', name: p.name } });
+      if (p) {
+        saveSettings({
+          resume: {
+            path: st.feed,
+            sort: st.sort,
+            cursor: p._cursor || '',
+            name: p.name,
+            sig: cookieSig(st.accounts[st.activeAccount]?.cookie.trim() ?? ''),
+          },
+        });
+      }
     }, 400);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeName]);

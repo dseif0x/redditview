@@ -66,10 +66,12 @@ export async function api<T>(path: string, body?: unknown): Promise<T> {
   const cookie = activeCookie();
   const headers: Record<string, string> = {};
   if (cookie) headers['X-Reddit-Cookie'] = cookie;
-  let init: RequestInit = { headers };
+  // Responses differ per account while sharing a URL; without this, iOS's
+  // HTTP cache can serve another account's feed page after switching.
+  let init: RequestInit = { headers, cache: 'no-store' };
   if (body !== undefined) {
     headers['Content-Type'] = 'application/json';
-    init = { method: 'POST', headers, body: JSON.stringify(body) };
+    init = { method: 'POST', headers, body: JSON.stringify(body), cache: 'no-store' };
   }
   const res = await fetch(base + path, init);
   if (!res.ok) throw new Error((await res.text()).slice(0, 200) || `HTTP ${res.status}`);

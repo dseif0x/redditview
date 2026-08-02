@@ -7,7 +7,16 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export type Account = { name: string; cookie: string };
 export type Bookmark = { path: string; sort: string };
-export type Resume = { path: string; sort: string; cursor: string; name: string };
+// sig ties the position to the account it was browsed with — a cursor from
+// another account's session must not be resumed.
+export type Resume = { path: string; sort: string; cursor: string; name: string; sig?: string };
+
+// Cheap stable signature of a cookie (djb2), for tagging resume state.
+export function cookieSig(cookie: string): string {
+  let h = 5381;
+  for (let i = 0; i < cookie.length; i++) h = ((h * 33) ^ cookie.charCodeAt(i)) >>> 0;
+  return h.toString(36);
+}
 export type BarPos = 'bottom' | 'top' | 'left' | 'right';
 // 'auto' = the web app's movable-bar mode: tapping near a screen edge docks
 // the bar there; the docked position lives in barAutoPos.
