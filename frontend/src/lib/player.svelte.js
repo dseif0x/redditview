@@ -161,9 +161,12 @@ async function fetchPage(seq = feedSeq) {
           !loadedNames.has(p.name || p.id) &&
           (!settings.skipSeen || !hasSeen(p.id) || p.name === resumeExemptName)
       );
-      // Remember which cursor fetched each post so the feed can resume here.
+      // Remember which cursor fetched each post (for resume) plus fetch
+      // provenance (upstream host, account signature) for the debug overlay.
       for (const p of added) {
         p._cursor = cursorUsed;
+        p._host = data.host || '?';
+        p._sig = feedCookieSig;
         loadedNames.add(p.name || p.id);
       }
       P.posts.push(...added);

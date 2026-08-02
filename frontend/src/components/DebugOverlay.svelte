@@ -3,7 +3,7 @@
   // audio/perf log, so failures can be diagnosed on-device without an
   // inspector.
   import { P } from '../lib/player.svelte.js';
-  import { settings } from '../lib/settings.svelte.js';
+  import { settings, activeCookie, cookieSig } from '../lib/settings.svelte.js';
   import { dbg } from '../lib/debug.svelte.js';
 
   let text = $state('');
@@ -85,8 +85,19 @@
         const worst = Math.max(...frameDeltas);
         fps = `fps ~${(1000 / avg).toFixed(0)}, worst frame ${worst.toFixed(0)}ms`;
       }
+      // Provenance of the active post: which upstream host served its page,
+      // which cursor fetched it, and whether the fetching account matches
+      // the currently active one — for diagnosing stray posts in the feed.
+      let postLine = '';
+      const post = P.posts[P.idx];
+      if (post) {
+        const sig = cookieSig(activeCookie());
+        const acct = post._sig ? (post._sig === sig ? 'ok' : `MIXED ${post._sig}≠${sig}`) : '?';
+        postLine = `post: ${post.subreddit || post.name} host=${post._host || '?'} cur=${post._cursor || '(first)'} acct=${acct}`;
+      }
       text = [
         `${P.muted ? 'MUTED' : 'audio on'} | ${audio}`,
+        postLine,
         viewportLine(),
         [fps, dbg.lastTransitionProfile].filter(Boolean).join(' | '),
         ...dbg.log,
