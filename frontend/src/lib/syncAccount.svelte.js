@@ -20,9 +20,11 @@ import {
   withRemoteApply,
   seenList,
   mergeSeen,
+  activeCookie,
 } from './settings.svelte.js';
 import { apiBase } from './api.js';
 import { showToast } from './toast.svelte.js';
+import { P, startFeed } from './player.svelte.js';
 
 const SYNC_KEY = 'redditview.sync';
 const PRF_SALT = new TextEncoder().encode('redditview-sync-prf-v1');
@@ -232,7 +234,14 @@ function applyRemote(payload) {
     const activeName = settings.accounts[settings.activeAccount]?.name;
     const at = activeName ? (incoming.accounts || []).findIndex((a) => a.name === activeName) : -1;
     incoming.activeAccount = at >= 0 ? at : 0;
+    const prevCookie = activeCookie();
     withRemoteApply(() => replaceSettings(incoming));
+    // Snapshots arrive mid-session too (push conflicts fire after every
+    // slide's bookkeeping). If applying one changed the active cookie —
+    // renamed accounts, or a name the remote list lacks falling back to
+    // account 0 — paging the live feed on would splice the other account's
+    // posts in. Reload it, exactly like switching accounts in settings.
+    if (activeCookie() !== prevCookie && P.feedActive) startFeed(P.feedPath);
   }
   mergeSeen(payload.seen);
 }
