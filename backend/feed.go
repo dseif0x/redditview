@@ -40,6 +40,10 @@ type Post struct {
 type feedResponse struct {
 	After string `json:"after"`
 	Posts []Post `json:"posts"`
+	// Which upstream served this page ("old" or "www"): the two hosts can
+	// compose listings differently (www injects recommendations/promotions
+	// old never shows), so the client keeps this for diagnostics.
+	Host string `json:"host,omitempty"`
 }
 
 // --- reddit JSON wire types (only the fields we need) ---
@@ -87,6 +91,7 @@ type postData struct {
 	Score         int    `json:"score"`
 	NumComments   int    `json:"num_comments"`
 	Stickied      bool   `json:"stickied"`
+	Promoted      bool   `json:"promoted"` // ads (www listings can carry them)
 	IsGallery     bool   `json:"is_gallery"`
 	IsSelf        bool   `json:"is_self"`
 	PostHint      string `json:"post_hint"`
@@ -190,6 +195,7 @@ func handleFeed(w http.ResponseWriter, r *http.Request) {
 	var resp *http.Response
 	lastStatus := 0
 	lastBody := ""
+	servedHost := ""
 	for _, host := range feedHosts {
 		target := host
 		if path != "" {
@@ -214,6 +220,11 @@ func handleFeed(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if resp.StatusCode == http.StatusOK {
+			if strings.HasPrefix(host, "https://old.") {
+				servedHost = "old"
+			} else {
+				servedHost = "www"
+			}
 			break
 		}
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
@@ -242,9 +253,9 @@ func handleFeed(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	out := feedResponse{After: l.Data.After, Posts: []Post{}}
+	out := feedResponse{After: l.Data.After, Posts: []Post{}, Host: servedHost}
 	for _, child := range l.Data.Children {
-		if child.Kind != "t3" || child.Data.Stickied {
+		if child.Kind != "t3" || child.Data.Stickied || child.Data.Promoted {
 			continue
 		}
 		if p, ok := extractPost(child.Data); ok {
