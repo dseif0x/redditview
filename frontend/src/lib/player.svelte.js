@@ -132,6 +132,12 @@ function kindEnabled(post) {
 // the old feed's posts (e.g. the previous account's) and cursor into the
 // new one.
 let feedSeq = 0;
+// The cookie signature this feed was started under. Every page must be
+// fetched under the same account: if anything flips the active cookie
+// without restarting the feed (a synced settings snapshot applying
+// mid-session, for instance), paging on would splice the other account's
+// posts in — restart instead.
+let feedCookieSig = '';
 
 async function fetchPage(seq = feedSeq) {
   if (loadingPage || exhausted) return;
@@ -140,6 +146,10 @@ async function fetchPage(seq = feedSeq) {
     // A page may contain only filtered-out kinds; keep paging (bounded) until
     // something usable shows up.
     for (let attempts = 0; attempts < 5; attempts++) {
+      if (cookieSig(activeCookie()) !== feedCookieSig) {
+        startFeed(P.feedPath); // account changed under this feed
+        return;
+      }
       const params = new URLSearchParams({ path: applySort(P.feedPath) });
       if (after) params.set('after', after);
       const data = await api('/api/feed?' + params.toString());
@@ -171,6 +181,7 @@ async function fetchPage(seq = feedSeq) {
 
 export async function startFeed(path, resume = null) {
   const seq = ++feedSeq;
+  feedCookieSig = cookieSig(activeCookie());
   // An in-flight page fetch belongs to the previous feed and will discard
   // itself; its loading flag must not block this feed's first page.
   loadingPage = false;
