@@ -7,7 +7,7 @@
 // ---------------------------------------------------------------------------
 import { flushSync } from 'svelte';
 import Hls from 'hls.js';
-import { settings, saveSettings, markSeen, hasSeen } from './settings.svelte.js';
+import { settings, saveSettings, markSeen, hasSeen, activeCookie, cookieSig } from './settings.svelte.js';
 import { api, mediaUrl } from './api.js';
 import { showToast } from './toast.svelte.js';
 import { alog, timed, profileTransition } from './debug.svelte.js';
@@ -127,7 +127,13 @@ function kindEnabled(post) {
   }
 }
 
-async function fetchPage() {
+// Feed generation counter: every startFeed bumps it, and an in-flight page
+// fetch from a previous generation discards its response instead of pushing
+// the old feed's posts (e.g. the previous account's) and cursor into the
+// new one.
+let feedSeq = 0;
+
+async function fetchPage(seq = feedSeq) {
   if (loadingPage || exhausted) return;
   loadingPage = true;
   try {
@@ -137,6 +143,7 @@ async function fetchPage() {
       const params = new URLSearchParams({ path: applySort(P.feedPath) });
       if (after) params.set('after', after);
       const data = await api('/api/feed?' + params.toString());
+      if (seq !== feedSeq) return; // a newer feed owns the state now
       const cursorUsed = after || '';
       const added = data.posts.filter(
         (p) =>
@@ -158,11 +165,15 @@ async function fetchPage() {
       if (added.length > 0) break;
     }
   } finally {
-    loadingPage = false;
+    if (seq === feedSeq) loadingPage = false;
   }
 }
 
 export async function startFeed(path, resume = null) {
+  const seq = ++feedSeq;
+  // An in-flight page fetch belongs to the previous feed and will discard
+  // itself; its loading flag must not block this feed's first page.
+  loadingPage = false;
   stopSlide();
   P.posts = [];
   loadedNames = new Set();
@@ -178,11 +189,12 @@ export async function startFeed(path, resume = null) {
   resumeExemptName = resume?.name || null;
 
   try {
-    await fetchPage();
+    await fetchPage(seq);
   } catch (err) {
-    P.message = { text: `Failed to load feed:\n${String(err.message || err)}`, error: true };
+    if (seq === feedSeq) P.message = { text: `Failed to load feed:\n${String(err.message || err)}`, error: true };
     return;
   }
+  if (seq !== feedSeq) return; // superseded while loading
   if (P.posts.length === 0) {
     P.message = { text: 'No viewable posts in this feed.' };
     return;
@@ -201,7 +213,19 @@ export async function startFeed(path, resume = null) {
 // ---------------------------------------------------------------------------
 function currentHistoryState() {
   const p = P.posts[P.idx];
-  return { feed: P.feedPath, sort: settings.sort, cursor: p?._cursor || '', name: p?.name || null };
+  return {
+    feed: P.feedPath,
+    sort: settings.sort,
+    cursor: p?._cursor || '',
+    name: p?.name || null,
+    sig: cookieSig(activeCookie()),
+  };
+}
+
+// A stored position (resume or history entry) is only worth restoring under
+// the account it was browsed with; otherwise reopen the feed from the top.
+function positionValid(entry) {
+  return entry?.sig === undefined || entry.sig === cookieSig(activeCookie());
 }
 
 let histTimer = null;
@@ -498,7 +522,13 @@ function activateEntry(entry, animating = false) {
   clearTimeout(bookkeepTimer);
   bookkeepTimer = setTimeout(
     () => {
-      settings.resume = { path: P.feedPath, sort: settings.sort, cursor: post._cursor || '', name: post.name };
+      settings.resume = {
+        path: P.feedPath,
+        sort: settings.sort,
+        cursor: post._cursor || '',
+        name: post.name,
+        sig: cookieSig(activeCookie()),
+      };
       saveSettings();
       markSeen(post.id);
       stampHistoryEntry();
@@ -1422,7 +1452,7 @@ export function initPlayer() {
       settings.sort = st.sort;
       saveSettings();
     }
-    startFeed(st.feed, st.name ? { cursor: st.cursor || '', name: st.name } : null);
+    startFeed(st.feed, st.name && positionValid(st) ? { cursor: st.cursor || '', name: st.name } : null);
   });
 
   // Mouse drag tracking outside the viewer.
@@ -1682,11 +1712,12 @@ export function initPlayer() {
     { passive: false }
   );
 
-  // Resume the last session's feed and position.
+  // Resume the last session's feed and position — but only under the same
+  // account; another account's cursor would splice its feed in.
   const r = settings.resume;
   if (r && typeof r.path === 'string' && r.name) {
     P.feedInput = r.path;
     if (typeof r.sort === 'string') settings.sort = r.sort;
-    startFeed(r.path, r);
+    startFeed(r.path, positionValid(r) ? r : null);
   }
 }
