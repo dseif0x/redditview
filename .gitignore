@@ -8,5 +8,7 @@ mobile/ios/
 mobile/android/
 mobile/build/
 backend/redditview
+backend/backend
+backend/data/
 *.log
 .DS_Store

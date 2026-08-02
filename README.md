@@ -90,29 +90,13 @@ docker build -t redditview .
 docker run -p 8080:8080 redditview
 ```
 
-## iOS app (sideload)
+## Native app (React Native / Expo)
 
-`.github/workflows/ios.yml` builds an **unsigned** `.ipa` on every push to
-`main` that touches the frontend (artifact on the workflow run). The app
-bundles the web frontend with Capacitor; on first launch, set the **Backend
-server URL** in the Settings tab to any deployed redditview instance
-(`https://`, or plain `http://` for a LAN/homelab server). All `/api` calls,
-the media proxy, and HLS rewriting then work exactly as in the browser — the
-backend allows cross-origin API requests for this.
-
-Install the `.ipa` by sideloading — AltStore, Sideloadly, etc. re-sign it
-with your own (free) Apple ID. Proper distribution signing would need an
-Apple Developer account and cert secrets wired into the workflow.
-
-The native project is generated in CI (`npx cap add ios`) and not checked in;
-`frontend/capacitor.config.json` and the icon/splash sources in
-`frontend/assets/` are the only tracked iOS files.
-
-There is also a fully native (React Native / Expo) proof-of-concept in
-`mobile/` — native video player, native paging — runnable on an iPhone via
-Expo Go without a Mac; see `mobile/README.md`. Its web build ships as the
-`ghcr.io/…/redditview:rn` image (`Dockerfile.rn`), built per push on the
-spike branch alongside an unsigned RN `.ipa`.
+A fully native mobile frontend lives in `mobile/` — native video player,
+native paging — runnable on an iPhone via Expo Go without a Mac; see
+`mobile/README.md`. Its web build ships as the `ghcr.io/…/redditview:rn`
+image (`Dockerfile.rn`), built per push on the spike branch alongside an
+unsigned RN `.ipa`.
 
 ## Kubernetes (Helm)
 

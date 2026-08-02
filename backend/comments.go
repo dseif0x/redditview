@@ -6,23 +6,36 @@ import (
 	"io"
 	"net/http"
 	"regexp"
+	"sort"
 	"strings"
 )
 
 // Comment is one node of the fully-parsed comment tree.
 type Comment struct {
-	ID            string    `json:"id"`
-	Author        string    `json:"author"`
-	Body          string    `json:"body"`
-	Score         int       `json:"score"`
-	ScoreHidden   bool      `json:"scoreHidden"`
-	CreatedUTC    float64   `json:"createdUtc"`
-	IsSubmitter   bool      `json:"isSubmitter"`
-	Distinguished string    `json:"distinguished,omitempty"`
-	Stickied      bool      `json:"stickied"`
-	Replies       []Comment `json:"replies,omitempty"`
+	ID     string `json:"id"`
+	Author string `json:"author"`
+	Body   string `json:"body"`
+	// Reddit's own server-rendered HTML for the body (raw_json=1 delivers it
+	// unescaped): the client sanitizes and displays this, which covers the
+	// full comment-markdown flavor without re-parsing it.
+	BodyHTML      string         `json:"bodyHtml,omitempty"`
+	Media         []CommentMedia `json:"media,omitempty"`
+	Score         int            `json:"score"`
+	ScoreHidden   bool           `json:"scoreHidden"`
+	CreatedUTC    float64        `json:"createdUtc"`
+	IsSubmitter   bool           `json:"isSubmitter"`
+	Distinguished string         `json:"distinguished,omitempty"`
+	Stickied      bool           `json:"stickied"`
+	Replies       []Comment      `json:"replies,omitempty"`
 	// Replies reddit didn't include in this response ("load more" stubs).
 	MoreCount int `json:"moreCount,omitempty"`
+}
+
+// CommentMedia is an image/gif embedded in a comment (media_metadata):
+// uploaded images, giphy gifs, emotes. The body references them by id.
+type CommentMedia struct {
+	ID  string `json:"id"`
+	URL string `json:"url"`
 }
 
 type commentsResponse struct {
@@ -40,16 +53,24 @@ type cListing struct {
 }
 
 type cData struct {
-	ID            string          `json:"id"`
-	Author        string          `json:"author"`
-	Body          string          `json:"body"`
-	Score         int             `json:"score"`
-	ScoreHidden   bool            `json:"score_hidden"`
-	CreatedUTC    float64         `json:"created_utc"`
-	IsSubmitter   bool            `json:"is_submitter"`
-	Distinguished string          `json:"distinguished"`
-	Stickied      bool            `json:"stickied"`
-	Replies       json.RawMessage `json:"replies"` // "" or a nested listing
+	ID            string  `json:"id"`
+	Author        string  `json:"author"`
+	Body          string  `json:"body"`
+	BodyHTML      string  `json:"body_html"`
+	Score         int     `json:"score"`
+	ScoreHidden   bool    `json:"score_hidden"`
+	CreatedUTC    float64 `json:"created_utc"`
+	IsSubmitter   bool    `json:"is_submitter"`
+	Distinguished string  `json:"distinguished"`
+	Stickied      bool    `json:"stickied"`
+	MediaMetadata map[string]struct {
+		Status string `json:"status"`
+		S      struct {
+			U   string `json:"u"`
+			GIF string `json:"gif"`
+		} `json:"s"`
+	} `json:"media_metadata"`
+	Replies json.RawMessage `json:"replies"` // "" or a nested listing
 }
 
 // parseComments turns a reddit comment listing into a tree, returning the
@@ -68,6 +89,7 @@ func parseComments(l cListing) ([]Comment, int) {
 				ID:            d.ID,
 				Author:        d.Author,
 				Body:          d.Body,
+				BodyHTML:      d.BodyHTML,
 				Score:         d.Score,
 				ScoreHidden:   d.ScoreHidden,
 				CreatedUTC:    d.CreatedUTC,
@@ -75,6 +97,19 @@ func parseComments(l cListing) ([]Comment, int) {
 				Distinguished: d.Distinguished,
 				Stickied:      d.Stickied,
 			}
+			for mid, m := range d.MediaMetadata {
+				if m.Status != "valid" {
+					continue
+				}
+				u := m.S.GIF // animated entries: the gif beats the still
+				if u == "" {
+					u = m.S.U
+				}
+				if u != "" {
+					c.Media = append(c.Media, CommentMedia{ID: mid, URL: u})
+				}
+			}
+			sort.Slice(c.Media, func(i, j int) bool { return c.Media[i].ID < c.Media[j].ID })
 			if len(d.Replies) > 2 { // not "" / null / {}
 				var rl cListing
 				if json.Unmarshal(d.Replies, &rl) == nil {

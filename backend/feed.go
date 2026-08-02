@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"sort"
 	"strings"
 )
 
@@ -20,6 +21,7 @@ type Post struct {
 	Subreddit   string   `json:"subreddit"`
 	Permalink   string   `json:"permalink"`
 	NSFW        bool     `json:"nsfw"`
+	Score       int      `json:"score"`
 	NumComments int      `json:"numComments"`
 	Kind        string   `json:"kind"` // image | gallery | video | text
 	Images      []string `json:"images,omitempty"`
@@ -29,7 +31,10 @@ type Post struct {
 	Poster      string   `json:"poster,omitempty"`
 	Duration    float64  `json:"duration,omitempty"`
 	Text        string   `json:"text,omitempty"`
-	LinkURL     string   `json:"linkUrl,omitempty"`
+	// Reddit's rendered selftext (media posts can carry body text too);
+	// the client sanitizes and shows it as the caption under the title.
+	BodyHTML string `json:"bodyHtml,omitempty"`
+	LinkURL  string `json:"linkUrl,omitempty"`
 }
 
 type feedResponse struct {
@@ -79,6 +84,7 @@ type postData struct {
 	Subreddit     string `json:"subreddit_name_prefixed"`
 	Permalink     string `json:"permalink"`
 	Over18        bool   `json:"over_18"`
+	Score         int    `json:"score"`
 	NumComments   int    `json:"num_comments"`
 	Stickied      bool   `json:"stickied"`
 	IsGallery     bool   `json:"is_gallery"`
@@ -87,6 +93,7 @@ type postData struct {
 	URL           string `json:"url"`
 	URLOverridden string `json:"url_overridden_by_dest"`
 	Selftext      string `json:"selftext"`
+	SelftextHTML  string `json:"selftext_html"`
 
 	MediaMetadata map[string]mediaMeta `json:"media_metadata"`
 	GalleryData   *struct {
@@ -253,6 +260,182 @@ func handleFeed(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(out)
 }
 
+// ---------------------------------------------------------------------------
+// Subscriptions: the cookie account's subscribed subreddits and followed
+// users. Reddit implements "follow" as a subscription to the user's profile
+// subreddit (u_<name>), so one listing serves both, split by prefix.
+// ---------------------------------------------------------------------------
+
+type subredditListing struct {
+	Data struct {
+		After    string `json:"after"`
+		Children []struct {
+			Data struct {
+				DisplayName string `json:"display_name"`
+			} `json:"data"`
+		} `json:"children"`
+	} `json:"data"`
+}
+
+// redditGetJSON fetches a reddit JSON endpoint with the usual host fallback.
+func redditGetJSON(r *http.Request, path string, q url.Values, cookie string, out any) error {
+	var lastErr error
+	for _, host := range feedHosts {
+		req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, host+path+"?"+q.Encode(), nil)
+		if err != nil {
+			return err
+		}
+		req.Header.Set("User-Agent", userAgent)
+		req.Header.Set("Accept", "application/json")
+		if cookie != "" {
+			req.Header.Set("Cookie", cookie)
+		}
+		resp, err := httpClient.Do(req)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		if resp.StatusCode != http.StatusOK {
+			_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 2048))
+			resp.Body.Close()
+			lastErr = fmt.Errorf("reddit returned %d", resp.StatusCode)
+			continue
+		}
+		err = json.NewDecoder(io.LimitReader(resp.Body, 20<<20)).Decode(out)
+		resp.Body.Close()
+		return err
+	}
+	return lastErr
+}
+
+func handleSubscriptions(w http.ResponseWriter, r *http.Request) {
+	cookie := r.Header.Get("X-Reddit-Cookie")
+	if cookie == "" {
+		http.Error(w, "reddit cookie required to list subscriptions — set it in settings", http.StatusUnauthorized)
+		return
+	}
+	subreddits := []string{}
+	following := []string{}
+	after := ""
+	for page := 0; page < 4; page++ { // up to 400 subscriptions
+		q := url.Values{}
+		q.Set("raw_json", "1")
+		q.Set("limit", "100")
+		if after != "" {
+			q.Set("after", after)
+		}
+		var l subredditListing
+		if err := redditGetJSON(r, "subreddits/mine/subscriber.json", q, cookie, &l); err != nil {
+			http.Error(w, "could not list subscriptions: "+err.Error(), http.StatusBadGateway)
+			return
+		}
+		for _, c := range l.Data.Children {
+			if name, ok := strings.CutPrefix(c.Data.DisplayName, "u_"); ok {
+				following = append(following, name)
+			} else if c.Data.DisplayName != "" {
+				subreddits = append(subreddits, c.Data.DisplayName)
+			}
+		}
+		after = l.Data.After
+		if after == "" {
+			break
+		}
+	}
+	lessFold := func(s []string) {
+		sort.Slice(s, func(i, j int) bool { return strings.ToLower(s[i]) < strings.ToLower(s[j]) })
+	}
+	lessFold(subreddits)
+	lessFold(following)
+	// The account's multireddits ride along; failing to list them must not
+	// take down the subscription lists.
+	type multi struct {
+		Name  string `json:"name"`
+		Path  string `json:"path"`
+		Count int    `json:"count"`
+	}
+	multis := []multi{}
+	var multiResp []struct {
+		Data struct {
+			DisplayName string `json:"display_name"`
+			Path        string `json:"path"`
+			Subreddits  []struct {
+				Name string `json:"name"`
+			} `json:"subreddits"`
+		} `json:"data"`
+	}
+	mq := url.Values{}
+	mq.Set("raw_json", "1")
+	if err := redditGetJSON(r, "api/multi/mine", mq, cookie, &multiResp); err == nil {
+		for _, m := range multiResp {
+			path := strings.Trim(m.Data.Path, "/")
+			if m.Data.DisplayName == "" || path == "" {
+				continue
+			}
+			multis = append(multis, multi{m.Data.DisplayName, path, len(m.Data.Subreddits)})
+		}
+		sort.Slice(multis, func(i, j int) bool {
+			return strings.ToLower(multis[i].Name) < strings.ToLower(multis[j].Name)
+		})
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"subreddits": subreddits,
+		"following":  following,
+		"multis":     multis,
+	})
+}
+
+// handleSearch backs the suggestion panel's reddit search. One autocomplete
+// call yields subreddits and user profiles alike — profiles come back as
+// t5 entries named u_<name> with subreddit_type "user".
+func handleSearch(w http.ResponseWriter, r *http.Request) {
+	query := strings.TrimSpace(r.URL.Query().Get("q"))
+	if query == "" {
+		http.Error(w, "q required", http.StatusBadRequest)
+		return
+	}
+	q := url.Values{}
+	q.Set("raw_json", "1")
+	q.Set("query", query)
+	q.Set("limit", "10")
+	q.Set("include_profiles", "true")
+	q.Set("include_over_18", "true")
+	var l struct {
+		Data struct {
+			Children []struct {
+				Data struct {
+					DisplayName   string `json:"display_name"`
+					Subscribers   int64  `json:"subscribers"`
+					SubredditType string `json:"subreddit_type"`
+				} `json:"data"`
+			} `json:"children"`
+		} `json:"data"`
+	}
+	if err := redditGetJSON(r, "api/subreddit_autocomplete_v2.json", q, r.Header.Get("X-Reddit-Cookie"), &l); err != nil {
+		http.Error(w, "search failed: "+err.Error(), http.StatusBadGateway)
+		return
+	}
+	type sub struct {
+		Name        string `json:"name"`
+		Subscribers int64  `json:"subscribers,omitempty"`
+	}
+	subreddits := []sub{}
+	users := []string{}
+	for _, c := range l.Data.Children {
+		name := c.Data.DisplayName
+		if stripped, ok := strings.CutPrefix(name, "u_"); ok || c.Data.SubredditType == "user" {
+			if ok {
+				name = stripped
+			}
+			users = append(users, name)
+		} else if name != "" {
+			subreddits = append(subreddits, sub{name, c.Data.Subscribers})
+		}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{"subreddits": subreddits, "users": users})
+}
+
 // extractPost classifies a reddit post into one of our media kinds.
 func extractPost(d postData) (Post, bool) {
 	p := Post{
@@ -265,7 +448,9 @@ func extractPost(d postData) (Post, bool) {
 		Subreddit:   d.Subreddit,
 		Permalink:   "https://www.reddit.com" + d.Permalink,
 		NSFW:        d.Over18,
+		Score:       d.Score,
 		NumComments: d.NumComments,
+		BodyHTML:    d.SelftextHTML,
 	}
 
 	poster := ""

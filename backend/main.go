@@ -26,30 +26,38 @@ func main() {
 		staticDir = "../frontend/dist"
 	}
 
+	initSyncStore()
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/feed", handleFeed)
 	mux.HandleFunc("GET /api/media", handleMedia)
 	mux.HandleFunc("GET /api/redgifs", handleRedgifs)
 	mux.HandleFunc("GET /api/comments", handleComments)
+	mux.HandleFunc("GET /api/subscriptions", handleSubscriptions)
+	mux.HandleFunc("GET /api/search", handleSearch)
 	mux.HandleFunc("POST /api/vote", handleVote)
 	mux.HandleFunc("POST /api/save", handleSave)
+	mux.HandleFunc("POST /api/subscribe", handleSubscribe)
+	registerSyncRoutes(mux)
 	mux.Handle("GET /", spaHandler(staticDir))
 
 	log.Printf("redditview listening on %s (static: %s)", addr, staticDir)
 	log.Fatal(http.ListenAndServe(addr, withCORS(mux)))
 }
 
-// withCORS lets the native app (a capacitor:// webview with no same-origin
-// backend) call the API cross-origin. The API holds no server-side state or
-// credentials — the reddit cookie always arrives from the client per
-// request — so a wildcard origin doesn't expose anything a direct request
-// couldn't already reach. Handles preflight before the mux so OPTIONS
-// doesn't 405 against the method-specific routes.
+// withCORS lets a frontend served from another origin (the backend server
+// URL setting) call the API cross-origin. The reddit API holds no
+// server-side state or credentials — the reddit cookie always arrives from
+// the client per request — so a wildcard origin doesn't expose anything a
+// direct request couldn't already reach (the passkey-sync session cookie is
+// unaffected: browsers refuse credentialed requests under a wildcard).
+// Handles preflight before the mux so OPTIONS doesn't 405 against the
+// method-specific routes.
 func withCORS(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		if r.Method == http.MethodOptions {
-			w.Header().Set("Access-Control-Allow-Methods", "GET, POST")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE")
 			w.Header().Set("Access-Control-Allow-Headers", "X-Reddit-Cookie, Content-Type, Range")
 			w.Header().Set("Access-Control-Max-Age", "86400")
 			w.WriteHeader(http.StatusNoContent)
