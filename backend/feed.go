@@ -253,6 +253,10 @@ func handleFeed(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
+	// Responses are per-cookie but share a URL; HTTP caches (the WebKit/
+	// NSURLCache layer under iOS PWAs in particular) must never reuse them
+	// across accounts.
+	w.Header().Set("Cache-Control", "no-store")
 	json.NewEncoder(w).Encode(out)
 }
 
@@ -374,6 +378,7 @@ func handleSubscriptions(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store") // per-cookie, shared URL
 	_ = json.NewEncoder(w).Encode(map[string]any{
 		"subreddits": subreddits,
 		"following":  following,
@@ -429,6 +434,7 @@ func handleSearch(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
 	_ = json.NewEncoder(w).Encode(map[string]any{"subreddits": subreddits, "users": users})
 }
 

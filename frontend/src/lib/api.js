@@ -30,10 +30,12 @@ export async function api(url, body) {
   const base = apiBase();
   const headers = {};
   if (settings.cookie.trim()) headers['X-Reddit-Cookie'] = settings.cookie.trim();
-  let init = { headers };
+  // Responses differ per account while sharing a URL; without this, WebKit's
+  // HTTP cache can serve another account's feed page after switching.
+  let init = { headers, cache: 'no-store' };
   if (body !== undefined) {
     headers['Content-Type'] = 'application/json';
-    init = { method: 'POST', headers, body: JSON.stringify(body) };
+    init = { method: 'POST', headers, body: JSON.stringify(body), cache: 'no-store' };
   }
   const res = await fetch(base + url, init);
   if (!res.ok) throw new Error((await res.text()).slice(0, 200) || `HTTP ${res.status}`);

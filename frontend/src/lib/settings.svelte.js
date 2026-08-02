@@ -74,6 +74,15 @@ export function activeCookie() {
 }
 settings.cookie = activeCookie();
 
+// Cheap stable signature of a cookie (djb2), for tagging resume/history
+// positions with the account they were browsed with — a cursor from another
+// account's session must not be resumed into its feed.
+export function cookieSig(cookie) {
+  let h = 5381;
+  for (let i = 0; i < cookie.length; i++) h = ((h * 33) ^ cookie.charCodeAt(i)) >>> 0;
+  return h.toString(36);
+}
+
 // Sync integration: the sync module registers a hook that schedules an
 // upload after local changes, and flips `applyingRemote` while it applies a
 // downloaded snapshot so those writes don't count as local edits (or loop
