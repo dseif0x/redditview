@@ -14,7 +14,6 @@ export const DEFAULTS = {
   showImages: true,
   showVideos: true,
   showText: true,
-  fillScreen: false,
   vertical: false,
   smoothScroll: true,
   showPauseIcon: true,
@@ -38,6 +37,8 @@ function migrateStored(raw) {
     raw.barMode = raw.moveBar ? 'auto' : 'bottom';
   }
   delete raw.moveBar;
+  // Crop-to-fill became real browser fullscreen (not a setting).
+  delete raw.fillScreen;
   return raw;
 }
 

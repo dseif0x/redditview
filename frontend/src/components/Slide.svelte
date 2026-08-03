@@ -266,7 +266,7 @@
     {#if redgifsLoading}
       <div class="loading"><div class="spinner"></div></div>
     {/if}
-    <div class="pause-indicator" hidden={!pauseVisible || !settings.showPauseIcon}></div>
+    <div class="pause-indicator" class:show={pauseVisible && settings.showPauseIcon}></div>
   {:else if post.kind === 'gallery'}
     <!-- gallery: all images in one slide, stacked along the cross axis -->
     <div class="gallery-strip" class:sliding={stripSliding} style:transform={stripTransform}>

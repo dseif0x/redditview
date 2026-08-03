@@ -34,7 +34,6 @@
   import PickerSelect from './PickerSelect.svelte';
 
   const TOGGLES = [
-    { key: 'fillScreen', label: 'Fill screen (crop to fill)' },
     { key: 'vertical', label: 'Vertical navigation (swipe up/down)' },
     { key: 'smoothScroll', label: 'Smooth scrolling' },
     { key: 'showPauseIcon', label: 'Paused indicator on videos' },
