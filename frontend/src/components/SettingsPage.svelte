@@ -23,6 +23,12 @@
     syncNow,
     syncLogout,
     syncDeleteAccount,
+    linking,
+    startDeviceLink,
+    cancelDeviceLink,
+    formatLinkCode,
+    fetchDeviceLink,
+    authorizeDeviceLink,
   } from '../lib/syncAccount.svelte.js';
   import Icon from './Icon.svelte';
   import PickerSelect from './PickerSelect.svelte';
@@ -207,6 +213,32 @@
   // -------------------------------------------------------------------------
   // Passkey sync
   // -------------------------------------------------------------------------
+  // Device-link authorizer state: check the code first so the user can
+  // compare fingerprints before any key material moves.
+  let linkCodeInput = $state('');
+  let linkPreview = $state(null); // { code, pubKey, fp } awaiting confirmation
+
+  async function checkLinkCode() {
+    sync.error = '';
+    try {
+      linkPreview = await fetchDeviceLink(linkCodeInput);
+    } catch (err) {
+      sync.error = String(err.message || err);
+    }
+  }
+
+  async function confirmLinkCode() {
+    sync.error = '';
+    try {
+      await authorizeDeviceLink(linkPreview);
+      linkPreview = null;
+      linkCodeInput = '';
+      showToast('Device linked', 2000);
+    } catch (err) {
+      sync.error = String(err.message || err);
+    }
+  }
+
   function lastSyncLabel(t) {
     if (!t) return '';
     const s = Math.max(0, (Date.now() - t) / 1000);
@@ -339,12 +371,61 @@
       {:else if sync.loggedIn}
         <div class="item">
           <span class="item-label">
-            Synced with passkey{sync.name ? ` · ${sync.name}` : ''}
+            Synced{sync.name ? ` · ${sync.name}` : ''}
             {#if sync.lastSyncAt}<span class="sync-note"> · {lastSyncLabel(sync.lastSyncAt)}</span>{/if}
           </span>
           <button type="button" class="btn-outline" disabled={sync.busy} onclick={() => syncNow()}>
             Sync now
           </button>
+        </div>
+        <div class="item item-stacked">
+          <span class="sync-note">
+            Link a device that can't use passkeys (VR headset, TV): open Settings there, tap “Link
+            this device”, and enter its code here.
+          </span>
+          <div class="sync-actions">
+            <input
+              id="link-code-input"
+              class="item-input"
+              type="text"
+              autocomplete="off"
+              autocapitalize="characters"
+              spellcheck="false"
+              placeholder="Code from the other device"
+              bind:value={linkCodeInput}
+            />
+            {#if !linkPreview}
+              <button
+                id="link-check-btn"
+                type="button"
+                class="btn-outline"
+                disabled={sync.busy || !linkCodeInput.trim()}
+                onclick={checkLinkCode}
+              >
+                Check
+              </button>
+            {/if}
+          </div>
+          {#if linkPreview}
+            <span class="sync-note">
+              Other device shows <strong id="link-fp-confirm">{linkPreview.fp}</strong>? Only link
+              if it matches.
+            </span>
+            <div class="sync-actions">
+              <button
+                id="link-confirm-btn"
+                type="button"
+                class="btn-solid"
+                disabled={sync.busy}
+                onclick={confirmLinkCode}
+              >
+                Link device
+              </button>
+              <button type="button" class="btn-outline" onclick={() => (linkPreview = null)}>
+                Cancel
+              </button>
+            </div>
+          {/if}
         </div>
         <div class="item item-end">
           <button type="button" class="btn-outline" disabled={sync.busy} onclick={() => syncLogout()}>
@@ -354,6 +435,21 @@
             Delete sync account
           </button>
         </div>
+      {:else if linking.active}
+        <div class="item item-stacked">
+          <span class="sync-note">
+            On a device that's already signed in, open Settings and enter this code under “Link a
+            device”:
+          </span>
+          <div class="link-code" id="link-code">{formatLinkCode(linking.code)}</div>
+          <span class="sync-note">
+            Verification: <strong id="link-fp-self">{linking.fp}</strong> — the other device shows
+            the same letters before linking.
+          </span>
+          <div class="sync-actions">
+            <button type="button" class="btn-outline" onclick={cancelDeviceLink}>Cancel</button>
+          </div>
+        </div>
       {:else}
         <div class="item item-stacked">
           <span class="sync-note">
@@ -361,21 +457,32 @@
             passkey. The server only ever stores ciphertext.
           </span>
           <div class="sync-actions">
+            {#if sync.passkeys}
+              <button
+                type="button"
+                class="btn-solid"
+                disabled={sync.busy}
+                onclick={() => quiet(syncRegister())}
+              >
+                Create sync passkey
+              </button>
+              <button
+                type="button"
+                class="btn-outline"
+                disabled={sync.busy}
+                onclick={() => quiet(syncLogin())}
+              >
+                Sign in
+              </button>
+            {/if}
             <button
-              type="button"
-              class="btn-solid"
-              disabled={sync.busy}
-              onclick={() => quiet(syncRegister())}
-            >
-              Create sync passkey
-            </button>
-            <button
+              id="link-device-btn"
               type="button"
               class="btn-outline"
               disabled={sync.busy}
-              onclick={() => quiet(syncLogin())}
+              onclick={() => quiet(startDeviceLink())}
             >
-              Sign in
+              Link this device
             </button>
           </div>
         </div>
