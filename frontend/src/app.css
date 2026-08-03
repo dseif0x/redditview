@@ -1734,6 +1734,16 @@ h2.as-header,
 }
 
 /* ---- passkey sync section ---- */
+/* the device-link code, big enough to read across the room */
+.link-code {
+  font-size: 1.8rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-align: center;
+  padding: 0.4rem 0;
+  user-select: all;
+}
+
 .sync-note {
   font-size: 0.82rem;
   color: var(--muted);

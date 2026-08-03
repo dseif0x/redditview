@@ -10,11 +10,14 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
+	"io"
 	"log"
 	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strings"
 	"sync"
 	"time"
 
@@ -549,4 +552,175 @@ func registerSyncRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /api/sync/blob", handleSyncBlobPut)
 	mux.HandleFunc("POST /api/sync/logout", handleSyncLogout)
 	mux.HandleFunc("DELETE /api/sync/account", handleSyncAccountDelete)
+	mux.HandleFunc("POST /api/sync/link/start", handleLinkStart)
+	mux.HandleFunc("GET /api/sync/link/{code}", handleLinkGet)
+	mux.HandleFunc("POST /api/sync/link/{code}", handleLinkComplete)
+	mux.HandleFunc("GET /api/sync/link/{code}/claim", handleLinkClaim)
+}
+
+// ---------------------------------------------------------------------------
+// Device linking: lets a device that can't do passkeys (VR headsets, TVs)
+// join an existing sync account. The new device generates an ephemeral ECDH
+// key and displays a short code; the user types that code into an already-
+// signed-in device, which verifies the key's fingerprint and posts the
+// account's key material encrypted TO that public key. The server relays
+// only ciphertext (it never sees the DEK) and mints the new device a
+// session when the encrypted bundle is claimed.
+// ---------------------------------------------------------------------------
+
+type linkFlow struct {
+	pubKey  string          // linkee's ephemeral public key (b64 SPKI)
+	payload json.RawMessage // authorizer's encrypted bundle, once posted
+	token   string          // session token minted for the linkee
+	expires time.Time
+}
+
+var (
+	linkMu    sync.Mutex
+	linkFlows = map[string]*linkFlow{}
+)
+
+const linkTTL = 10 * time.Minute
+
+// Typable alphabet: no 0/O, 1/I/L confusables.
+const linkAlphabet = "23456789ABCDEFGHJKMNPQRSTUVWXYZ"
+
+func newLinkCode() string {
+	b := make([]byte, 8)
+	if _, err := rand.Read(b); err != nil {
+		panic(err)
+	}
+	out := make([]byte, len(b))
+	for i, v := range b {
+		out[i] = linkAlphabet[int(v)%len(linkAlphabet)]
+	}
+	return string(out)
+}
+
+var linkCodeClean = regexp.MustCompile(`[^0-9A-Z]`)
+
+func normalizeLinkCode(s string) string {
+	return linkCodeClean.ReplaceAllString(strings.ToUpper(s), "")
+}
+
+func handleLinkStart(w http.ResponseWriter, r *http.Request) {
+	if !requireStore(w) {
+		return
+	}
+	var body struct {
+		PubKey string `json:"pubKey"`
+	}
+	if json.NewDecoder(io.LimitReader(r.Body, 8<<10)).Decode(&body) != nil || body.PubKey == "" || len(body.PubKey) > 400 {
+		syncError(w, http.StatusBadRequest, "pubKey required")
+		return
+	}
+	linkMu.Lock()
+	defer linkMu.Unlock()
+	now := time.Now()
+	for k, v := range linkFlows {
+		if now.After(v.expires) {
+			delete(linkFlows, k)
+		}
+	}
+	if len(linkFlows) >= 100 {
+		syncError(w, http.StatusTooManyRequests, "too many pending device links")
+		return
+	}
+	code := newLinkCode()
+	linkFlows[code] = &linkFlow{pubKey: body.PubKey, expires: now.Add(linkTTL)}
+	writeJSON(w, http.StatusOK, map[string]string{"code": code})
+}
+
+// The authorizer (signed in) looks up the code to verify the fingerprint.
+func handleLinkGet(w http.ResponseWriter, r *http.Request) {
+	if !requireStore(w) {
+		return
+	}
+	if u, _ := sessionUser(r); u == nil {
+		syncError(w, http.StatusUnauthorized, "not signed in")
+		return
+	}
+	code := normalizeLinkCode(r.PathValue("code"))
+	linkMu.Lock()
+	f := linkFlows[code]
+	ok := f != nil && time.Now().Before(f.expires) && f.payload == nil
+	var pk string
+	if ok {
+		pk = f.pubKey
+	}
+	linkMu.Unlock()
+	if !ok {
+		syncError(w, http.StatusNotFound, "link code not found or expired")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"pubKey": pk})
+}
+
+// The authorizer posts the encrypted bundle; a session for its own account
+// is minted here and handed over when the linkee claims.
+func handleLinkComplete(w http.ResponseWriter, r *http.Request) {
+	if !requireStore(w) {
+		return
+	}
+	u, _ := sessionUser(r)
+	if u == nil {
+		syncError(w, http.StatusUnauthorized, "not signed in")
+		return
+	}
+	var body struct {
+		Payload json.RawMessage `json:"payload"`
+	}
+	if json.NewDecoder(io.LimitReader(r.Body, 64<<10)).Decode(&body) != nil || len(body.Payload) == 0 {
+		syncError(w, http.StatusBadRequest, "payload required")
+		return
+	}
+	code := normalizeLinkCode(r.PathValue("code"))
+	token := randomToken()
+	store.mu.Lock()
+	store.Sessions[token] = &syncSession{UserID: u.ID, Expires: time.Now().Add(syncSessionTTL)}
+	err := store.save()
+	store.mu.Unlock()
+	if err != nil {
+		syncError(w, http.StatusInternalServerError, "store: "+err.Error())
+		return
+	}
+	linkMu.Lock()
+	f := linkFlows[code]
+	ok := f != nil && time.Now().Before(f.expires) && f.payload == nil
+	if ok {
+		f.payload = body.Payload
+		f.token = token
+	}
+	linkMu.Unlock()
+	if !ok {
+		syncError(w, http.StatusNotFound, "link code not found or expired")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+// The linkee polls until the bundle arrives; claiming is one-shot and sets
+// its session cookie.
+func handleLinkClaim(w http.ResponseWriter, r *http.Request) {
+	if !requireStore(w) {
+		return
+	}
+	code := normalizeLinkCode(r.PathValue("code"))
+	linkMu.Lock()
+	f := linkFlows[code]
+	if f == nil || time.Now().After(f.expires) {
+		linkMu.Unlock()
+		syncError(w, http.StatusNotFound, "link code not found or expired")
+		return
+	}
+	if f.payload == nil {
+		linkMu.Unlock()
+		writeJSON(w, http.StatusOK, map[string]any{"pending": true})
+		return
+	}
+	payload, token := f.payload, f.token
+	delete(linkFlows, code)
+	linkMu.Unlock()
+	setSessionCookie(w, r, token, int(syncSessionTTL.Seconds()))
+	writeJSON(w, http.StatusOK, map[string]any{"payload": payload})
 }

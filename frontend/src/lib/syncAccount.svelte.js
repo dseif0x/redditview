@@ -31,6 +31,7 @@ const PRF_SALT = new TextEncoder().encode('redditview-sync-prf-v1');
 
 export const sync = $state({
   available: false,
+  passkeys: false, // this browser can do passkey ceremonies (else: link-only)
   loggedIn: false,
   name: '',
   lastSyncAt: 0,
@@ -459,7 +460,11 @@ export function initSync() {
   // Passkeys bind to the page's origin, so sync only works when the app is
   // served by its own backend (the normal deployment) — not with a
   // cross-origin server URL configured.
-  sync.available = apiBase() === '' && !!window.PublicKeyCredential && !!crypto?.subtle;
+  // Device linking only needs WebCrypto, so devices without passkey support
+  // (VR headsets, TVs) still get the sync section — minus the passkey
+  // buttons.
+  sync.available = apiBase() === '' && !!crypto?.subtle;
+  sync.passkeys = sync.available && !!window.PublicKeyCredential;
   if (!sync.available) return;
 
   setSettingsChangeHook(() => schedulePush());
@@ -488,4 +493,147 @@ export function initSync() {
       else sync.error = String(err.message || err);
     }
   })();
+}
+
+// ---------------------------------------------------------------------------
+// Device linking — for devices that can't do passkeys (VR headsets, TVs).
+// The new device shows a short code; the user types it into a signed-in
+// device, both show the same key fingerprint for verification, and the
+// signed-in device sends the data key encrypted to the new device's
+// ephemeral ECDH key. The server relays only ciphertext.
+// ---------------------------------------------------------------------------
+export const linking = $state({ active: false, code: '', fp: '' });
+
+const LINK_ALPHABET = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';
+
+async function linkSharedKey(privateKey, publicKey) {
+  const bits = await crypto.subtle.deriveBits({ name: 'ECDH', public: publicKey }, privateKey, 256);
+  const ikm = await crypto.subtle.importKey('raw', bits, 'HKDF', false, ['deriveKey']);
+  return crypto.subtle.deriveKey(
+    {
+      name: 'HKDF',
+      hash: 'SHA-256',
+      salt: new TextEncoder().encode('redditview'),
+      info: new TextEncoder().encode('device-link-v1'),
+    },
+    ikm,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['encrypt', 'decrypt']
+  );
+}
+
+const importLinkPub = (b64) =>
+  crypto.subtle.importKey('spki', b64ToBuf(b64), { name: 'ECDH', namedCurve: 'P-256' }, false, []);
+
+// Short human-comparable fingerprint of the linkee's public key: shown on
+// both devices so a server swapping keys mid-link would be visible.
+async function linkFingerprint(pubB64) {
+  const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', b64ToBuf(pubB64)));
+  let out = '';
+  for (let i = 0; i < 5; i++) out += LINK_ALPHABET[digest[i] % LINK_ALPHABET.length];
+  return out;
+}
+
+export const formatLinkCode = (c) => (c ? c.slice(0, 4) + '-' + c.slice(4) : '');
+
+let linkPollTimer = null;
+
+// On the passkey-less device: create the ephemeral key, show the code, and
+// poll until a signed-in device sends the bundle over.
+export async function startDeviceLink() {
+  cancelDeviceLink();
+  sync.error = '';
+  const pair = await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, false, [
+    'deriveBits',
+  ]);
+  const pubB64 = bufToB64(await crypto.subtle.exportKey('spki', pair.publicKey));
+  const { code } = await syncFetch('/api/sync/link/start', {
+    method: 'POST',
+    body: { pubKey: pubB64 },
+  });
+  linking.code = code;
+  linking.fp = await linkFingerprint(pubB64);
+  linking.active = true;
+  const deadline = Date.now() + 9.5 * 60 * 1000;
+  linkPollTimer = setInterval(async () => {
+    if (!linking.active) return;
+    if (Date.now() > deadline) {
+      cancelDeviceLink();
+      sync.error = 'Link code expired — start again';
+      return;
+    }
+    let res;
+    try {
+      res = await syncFetch('/api/sync/link/' + code + '/claim');
+    } catch (err) {
+      cancelDeviceLink();
+      sync.error = String(err.message || err);
+      return;
+    }
+    if (!res || res.pending) return;
+    cancelDeviceLink();
+    try {
+      const key = await linkSharedKey(pair.privateKey, await importLinkPub(res.payload.epk));
+      const plain = JSON.parse(
+        new TextDecoder().decode(
+          await crypto.subtle.decrypt(
+            { name: 'AES-GCM', iv: b64ToBuf(res.payload.iv) },
+            key,
+            b64ToBuf(res.payload.data)
+          )
+        )
+      );
+      dekKey = await importDek(plain.dek);
+      sync.loggedIn = true;
+      sync.name = plain.name || '';
+      rev = 0;
+      await pull(); // the claim response set this device's session cookie
+      await cacheDek();
+      showToast('Device linked — settings synced');
+    } catch (err) {
+      sync.error = 'Linking failed: ' + String(err.message || err);
+    }
+  }, 2000);
+}
+
+export function cancelDeviceLink() {
+  clearInterval(linkPollTimer);
+  linkPollTimer = null;
+  linking.active = false;
+  linking.code = '';
+  linking.fp = '';
+}
+
+// On the signed-in device: look the code up so the user can compare the
+// fingerprint before anything is sent.
+export async function fetchDeviceLink(codeRaw) {
+  const code = codeRaw.toUpperCase().replace(/[^0-9A-Z]/g, '');
+  if (code.length !== 8) throw new Error('Enter the 8-character code from the other device');
+  const { pubKey } = await syncFetch('/api/sync/link/' + code);
+  return { code, pubKey, fp: await linkFingerprint(pubKey) };
+}
+
+export async function authorizeDeviceLink({ code, pubKey }) {
+  const eph = await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, false, [
+    'deriveBits',
+  ]);
+  const key = await linkSharedKey(eph.privateKey, await importLinkPub(pubKey));
+  const dekRaw = bufToB64(await crypto.subtle.exportKey('raw', dekKey));
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const data = await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv },
+    key,
+    new TextEncoder().encode(JSON.stringify({ dek: dekRaw, name: sync.name }))
+  );
+  await syncFetch('/api/sync/link/' + code, {
+    method: 'POST',
+    body: {
+      payload: {
+        epk: bufToB64(await crypto.subtle.exportKey('spki', eph.publicKey)),
+        iv: bufToB64(iv),
+        data: bufToB64(data),
+      },
+    },
+  });
 }
