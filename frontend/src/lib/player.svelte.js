@@ -37,6 +37,7 @@ export const P = $state({
   seekable: false,
   currentVideo: null,
   rateBoost: false, // holding down on a playing video runs it at 2x
+  fullscreen: false,
   commentsOpen: false,
   commentsPost: null,
   tab: 'posts',
@@ -1048,9 +1049,22 @@ export function toggleMute() {
   }
 }
 
+// Real browser fullscreen (like YouTube), replacing the old crop-to-fill
+// zoom. iOS Safari can only fullscreen video elements, so the button falls
+// back to fullscreening the current video there.
 export function toggleFill() {
-  settings.fillScreen = !settings.fillScreen;
-  saveSettings();
+  if (document.fullscreenElement) {
+    document.exitFullscreen?.().catch?.(() => {});
+    return;
+  }
+  const root = document.documentElement;
+  if (root.requestFullscreen) {
+    root.requestFullscreen().catch(() => {});
+  } else if (P.currentVideo?.webkitEnterFullscreen) {
+    P.currentVideo.webkitEnterFullscreen();
+  } else {
+    showToast('Fullscreen is not available in this browser');
+  }
 }
 
 // Any user gesture is a licence to lift a policy-forced mute — but ONLY on
@@ -1579,13 +1593,19 @@ export function initPlayer() {
       if (e.target instanceof Element && e.target.closest('#topbar')) return;
       const now = Date.now();
       if (now < wheelLockUntil) return;
-      if (settings.vertical && Math.abs(e.deltaX) > Math.abs(e.deltaY) && Math.abs(e.deltaX) >= 20) {
-        if (galleryStep(e.deltaX > 0 ? 1 : -1)) wheelLockUntil = now + 400;
+      // Normalize delta units: VR/controller joysticks (Quest) and some
+      // mice scroll in LINES (deltaMode 1) with tiny values that would
+      // never cross a pixel threshold.
+      const scale = e.deltaMode === 1 ? 33 : e.deltaMode === 2 ? window.innerHeight : 1;
+      const dx = e.deltaX * scale;
+      const dy = e.deltaY * scale;
+      if (settings.vertical && Math.abs(dx) > Math.abs(dy) && Math.abs(dx) >= 20) {
+        if (galleryStep(dx > 0 ? 1 : -1)) wheelLockUntil = now + 400;
         return;
       }
-      if (Math.abs(e.deltaY) < 20) return;
+      if (Math.abs(dy) < 20) return;
       wheelLockUntil = now + 500;
-      if (e.deltaY > 0) next();
+      if (dy > 0) next();
       else prev();
     },
     { passive: true }
@@ -1667,6 +1687,9 @@ export function initPlayer() {
     if (document.documentElement.scrollTop) document.documentElement.scrollTop = 0;
     if (document.body.scrollTop) document.body.scrollTop = 0;
   }
+  document.addEventListener('fullscreenchange', () => {
+    P.fullscreen = !!document.fullscreenElement;
+  });
   document.addEventListener('focusout', () => setTimeout(resetViewportScroll, 60));
   window.visualViewport?.addEventListener('resize', () => setTimeout(resetViewportScroll, 60));
   window.addEventListener('orientationchange', () => setTimeout(resetViewportScroll, 250));

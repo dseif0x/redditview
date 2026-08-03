@@ -14,7 +14,6 @@
 
 <main
   id="viewer"
-  class:fill={settings.fillScreen}
   ontouchstart={viewerTouchStart}
   ontouchmove={viewerTouchMove}
   ontouchend={viewerTouchEnd}

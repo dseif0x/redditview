@@ -168,9 +168,9 @@
     <button
       id="fill-btn"
       class="icon-btn"
-      class:active={settings.fillScreen}
+      class:active={P.fullscreen}
       type="button"
-      title="Fill screen (f)"
+      title="Fullscreen (f)"
       onclick={toggleFill}
     >
       <Icon name="expand" />

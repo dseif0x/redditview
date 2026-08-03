@@ -616,12 +616,6 @@ button {
   object-fit: contain;
 }
 
-#viewer.fill .gallery-cell img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
 .slide img,
 .slide video {
   max-width: 100%;
@@ -629,7 +623,9 @@ button {
   object-fit: contain;
 }
 
-/* centered indicator over a user-paused video */
+/* centered indicator over a user-paused video. Toggled via an explicit
+   class: the hidden attribute loses to any author display rule in some
+   engines, which made it engine-dependent. */
 .pause-indicator {
   position: absolute;
   inset: 0;
@@ -638,12 +634,16 @@ button {
   height: 4.5rem;
   border-radius: 50%;
   background: rgba(10, 10, 14, 0.6);
-  display: flex;
+  display: none;
   align-items: center;
   justify-content: center;
   gap: 0.55rem;
   z-index: 3;
   pointer-events: none;
+}
+
+.pause-indicator.show {
+  display: flex;
 }
 
 .pause-indicator::before,
@@ -669,18 +669,6 @@ button {
 
 .slide .poster-overlay.gone {
   opacity: 0;
-}
-
-/* fill-screen mode: crop media to cover the whole viewport */
-#viewer.fill .slide img,
-#viewer.fill .slide video {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-#viewer.fill .slide .poster-overlay {
-  object-fit: cover;
 }
 
 .text-post {
