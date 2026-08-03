@@ -44,6 +44,7 @@ export const SOURCES = [
     async items() {
       return [
         { label: 'Home', path: '', icon: 'home' },
+        { label: 'Fresh', path: 'fresh', icon: 'sparkles', sublabel: 'unseen mix of best · new · top today' },
         { label: 'Friends', path: 'r/friends', icon: 'heart' },
         { label: 'Saved posts', path: 'saved', icon: 'bookmark' },
         { label: 'Upvoted', path: 'upvoted', icon: 'arrow-big-up' },
