@@ -100,7 +100,7 @@ function applySort(raw) {
   let path = (qi >= 0 ? raw.slice(0, qi) : raw).replace(/^\/+|\/+$/g, '');
   const params = new URLSearchParams(qi >= 0 ? raw.slice(qi + 1) : '');
 
-  if (['saved', 'upvoted', 'downvoted', 'hidden'].includes(path)) return raw;
+  if (['fresh', 'saved', 'upvoted', 'downvoted', 'hidden'].includes(path)) return raw;
 
   t ? params.set('t', t) : params.delete('t');
 
@@ -156,11 +156,14 @@ async function fetchPage(seq = feedSeq) {
       const data = await api('/api/feed?' + params.toString());
       if (seq !== feedSeq) return; // a newer feed owns the state now
       const cursorUsed = after || '';
+      // The fresh feed's whole point is unseen posts: it drops seen ones no
+      // matter what the skip-seen setting says.
+      const dropSeen = settings.skipSeen || P.feedPath === 'fresh';
       const added = data.posts.filter(
         (p) =>
           kindEnabled(p) &&
           !loadedNames.has(p.name || p.id) &&
-          (!settings.skipSeen || !hasSeen(p.id) || p.name === resumeExemptName)
+          (!dropSeen || !hasSeen(p.id) || p.name === resumeExemptName)
       );
       // Remember which cursor fetched each post (for resume) plus fetch
       // provenance (upstream host, account signature) for the debug overlay.
@@ -1755,6 +1758,8 @@ export function initPlayer() {
   if (r && typeof r.path === 'string' && r.name) {
     P.feedInput = r.path;
     if (typeof r.sort === 'string') settings.sort = r.sort;
-    startFeed(r.path, positionValid(r) ? r : null);
+    // The fresh feed promises a new mix on every open — never resume it
+    // into yesterday's cursor (in-session back/forward still restores it).
+    startFeed(r.path, r.path !== 'fresh' && positionValid(r) ? r : null);
   }
 }

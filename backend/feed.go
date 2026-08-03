@@ -165,6 +165,12 @@ func handleFeed(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// The mixed always-something-new feed has its own multi-listing fetcher.
+	if path == "fresh" {
+		handleFresh(w, r)
+		return
+	}
+
 	// Pseudo-feeds for the logged-in user's own listings; reddit only serves
 	// these under the username, which we resolve from the cookie.
 	switch path {

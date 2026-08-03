@@ -28,6 +28,7 @@
   import Share from '@lucide/svelte/icons/share';
   import ChevronDown from '@lucide/svelte/icons/chevron-down';
   import Check from '@lucide/svelte/icons/check';
+  import Sparkles from '@lucide/svelte/icons/sparkles';
 
   const ICONS = {
     play: Play,
@@ -56,6 +57,7 @@
     share: Share,
     'chevron-down': ChevronDown,
     check: Check,
+    sparkles: Sparkles,
   };
 </script>
 
