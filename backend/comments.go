@@ -158,7 +158,7 @@ func handleComments(w http.ResponseWriter, r *http.Request) {
 		}
 		req.Header.Set("User-Agent", userAgent)
 		req.Header.Set("Accept", "application/json")
-		if cookie := r.Header.Get("X-Reddit-Cookie"); cookie != "" {
+		if cookie := clientCookie(r); cookie != "" {
 			req.Header.Set("Cookie", cookie)
 		}
 		resp, err = httpClient.Do(req)

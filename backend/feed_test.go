@@ -2,6 +2,8 @@ package main
 
 import (
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
@@ -35,6 +37,62 @@ func TestNormalizeFeedPath(t *testing.T) {
 	}
 	if _, _, err := normalizeFeedPath("r/../etc"); err == nil {
 		t.Error("expected error for path traversal")
+	}
+}
+
+func TestSanitizeCookie(t *testing.T) {
+	cases := []struct{ in, want string }{
+		// The OAuth tokens are dropped when reddit_session anchors identity:
+		// www.reddit.com prefers them, and a pasted header's snapshot can
+		// carry a token minted for a different account.
+		{
+			"loid=abc; token_v2=eyJhbGciOi.something; reddit_session=123%2Cxyz; csv=2",
+			"loid=abc; reddit_session=123%2Cxyz; csv=2",
+		},
+		{"token=old.jwt;reddit_session=s", "reddit_session=s"},
+		{"Token_V2=CaseInsensitive; reddit_session=s", " reddit_session=s"},
+		// No reddit_session -> the token is the only identity; keep as-is.
+		{"loid=abc; token_v2=eyJhbGciOi.something", "loid=abc; token_v2=eyJhbGciOi.something"},
+		{"", ""},
+		// Names that merely contain "token" are not the token cookies.
+		{"csrf_token=x; reddit_session=s", "csrf_token=x; reddit_session=s"},
+	}
+	for _, c := range cases {
+		if got := sanitizeCookie(c.in); got != c.want {
+			t.Errorf("sanitizeCookie(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}
+
+// The leak this guards against: old.reddit.com authenticates via
+// reddit_session while www.reddit.com prefers token_v2, so the silent host
+// fallback could serve another account's listing mid-feed. The header
+// reaching ANY upstream must have the tokens stripped.
+func TestHandleFeedStripsTokenCookies(t *testing.T) {
+	gotCookie := make(chan string, 1)
+	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotCookie <- r.Header.Get("Cookie")
+		w.Write([]byte(`{"data":{"after":"","children":[]}}`))
+	}))
+	defer up.Close()
+	saved := feedHosts
+	feedHosts = []string{up.URL + "/"}
+	defer func() { feedHosts = saved }()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/feed?path=", nil)
+	req.Header.Set("X-Reddit-Cookie", "reddit_session=abc; token_v2=eyJ.other.account; csv=2")
+	rr := httptest.NewRecorder()
+	handleFeed(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, body %q", rr.Code, rr.Body.String())
+	}
+	upstream := <-gotCookie
+	if strings.Contains(upstream, "token_v2") {
+		t.Errorf("token_v2 leaked upstream: %q", upstream)
+	}
+	if !strings.Contains(upstream, "reddit_session=abc") || !strings.Contains(upstream, "csv=2") {
+		t.Errorf("session cookies lost: %q", upstream)
 	}
 }
 

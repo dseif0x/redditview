@@ -158,6 +158,52 @@ func normalizeFeedPath(raw string) (path string, query url.Values, err error) {
 // but its anti-bot filtering is far less aggressive than www.reddit.com's.
 var feedHosts = []string{"https://old.reddit.com/", "https://www.reddit.com/"}
 
+// sanitizeCookie strips reddit's OAuth token cookies (token_v2 and its older
+// sibling) from a pasted browser Cookie header before it is forwarded
+// upstream. The two feed hosts resolve identity from DIFFERENT cookies:
+// old.reddit.com authenticates with reddit_session, while www.reddit.com
+// prefers a token_v2 JWT when one is present. A pasted header snapshots
+// whichever token_v2 the browser held at copy time — with multiple accounts
+// captured from the same browser that is routinely a token minted for a
+// different account than the header's reddit_session — so a request that
+// falls back from old to www would silently serve the OTHER account's
+// listing into the middle of this account's feed. Dropping the tokens makes
+// every host authenticate from reddit_session alone. Headers without a
+// reddit_session are left untouched: there the token is the only identity,
+// and removing it would anonymize the request instead.
+func sanitizeCookie(header string) string {
+	parts := strings.Split(header, ";")
+	name := func(part string) string {
+		if i := strings.Index(part, "="); i >= 0 {
+			part = part[:i]
+		}
+		return strings.ToLower(strings.TrimSpace(part))
+	}
+	hasSession := false
+	for _, part := range parts {
+		if name(part) == "reddit_session" {
+			hasSession = true
+		}
+	}
+	if !hasSession {
+		return header
+	}
+	kept := make([]string, 0, len(parts))
+	for _, part := range parts {
+		switch name(part) {
+		case "token_v2", "token":
+			continue
+		}
+		kept = append(kept, part)
+	}
+	return strings.Join(kept, ";")
+}
+
+// clientCookie extracts the sanitized reddit cookie from an API request.
+func clientCookie(r *http.Request) string {
+	return sanitizeCookie(r.Header.Get("X-Reddit-Cookie"))
+}
+
 func handleFeed(w http.ResponseWriter, r *http.Request) {
 	path, extra, err := normalizeFeedPath(r.URL.Query().Get("path"))
 	if err != nil {
@@ -175,7 +221,7 @@ func handleFeed(w http.ResponseWriter, r *http.Request) {
 	// these under the username, which we resolve from the cookie.
 	switch path {
 	case "saved", "upvoted", "downvoted", "hidden":
-		cookie := r.Header.Get("X-Reddit-Cookie")
+		cookie := clientCookie(r)
 		if cookie == "" {
 			http.Error(w, "reddit cookie required to view "+path+" posts — set it in settings", http.StatusUnauthorized)
 			return
@@ -216,7 +262,7 @@ func handleFeed(w http.ResponseWriter, r *http.Request) {
 		}
 		req.Header.Set("User-Agent", userAgent)
 		req.Header.Set("Accept", "application/json")
-		if cookie := r.Header.Get("X-Reddit-Cookie"); cookie != "" {
+		if cookie := clientCookie(r); cookie != "" {
 			req.Header.Set("Cookie", cookie)
 		}
 
@@ -326,7 +372,7 @@ func redditGetJSON(r *http.Request, path string, q url.Values, cookie string, ou
 }
 
 func handleSubscriptions(w http.ResponseWriter, r *http.Request) {
-	cookie := r.Header.Get("X-Reddit-Cookie")
+	cookie := clientCookie(r)
 	if cookie == "" {
 		http.Error(w, "reddit cookie required to list subscriptions — set it in settings", http.StatusUnauthorized)
 		return
@@ -429,7 +475,7 @@ func handleSearch(w http.ResponseWriter, r *http.Request) {
 			} `json:"children"`
 		} `json:"data"`
 	}
-	if err := redditGetJSON(r, "api/subreddit_autocomplete_v2.json", q, r.Header.Get("X-Reddit-Cookie"), &l); err != nil {
+	if err := redditGetJSON(r, "api/subreddit_autocomplete_v2.json", q, clientCookie(r), &l); err != nil {
 		http.Error(w, "search failed: "+err.Error(), http.StatusBadGateway)
 		return
 	}

@@ -139,6 +139,11 @@ let feedSeq = 0;
 // mid-session, for instance), paging on would splice the other account's
 // posts in — restart instead.
 let feedCookieSig = '';
+// The sort-resolved request path, frozen at feed start. Re-resolving per
+// page would let a mid-session sort change (a synced snapshot — local sort
+// changes restart the feed) point later pages at a different listing,
+// splicing posts that don't belong into this one.
+let feedRequestPath = '';
 
 async function fetchPage(seq = feedSeq) {
   if (loadingPage || exhausted) return;
@@ -151,7 +156,7 @@ async function fetchPage(seq = feedSeq) {
         startFeed(P.feedPath); // account changed under this feed
         return;
       }
-      const params = new URLSearchParams({ path: applySort(P.feedPath) });
+      const params = new URLSearchParams({ path: feedRequestPath });
       if (after) params.set('after', after);
       const data = await api('/api/feed?' + params.toString());
       if (seq !== feedSeq) return; // a newer feed owns the state now
@@ -189,6 +194,7 @@ async function fetchPage(seq = feedSeq) {
 export async function startFeed(path, resume = null) {
   const seq = ++feedSeq;
   feedCookieSig = cookieSig(activeCookie());
+  feedRequestPath = applySort(path);
   // An in-flight page fetch belongs to the previous feed and will discard
   // itself; its loading flag must not block this feed's first page.
   loadingPage = false;
