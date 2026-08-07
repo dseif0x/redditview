@@ -143,6 +143,10 @@
   function deleteAccount() {
     if (editingAccount < 0) return;
     settings.accounts.splice(editingAccount, 1);
+    // Deleting an entry above the active one shifts the list down; follow
+    // the active ACCOUNT, not its old index — else a different account
+    // silently becomes active.
+    if (settings.activeAccount > editingAccount) settings.activeAccount--;
     if (settings.activeAccount >= settings.accounts.length) settings.activeAccount = 0;
     editingAccount = settings.accounts.length
       ? Math.min(editingAccount, settings.accounts.length - 1)
