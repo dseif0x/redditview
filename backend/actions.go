@@ -42,7 +42,7 @@ func getIdentity(r *http.Request, cookie string, force bool) (identity, error) {
 		return cached, nil
 	}
 
-	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, "https://old.reddit.com/api/me.json", nil)
+	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, feedHosts[0]+"api/me.json", nil)
 	if err != nil {
 		return identity{}, err
 	}

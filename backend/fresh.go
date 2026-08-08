@@ -180,5 +180,5 @@ func handleFresh(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store") // per-cookie, shared URL
-	_ = json.NewEncoder(w).Encode(feedResponse{After: encodeFreshAfter(next), Posts: posts, Host: "mix"})
+	_ = json.NewEncoder(w).Encode(feedResponse{After: encodeFreshAfter(next), Posts: posts, Host: "mix", User: pageUser(r, cookie)})
 }

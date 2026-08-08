@@ -39,6 +39,7 @@
     { key: 'showPauseIcon', label: 'Paused indicator on videos' },
     { key: 'barInvert', label: 'Left/right progress bar fills upwards' },
     { key: 'skipSeen', label: "Skip posts you've already seen" },
+    { key: 'homeSubsOnly', label: 'Home feed: only communities you follow' },
     { key: 'debug', label: 'Debug overlay (audio + performance)' },
   ];
   const FILTERS = [
@@ -46,7 +47,7 @@
     { key: 'showVideos', label: 'Videos' },
     { key: 'showText', label: 'Text posts' },
   ];
-  const FEED_KEYS = ['showImages', 'showVideos', 'showText', 'skipSeen'];
+  const FEED_KEYS = ['showImages', 'showVideos', 'showText', 'skipSeen', 'homeSubsOnly'];
 
   // Which account the page is editing: an index into settings.accounts, or
   // -1 for the "add new account" entry.

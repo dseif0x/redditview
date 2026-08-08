@@ -48,6 +48,9 @@ function refresh(fp) {
             subreddits: data.subreddits || [],
             following: data.following || [],
             multis: data.multis || [],
+            // Server hit its page cap: the lists are incomplete, and
+            // consumers that treat them as exhaustive must know.
+            truncated: !!data.truncated,
           })
         );
         return data;
@@ -88,6 +91,7 @@ export async function getSubscriptions() {
       subreddits: cached.subreddits || [],
       following: cached.following || [],
       multis: cached.multis,
+      truncated: !!cached.truncated,
     };
   }
   return refresh(fp);
