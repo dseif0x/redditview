@@ -25,10 +25,6 @@ export const DEFAULTS = {
   sort: '',
   bookmarks: [],
   skipSeen: false,
-  // Home feed shows only subscribed communities / followed users, dropping
-  // reddit's recommender injections (which can leak cross-account interest
-  // signals for accounts sharing a device).
-  homeSubsOnly: true,
   debug: false,
 };
 

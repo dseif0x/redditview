@@ -44,26 +44,6 @@ type feedResponse struct {
 	// compose listings differently (www injects recommendations/promotions
 	// old never shows), so the client keeps this for diagnostics.
 	Host string `json:"host,omitempty"`
-	// The reddit account the page's cookie authenticated as (resolved via
-	// the cached /api/me identity). The client pins a feed to its first
-	// page's user and refuses pages served for anyone else — the definitive
-	// guard against another account's posts splicing in, wherever the
-	// identity mixup happens.
-	User string `json:"user,omitempty"`
-}
-
-// pageUser resolves which account a cookie authenticates as, for the feed
-// response's provenance field. Best-effort: an unresolvable identity (rate
-// limit, anonymous cookie) must not take the feed down.
-func pageUser(r *http.Request, cookie string) string {
-	if cookie == "" {
-		return ""
-	}
-	ident, err := getIdentity(r, cookie, false)
-	if err != nil {
-		return ""
-	}
-	return ident.Name
 }
 
 // --- reddit JSON wire types (only the fields we need) ---
@@ -325,7 +305,7 @@ func handleFeed(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	out := feedResponse{After: l.Data.After, Posts: []Post{}, Host: servedHost, User: pageUser(r, clientCookie(r))}
+	out := feedResponse{After: l.Data.After, Posts: []Post{}, Host: servedHost}
 	for _, child := range l.Data.Children {
 		if child.Kind != "t3" || child.Data.Stickied || child.Data.Promoted {
 			continue
@@ -424,9 +404,6 @@ func handleSubscriptions(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 	}
-	// Leaving the loop with a live cursor means the page cap cut the
-	// listing short.
-	truncated := after != ""
 	lessFold := func(s []string) {
 		sort.Slice(s, func(i, j int) bool { return strings.ToLower(s[i]) < strings.ToLower(s[j]) })
 	}
@@ -469,9 +446,6 @@ func handleSubscriptions(w http.ResponseWriter, r *http.Request) {
 		"subreddits": subreddits,
 		"following":  following,
 		"multis":     multis,
-		// The page cap cut the listing short: consumers that treat these
-		// lists as exhaustive (the home-feed community filter) must not.
-		"truncated": truncated,
 	})
 }
 
