@@ -9,6 +9,7 @@ import { flushSync } from 'svelte';
 import Hls from 'hls.js';
 import { settings, saveSettings, markSeen, hasSeen, activeCookie, cookieSig } from './settings.svelte.js';
 import { api, mediaUrl } from './api.js';
+import { getSubscriptions } from './subscriptions.js';
 import { showToast } from './toast.svelte.js';
 import { alog, timed, profileTransition } from './debug.svelte.js';
 
@@ -117,6 +118,32 @@ function applySort(raw) {
   return parts.join('/') + (q ? '?' + q : '');
 }
 
+// Feeds showing the account's personalized home stream: the only listings
+// where reddit's recommender injects posts from communities the account
+// doesn't follow — and the only ones where a page served for the wrong
+// account is even visible (any other listing looks the same for everyone).
+const HOME_FEEDS = new Set(['', 'fresh', ...SORT_SEGMENTS]);
+const isHomeFeed = (path) =>
+  HOME_FEEDS.has(path.split('?')[0].replace(/^\/+|\/+$/g, '').toLowerCase());
+
+// Communities allowed on the home feed (subscribed subreddits + followed
+// users), lowercased with the r/ and u/ prefixes posts carry. Resolves to
+// null when the filter can't or shouldn't apply — setting off, no account,
+// non-home feed, a truncated subscription listing (filtering against an
+// incomplete list would drop legitimately subscribed posts), or a failed
+// fetch (better an occasional stray post than an empty feed).
+function loadHomeCommunities() {
+  return getSubscriptions()
+    .then((s) => {
+      if (s.truncated) return null;
+      const set = new Set();
+      for (const name of s.subreddits || []) set.add('r/' + name.toLowerCase());
+      for (const name of s.following || []) set.add('u/' + name.toLowerCase());
+      return set.size ? set : null;
+    })
+    .catch(() => null);
+}
+
 function kindEnabled(post) {
   switch (post.kind) {
     case 'video':
@@ -144,6 +171,13 @@ let feedCookieSig = '';
 // changes restart the feed) point later pages at a different listing,
 // splicing posts that don't belong into this one.
 let feedRequestPath = '';
+// The reddit account the feed's first page was served for (backend-resolved
+// from the cookie). Later pages served for anyone else are refused outright
+// — the last line of defense against cross-account posts, wherever the
+// identity mixup happens.
+let feedUser = '';
+// Promise for the home-community allowlist (null result = filter inactive).
+let homeCommunitiesLoad = null;
 
 async function fetchPage(seq = feedSeq) {
   if (loadingPage || exhausted) return;
@@ -156,10 +190,26 @@ async function fetchPage(seq = feedSeq) {
         startFeed(P.feedPath); // account changed under this feed
         return;
       }
+      // The signature of the cookie this request will actually send (what
+      // api() reads), so provenance records the request's real account even
+      // if it ever diverged from the active-account selection.
+      const sentSig = cookieSig(settings.cookie.trim());
       const params = new URLSearchParams({ path: feedRequestPath });
       if (after) params.set('after', after);
       const data = await api('/api/feed?' + params.toString());
       if (seq !== feedSeq) return; // a newer feed owns the state now
+      // Pin the feed to the account its first page was served for; a page
+      // served for any other account must never splice in — drop it and
+      // retry the same cursor.
+      if (data.user) {
+        if (!feedUser) feedUser = data.user;
+        else if (data.user !== feedUser) {
+          alog(`page for u/${data.user} ≠ feed u/${feedUser} — dropped`);
+          continue;
+        }
+      }
+      const allowed = homeCommunitiesLoad ? await homeCommunitiesLoad : null;
+      if (seq !== feedSeq) return;
       const cursorUsed = after || '';
       // The fresh feed's whole point is unseen posts: it drops seen ones no
       // matter what the skip-seen setting says.
@@ -168,14 +218,25 @@ async function fetchPage(seq = feedSeq) {
         (p) =>
           kindEnabled(p) &&
           !loadedNames.has(p.name || p.id) &&
-          (!dropSeen || !hasSeen(p.id) || p.name === resumeExemptName)
+          (!dropSeen || !hasSeen(p.id) || p.name === resumeExemptName) &&
+          (!allowed || allowed.has((p.subreddit || '').toLowerCase()) || p.name === resumeExemptName)
       );
+      if (allowed) {
+        const foreign = [
+          ...new Set(
+            data.posts.filter((p) => p.subreddit && !allowed.has(p.subreddit.toLowerCase())).map((p) => p.subreddit)
+          ),
+        ];
+        if (foreign.length) alog(`home filter: dropped ${foreign.slice(0, 3).join(', ')}${foreign.length > 3 ? '…' : ''}`);
+      }
       // Remember which cursor fetched each post (for resume) plus fetch
-      // provenance (upstream host, account signature) for the debug overlay.
+      // provenance (upstream host, account, served-for user) for the
+      // debug overlay.
       for (const p of added) {
         p._cursor = cursorUsed;
         p._host = data.host || '?';
-        p._sig = feedCookieSig;
+        p._sig = sentSig;
+        p._user = data.user || '';
         loadedNames.add(p.name || p.id);
       }
       P.posts.push(...added);
@@ -195,6 +256,9 @@ export async function startFeed(path, resume = null) {
   const seq = ++feedSeq;
   feedCookieSig = cookieSig(activeCookie());
   feedRequestPath = applySort(path);
+  feedUser = '';
+  homeCommunitiesLoad =
+    settings.homeSubsOnly && isHomeFeed(path) && settings.cookie.trim() ? loadHomeCommunities() : null;
   // An in-flight page fetch belongs to the previous feed and will discard
   // itself; its loading flag must not block this feed's first page.
   loadingPage = false;

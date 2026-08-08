@@ -71,6 +71,10 @@ func TestSanitizeCookie(t *testing.T) {
 func TestHandleFeedStripsTokenCookies(t *testing.T) {
 	gotCookie := make(chan string, 1)
 	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/api/me") {
+			w.Write([]byte(`{"data":{"modhash":"mh","name":"testuser"}}`))
+			return
+		}
 		gotCookie <- r.Header.Get("Cookie")
 		w.Write([]byte(`{"data":{"after":"","children":[]}}`))
 	}))
@@ -93,6 +97,16 @@ func TestHandleFeedStripsTokenCookies(t *testing.T) {
 	}
 	if !strings.Contains(upstream, "reddit_session=abc") || !strings.Contains(upstream, "csv=2") {
 		t.Errorf("session cookies lost: %q", upstream)
+	}
+
+	// The page must state which account it was served for, so the client
+	// can pin the feed to one user and refuse pages from any other.
+	var out feedResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &out); err != nil {
+		t.Fatalf("bad response JSON: %v", err)
+	}
+	if out.User != "testuser" {
+		t.Errorf("page user = %q, want %q", out.User, "testuser")
 	}
 }
 
