@@ -135,6 +135,11 @@ const isHomeFeed = (path) =>
 function loadHomeCommunities() {
   return getSubscriptions()
     .then((s) => {
+      if (s.truncated) {
+        homeFilterState = 'off:truncated';
+        alog('home filter OFF: subscription list truncated');
+        return null;
+      }
       const set = new Set();
       for (const name of s.subreddits || []) set.add('r/' + name.toLowerCase());
       for (const name of s.following || []) set.add('u/' + name.toLowerCase());
@@ -142,46 +147,14 @@ function loadHomeCommunities() {
         homeFilterState = 'off:empty';
         return null;
       }
-      // A truncated listing (the account follows more than the server's
-      // page cap) can't serve as an exhaustive allowlist — communities it
-      // lacks get verified individually instead of un-filtering the feed.
-      const partial = !!s.truncated;
-      homeFilterState = (partial ? 'on+verify:' : 'on:') + set.size;
-      return { set, partial };
+      homeFilterState = 'on:' + set.size;
+      return set;
     })
     .catch((err) => {
       homeFilterState = 'off:error';
       alog('home filter OFF: ' + String(err?.message || err));
       return null;
     });
-}
-
-// Per-community subscription verdicts from the verify endpoint, cached per
-// account signature for the session (a community is asked about once, not
-// once per page it appears on).
-const verifiedCommunities = new Map(); // 'sig|r/name' -> Promise<boolean>
-
-function communityAllowed(allowed, community) {
-  if (!community) return true; // no community info: never drop on missing data
-  if (allowed.set.has(community)) return true;
-  if (!allowed.partial) return false;
-  const key = feedCookieSig + '|' + community;
-  let verdict = verifiedCommunities.get(key);
-  if (!verdict) {
-    // r/name asks about the subreddit; u/name about the profile subreddit
-    // (a follow IS a subscription to u_<name>).
-    const sr = community.startsWith('u/') ? 'u_' + community.slice(2) : community.slice(2);
-    verdict = api('/api/subscribed?sr=' + encodeURIComponent(sr))
-      .then((d) => !!d.subscribed)
-      .catch(() => {
-        // Fail open per community — a failed check must not eat a legit
-        // post — but don't cache the failure: a later page retries.
-        verifiedCommunities.delete(key);
-        return true;
-      });
-    verifiedCommunities.set(key, verdict);
-  }
-  return verdict;
 }
 
 function kindEnabled(post) {
@@ -257,25 +230,20 @@ async function fetchPage(seq = feedSeq) {
       // The fresh feed's whole point is unseen posts: it drops seen ones no
       // matter what the skip-seen setting says.
       const dropSeen = settings.skipSeen || P.feedPath === 'fresh';
-      let added = data.posts.filter(
+      const added = data.posts.filter(
         (p) =>
           kindEnabled(p) &&
           !loadedNames.has(p.name || p.id) &&
-          (!dropSeen || !hasSeen(p.id) || p.name === resumeExemptName)
+          (!dropSeen || !hasSeen(p.id) || p.name === resumeExemptName) &&
+          (!allowed || allowed.has((p.subreddit || '').toLowerCase()) || p.name === resumeExemptName)
       );
       if (allowed) {
-        // Communities the allowlist can't answer resolve via the verify
-        // endpoint (cached per community), so a truncated subscription
-        // list narrows the filter instead of disabling it.
-        const keep = await Promise.all(
-          added.map((p) =>
-            p.name === resumeExemptName ? true : communityAllowed(allowed, (p.subreddit || '').toLowerCase())
-          )
-        );
-        if (seq !== feedSeq) return;
-        const foreign = [...new Set(added.filter((_, i) => !keep[i]).map((p) => p.subreddit))];
+        const foreign = [
+          ...new Set(
+            data.posts.filter((p) => p.subreddit && !allowed.has(p.subreddit.toLowerCase())).map((p) => p.subreddit)
+          ),
+        ];
         if (foreign.length) alog(`home filter: dropped ${foreign.slice(0, 3).join(', ')}${foreign.length > 3 ? '…' : ''}`);
-        added = added.filter((_, i) => keep[i]);
       }
       // Remember which cursor fetched each post (for resume) plus fetch
       // provenance (upstream host, account, served-for user) for the
