@@ -42,16 +42,22 @@ func TestNormalizeFeedPath(t *testing.T) {
 
 func TestSanitizeCookie(t *testing.T) {
 	cases := []struct{ in, want string }{
-		// The OAuth tokens are dropped when reddit_session anchors identity:
-		// www.reddit.com prefers them, and a pasted header's snapshot can
-		// carry a token minted for a different account.
+		// OAuth tokens and device-identity cookies are dropped when
+		// reddit_session anchors identity: the tokens can name a different
+		// account than the session, and the device cookies (shared by every
+		// header pasted from the same browser) let reddit's recommender
+		// link the accounts.
 		{
 			"loid=abc; token_v2=eyJhbGciOi.something; reddit_session=123%2Cxyz; csv=2",
-			"loid=abc; reddit_session=123%2Cxyz; csv=2",
+			"reddit_session=123%2Cxyz; csv=2",
 		},
 		{"token=old.jwt;reddit_session=s", "reddit_session=s"},
-		{"Token_V2=CaseInsensitive; reddit_session=s", " reddit_session=s"},
-		// No reddit_session -> the token is the only identity; keep as-is.
+		{"Token_V2=CaseInsensitive; reddit_session=s", "reddit_session=s"},
+		{
+			"rdt=device1; session_tracker=t.0; recent_srs=t5_a,t5_b; edgebucket=x; reddit_session=s; over18=1",
+			"reddit_session=s; over18=1",
+		},
+		// No reddit_session -> the tokens are the only identity; keep as-is.
 		{"loid=abc; token_v2=eyJhbGciOi.something", "loid=abc; token_v2=eyJhbGciOi.something"},
 		{"", ""},
 		// Names that merely contain "token" are not the token cookies.

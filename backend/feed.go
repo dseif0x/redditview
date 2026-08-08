@@ -178,19 +178,35 @@ func normalizeFeedPath(raw string) (path string, query url.Values, err error) {
 // but its anti-bot filtering is far less aggressive than www.reddit.com's.
 var feedHosts = []string{"https://old.reddit.com/", "https://www.reddit.com/"}
 
-// sanitizeCookie strips reddit's OAuth token cookies (token_v2 and its older
-// sibling) from a pasted browser Cookie header before it is forwarded
-// upstream. The two feed hosts resolve identity from DIFFERENT cookies:
-// old.reddit.com authenticates with reddit_session, while www.reddit.com
-// prefers a token_v2 JWT when one is present. A pasted header snapshots
-// whichever token_v2 the browser held at copy time — with multiple accounts
-// captured from the same browser that is routinely a token minted for a
-// different account than the header's reddit_session — so a request that
-// falls back from old to www would silently serve the OTHER account's
-// listing into the middle of this account's feed. Dropping the tokens makes
-// every host authenticate from reddit_session alone. Headers without a
-// reddit_session are left untouched: there the token is the only identity,
-// and removing it would anonymize the request instead.
+// Cookies dropped from a pasted browser Cookie header before it is
+// forwarded upstream (only when a reddit_session is present to anchor
+// identity — without one, stripping would anonymize the request).
+//
+// The OAuth tokens (token_v2, token): the two feed hosts resolve identity
+// from DIFFERENT cookies — old.reddit.com authenticates with
+// reddit_session, www.reddit.com prefers a token_v2 JWT when present — and
+// a pasted header snapshots whichever token the browser held at copy time,
+// which with multiple accounts captured from the same browser is routinely
+// a token minted for a DIFFERENT account than the header's reddit_session.
+//
+// The device-identity/tracking cookies (loid, rdt, session_tracker,
+// recent_srs, edgebucket): these identify the BROWSER, not the account, so
+// every account whose header was copied from the same browser carries the
+// same values — and reddit's home-feed personalization reads them, blending
+// device-level interest signals into the logged-in listing. Forwarding them
+// links the accounts server-side: reddit's recommender injects one
+// account's favorite communities into the other account's home feed.
+// Stripping them makes each request carry only the account's own identity.
+var droppedCookies = map[string]bool{
+	"token_v2":        true,
+	"token":           true,
+	"loid":            true,
+	"rdt":             true,
+	"session_tracker": true,
+	"recent_srs":      true,
+	"edgebucket":      true,
+}
+
 func sanitizeCookie(header string) string {
 	parts := strings.Split(header, ";")
 	name := func(part string) string {
@@ -210,13 +226,14 @@ func sanitizeCookie(header string) string {
 	}
 	kept := make([]string, 0, len(parts))
 	for _, part := range parts {
-		switch name(part) {
-		case "token_v2", "token":
+		if droppedCookies[name(part)] {
 			continue
 		}
-		kept = append(kept, part)
+		if part = strings.TrimSpace(part); part != "" {
+			kept = append(kept, part)
+		}
 	}
-	return strings.Join(kept, ";")
+	return strings.Join(kept, "; ")
 }
 
 // clientCookie extracts the sanitized reddit cookie from an API request.
@@ -476,6 +493,39 @@ func handleSubscriptions(w http.ResponseWriter, r *http.Request) {
 		// lists as exhaustive (the home-feed community filter) must not.
 		"truncated": truncated,
 	})
+}
+
+// handleSubscribed reports whether the cookie's account subscribes to one
+// community (u_<name> covers followed users). It backs the home filter's
+// verify mode: accounts whose subscription listing exceeds the page cap
+// can't get an exhaustive allowlist, so unknown communities are checked
+// individually against reddit's about.json instead of un-filtering the
+// whole feed.
+func handleSubscribed(w http.ResponseWriter, r *http.Request) {
+	name := strings.TrimSpace(r.URL.Query().Get("sr"))
+	if !srNameRe.MatchString(name) {
+		http.Error(w, "invalid subreddit/user name", http.StatusBadRequest)
+		return
+	}
+	cookie := clientCookie(r)
+	if cookie == "" {
+		http.Error(w, "reddit cookie required — set it in settings", http.StatusUnauthorized)
+		return
+	}
+	q := url.Values{}
+	q.Set("raw_json", "1")
+	var about struct {
+		Data struct {
+			UserIsSubscriber bool `json:"user_is_subscriber"`
+		} `json:"data"`
+	}
+	if err := redditGetJSON(r, "r/"+name+"/about.json", q, cookie, &about); err != nil {
+		http.Error(w, "could not check subscription: "+err.Error(), http.StatusBadGateway)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
+	_ = json.NewEncoder(w).Encode(map[string]bool{"subscribed": about.Data.UserIsSubscriber})
 }
 
 // handleSearch backs the suggestion panel's reddit search. One autocomplete
