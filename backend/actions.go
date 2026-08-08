@@ -148,7 +148,7 @@ func handleSubscribe(w http.ResponseWriter, r *http.Request) {
 }
 
 func doRedditAction(w http.ResponseWriter, r *http.Request, endpoint string, form url.Values) {
-	cookie := clientCookie(r)
+	cookie := r.Header.Get("X-Reddit-Cookie")
 	if cookie == "" {
 		http.Error(w, "reddit cookie required — set it in settings", http.StatusUnauthorized)
 		return

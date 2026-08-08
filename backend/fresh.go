@@ -87,7 +87,7 @@ func interleavePosts(lists [][]Post) []Post {
 }
 
 func handleFresh(w http.ResponseWriter, r *http.Request) {
-	cookie := clientCookie(r)
+	cookie := r.Header.Get("X-Reddit-Cookie")
 	cursors := map[string]string{}
 	paging := false // a later page: sources absent from the cursor map stay skipped
 	if a := r.URL.Query().Get("after"); a != "" {
