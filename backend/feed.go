@@ -400,7 +400,10 @@ func handleSubscriptions(w http.ResponseWriter, r *http.Request) {
 	subreddits := []string{}
 	following := []string{}
 	after := ""
-	for page := 0; page < 4; page++ { // up to 400 subscriptions
+	// The cap only bounds a runaway listing; it must comfortably exceed any
+	// real subscription count, because past it the response is flagged
+	// truncated and the home-feed community filter turns itself off.
+	for page := 0; page < 20; page++ { // up to 2000 subscriptions
 		q := url.Values{}
 		q.Set("raw_json", "1")
 		q.Set("limit", "100")
