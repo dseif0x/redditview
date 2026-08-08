@@ -20,7 +20,7 @@
 // Picking an item loads `path`; `applySort` (when present) replaces the
 // active sort first — saved feeds remember the sort they were starred with.
 import { settings } from './settings.svelte.js';
-import { getSubscriptions } from './subscriptions.js';
+import { getSubscriptions } from './subscriptions.svelte.js';
 import { api } from './api.js';
 
 function fmtMembers(n) {

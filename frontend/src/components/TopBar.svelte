@@ -11,7 +11,7 @@
     registerFeedInput,
   } from '../lib/player.svelte.js';
   import { settings, saveSettings } from '../lib/settings.svelte.js';
-  import { getSubscriptions, patchSubscriptions } from '../lib/subscriptions.js';
+  import { getSubscriptions, patchSubscriptions } from '../lib/subscriptions.svelte.js';
   import { api } from '../lib/api.js';
   import { showToast } from '../lib/toast.svelte.js';
   import { presentActionSheet } from '../lib/sheet.svelte.js';

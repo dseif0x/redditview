@@ -2,6 +2,7 @@
   import { untrack } from 'svelte';
   import { ToggleGroup } from 'bits-ui';
   import { SOURCES, matchesQuery } from '../lib/searchSources.js';
+  import { subsVersion } from '../lib/subscriptions.svelte.js';
   import { settings, saveSettings } from '../lib/settings.svelte.js';
   import { P, goToFeed } from '../lib/player.svelte.js';
   import Icon from './Icon.svelte';
@@ -76,11 +77,14 @@
 
   // Static sources refresh on every open, but in place: the previous list
   // stays rendered until the (cached-first, usually instant) reload lands,
-  // so reopening never flashes. The body only depends on `open`: it writes
-  // `results`, so everything else stays untracked to avoid re-triggering
-  // itself.
+  // so reopening never flashes. The body only depends on `open` and the
+  // subscription-cache version — so lists a background refresh updates
+  // (e.g. a subreddit joined outside the app) reach the OPEN panel instead
+  // of waiting for the next open. It writes `results`, so everything else
+  // stays untracked to avoid re-triggering itself.
   $effect(() => {
     if (!open) return;
+    void subsVersion(); // re-pull when the subscription cache changes
     untrack(() => {
       for (const s of SOURCES) {
         if (s.live || !available(s)) continue;

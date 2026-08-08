@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"sort"
@@ -334,7 +335,14 @@ func handleSubscriptions(w http.ResponseWriter, r *http.Request) {
 	subreddits := []string{}
 	following := []string{}
 	after := ""
-	for page := 0; page < 4; page++ { // up to 400 subscriptions
+	// The page cap only bounds a runaway listing — it must comfortably
+	// exceed any real subscription count (followed users ride in the same
+	// listing and count toward it). The old cap of 4 pages silently cut
+	// accounts past 400 subscriptions, and since reddit orders the listing
+	// with newer subscriptions past the old ones, everything joined after
+	// the cutoff was PERMANENTLY missing from the app's lists, no matter
+	// how often they refreshed.
+	for page := 0; page < 20; page++ { // up to 2000 subscriptions
 		q := url.Values{}
 		q.Set("raw_json", "1")
 		q.Set("limit", "100")
@@ -357,6 +365,11 @@ func handleSubscriptions(w http.ResponseWriter, r *http.Request) {
 		if after == "" {
 			break
 		}
+	}
+	if after != "" {
+		// Never truncate silently again — the incomplete list reads as
+		// "not subscribed" everywhere it is consumed.
+		log.Printf("subscriptions listing truncated at %d entries (cursor still live)", len(subreddits)+len(following))
 	}
 	lessFold := func(s []string) {
 		sort.Slice(s, func(i, j int) bool { return strings.ToLower(s[i]) < strings.ToLower(s[j]) })
