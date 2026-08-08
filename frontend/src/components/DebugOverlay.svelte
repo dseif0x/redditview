@@ -93,7 +93,7 @@
       if (post) {
         const sig = cookieSig(activeCookie());
         const acct = post._sig ? (post._sig === sig ? 'ok' : `MIXED ${post._sig}≠${sig}`) : '?';
-        postLine = `post: ${post.subreddit || post.name} host=${post._host || '?'} cur=${post._cursor || '(first)'} acct=${acct}`;
+        postLine = `post: ${post.subreddit || post.name} host=${post._host || '?'} u=${post._user || '?'} cur=${post._cursor || '(first)'} acct=${acct}`;
       }
       text = [
         `${P.muted ? 'MUTED' : 'audio on'} | ${audio}`,
