@@ -135,26 +135,13 @@ const isHomeFeed = (path) =>
 function loadHomeCommunities() {
   return getSubscriptions()
     .then((s) => {
-      if (s.truncated) {
-        homeFilterState = 'off:truncated';
-        alog('home filter OFF: subscription list truncated');
-        return null;
-      }
+      if (s.truncated) return null;
       const set = new Set();
       for (const name of s.subreddits || []) set.add('r/' + name.toLowerCase());
       for (const name of s.following || []) set.add('u/' + name.toLowerCase());
-      if (!set.size) {
-        homeFilterState = 'off:empty';
-        return null;
-      }
-      homeFilterState = 'on:' + set.size;
-      return set;
+      return set.size ? set : null;
     })
-    .catch((err) => {
-      homeFilterState = 'off:error';
-      alog('home filter OFF: ' + String(err?.message || err));
-      return null;
-    });
+    .catch(() => null);
 }
 
 function kindEnabled(post) {
@@ -191,9 +178,6 @@ let feedRequestPath = '';
 let feedUser = '';
 // Promise for the home-community allowlist (null result = filter inactive).
 let homeCommunitiesLoad = null;
-// Why the allowlist is (in)active, stamped onto posts for the debug overlay:
-// a stray post must show whether it BEAT the filter or the filter was off.
-let homeFilterState = 'off';
 
 async function fetchPage(seq = feedSeq) {
   if (loadingPage || exhausted) return;
@@ -253,7 +237,6 @@ async function fetchPage(seq = feedSeq) {
         p._host = data.host || '?';
         p._sig = sentSig;
         p._user = data.user || '';
-        p._flt = homeFilterState; // the filter state this post was admitted under
         loadedNames.add(p.name || p.id);
       }
       P.posts.push(...added);
@@ -274,14 +257,8 @@ export async function startFeed(path, resume = null) {
   feedCookieSig = cookieSig(activeCookie());
   feedRequestPath = applySort(path);
   feedUser = '';
-  homeCommunitiesLoad = null;
-  if (!settings.homeSubsOnly) homeFilterState = 'off:setting';
-  else if (!isHomeFeed(path)) homeFilterState = 'off:not-home';
-  else if (!settings.cookie.trim()) homeFilterState = 'off:no-cookie';
-  else {
-    homeFilterState = 'loading';
-    homeCommunitiesLoad = loadHomeCommunities();
-  }
+  homeCommunitiesLoad =
+    settings.homeSubsOnly && isHomeFeed(path) && settings.cookie.trim() ? loadHomeCommunities() : null;
   // An in-flight page fetch belongs to the previous feed and will discard
   // itself; its loading flag must not block this feed's first page.
   loadingPage = false;
