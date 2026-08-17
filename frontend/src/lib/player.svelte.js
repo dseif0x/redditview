@@ -485,6 +485,9 @@ export async function resolveRedgifs(post) {
     const data = await api('/api/redgifs?id=' + encodeURIComponent(post.redgifsId));
     if (data.mp4) {
       post.redgifsMp4 = data.mp4;
+      // The SD file is the dynamic-resolution downswitch target for this
+      // fixed-mp4 provider (only useful when it's a distinct, lower file).
+      if (data.sd && data.sd !== data.mp4) post.redgifsSd = data.sd;
       if (!post.poster && data.poster) post.poster = data.poster;
       return;
     }
