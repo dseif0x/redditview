@@ -17,6 +17,10 @@ export const DEFAULTS = {
   vertical: false,
   smoothScroll: true,
   showPauseIcon: true,
+  // Opt-in adaptive quality: HLS starts at the measured bandwidth (capped to
+  // the player size), and fixed-mp4 providers (redgifs) drop to their SD file
+  // when playback stalls. Off = always full quality, like before.
+  dynamicResolution: false,
   // Progress bar position: bottom | top | left | right | auto (tap near a
   // screen edge to dock it there). barPos remembers auto's last dock.
   barMode: 'bottom',

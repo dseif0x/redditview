@@ -116,6 +116,7 @@ func handleRedgifs(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store") // urls are signed + expiring
 		json.NewEncoder(w).Encode(map[string]any{
 			"mp4":      mp4,
+			"sd":       body.Gif.Urls.SD,
 			"poster":   body.Gif.Urls.Poster,
 			"hasAudio": body.Gif.HasAudio,
 			"duration": body.Gif.Duration,

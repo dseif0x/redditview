@@ -87,7 +87,9 @@
   function buildVideo() {
     // Sources in preference order; on failure fall through to the next.
     const sources = [];
-    if (post.redgifsMp4) sources.push({ type: 'mp4', url: post.redgifsMp4 });
+    // `lower` is a same-content lower-resolution file the dynamic-resolution
+    // option may switch to when playback stalls (HLS adapts on its own).
+    if (post.redgifsMp4) sources.push({ type: 'mp4', url: post.redgifsMp4, lower: post.redgifsSd });
     if (post.videoHls) sources.push({ type: 'hls', url: post.videoHls });
     if (post.videoMp4) sources.push({ type: 'mp4', url: post.videoMp4, silent: !!post.videoHls });
     let si = -1;
@@ -137,7 +139,15 @@
       }
       if (s.type === 'hls') {
         if (Hls.isSupported()) {
-          hls = new Hls({ maxBufferLength: 20 });
+          // Dynamic resolution (opt-in): start at the level the measured
+          // bandwidth supports instead of the manifest's first variant, and
+          // never fetch more pixels than the player can show — so high-res
+          // videos start fast and switch up instead of buffering.
+          hls = new Hls(
+            settings.dynamicResolution
+              ? { maxBufferLength: 20, startLevel: -1, capLevelToPlayerSize: true }
+              : { maxBufferLength: 20 }
+          );
           hls.on(Hls.Events.ERROR, (_ev, data) => {
             if (data.fatal) loadNextSource(data.type);
           });
@@ -160,6 +170,44 @@
     // With autoscroll on, videos run to the end, then advance (loop is off).
     video.addEventListener('ended', () => videoEnded(entry.uid), sig);
     video.addEventListener('error', () => loadNextSource('playback error'), sig);
+
+    // Dynamic resolution (opt-in) for fixed-mp4 providers, which can't adapt
+    // the way HLS does: when the active video wants to play but stays stalled
+    // for STALL_MS, swap in the provider's lower-resolution file at the same
+    // position. Armed on play/waiting, disarmed once frames actually render.
+    const STALL_MS = 3000;
+    let stallTimer = null;
+    let stallSwitched = false;
+    const disarmStall = () => {
+      clearTimeout(stallTimer);
+      stallTimer = null;
+    };
+    const armStall = () => {
+      disarmStall();
+      if (!settings.dynamicResolution || stallSwitched || hls || !sources[si]?.lower) return;
+      stallTimer = setTimeout(() => {
+        stallTimer = null;
+        if (destroyed || !isEntryActive(entry.uid) || video.paused || video.readyState >= 3) return;
+        stallSwitched = true;
+        const lower = sources[si].lower;
+        const t = video.currentTime;
+        alog(`p${entry.pos}: stalled ${STALL_MS}ms — switching to lower resolution`);
+        showToast('Buffering — switching to a lower resolution', 1800);
+        video.src = mediaUrl(lower);
+        video.addEventListener(
+          'loadedmetadata',
+          () => {
+            if (t > 0 && t < (video.duration || Infinity)) video.currentTime = t;
+          },
+          { once: true, ...sig }
+        );
+        attemptPlay(video);
+      }, STALL_MS);
+    };
+    video.addEventListener('play', armStall, sig);
+    video.addEventListener('waiting', armStall, sig);
+    video.addEventListener('playing', disarmStall, sig);
+    video.addEventListener('pause', disarmStall, sig);
 
     // A centered paused indicator so a stopped video is unmistakable. Only
     // the playing->paused edge shows it, so activation (paused until the
