@@ -623,9 +623,9 @@ button {
   object-fit: contain;
 }
 
-/* centered indicator over a user-paused video. Toggled via an explicit
-   class: the hidden attribute loses to any author display rule in some
-   engines, which made it engine-dependent. */
+/* centered indicator over a paused video. Always laid out and toggled via
+   opacity: both the hidden attribute and display flips proved unreliable
+   across engines, and opacity also gives the fade. */
 .pause-indicator {
   position: absolute;
   inset: 0;
@@ -634,16 +634,18 @@ button {
   height: 4.5rem;
   border-radius: 50%;
   background: rgba(10, 10, 14, 0.6);
-  display: none;
+  display: flex;
   align-items: center;
   justify-content: center;
   gap: 0.55rem;
   z-index: 3;
   pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.12s;
 }
 
 .pause-indicator.show {
-  display: flex;
+  opacity: 1;
 }
 
 .pause-indicator::before,
@@ -653,6 +655,33 @@ button {
   height: 1.8rem;
   border-radius: 3px;
   background: #fff;
+}
+
+/* centered buffering spinner over the active video (Instagram-style). The
+   reveal transition is delayed so a stall has to persist before it fades
+   in — micro-rebuffers never flash it. */
+.buffer-spinner {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 3rem;
+  height: 3rem;
+  border-radius: 50%;
+  border: 3px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #fff;
+  filter: drop-shadow(0 1px 6px rgba(0, 0, 0, 0.5));
+  z-index: 3;
+  pointer-events: none;
+  opacity: 0;
+  animation: spin 0.8s linear infinite;
+  animation-play-state: paused;
+  transition: opacity 0.15s;
+}
+
+.buffer-spinner.show {
+  opacity: 1;
+  animation-play-state: running;
+  transition: opacity 0.2s ease 0.4s;
 }
 
 /* poster shown over a video until its first real frames render */

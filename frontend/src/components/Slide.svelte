@@ -7,6 +7,7 @@
   import {
     P,
     Hls,
+    SLIDE_MS,
     mediaUrl,
     registerController,
     isEntryActive,
@@ -37,8 +38,13 @@
 
   let gidx = $state(0);
   let zooming = $state(false);
-  let pauseVisible = $state(false);
-  let posterGone = $state(false);
+  // Element state mirrored into reactive land: the overlays below derive
+  // from it instead of being set on event edges, so a pause that happens to
+  // arrive at an inconvenient instant (or a play() that silently never
+  // starts) still ends up rendered correctly.
+  let vPaused = $state(false); // tracks video.paused via play/pause events
+  let vWaiting = $state(false); // stalled: wants to play but has no data
+  let posterGone = $state(false); // real frames have rendered
   let redgifsLoading = $state(
     post.kind === 'video' && !!(post.redgifsId && !post.redgifsMp4 && !post.redgifsResolved)
   );
@@ -64,6 +70,32 @@
     gidx === 0 && !gDragPx ? '' : `translate${crossAxis}(calc(${-gidx * 100}% + ${gDragPx}px))`
   );
   const stripSliding = $derived(settings.smoothScroll && !P.galleryDragging);
+
+  // Becoming active shows a paused frame until the engine's deferred play
+  // lands (up to SLIDE_MS after the transition starts); hold the paused
+  // overlay through that window so swiping back to a watched video doesn't
+  // flash it.
+  let activeGrace = $state(false);
+  let graceTimer = null;
+  $effect(() => {
+    if (isActive) {
+      activeGrace = true;
+      clearTimeout(graceTimer);
+      graceTimer = setTimeout(() => (activeGrace = false), SLIDE_MS + 300);
+    }
+    return () => clearTimeout(graceTimer);
+  });
+
+  // The centered paused indicator: any paused state of the active video
+  // once it has shown real frames — user taps, but also playback that never
+  // resumed (a rejected play() would otherwise leave a frozen frame with no
+  // hint that a tap starts it).
+  const pausedShow = $derived(
+    isActive && vPaused && posterGone && !activeGrace && settings.showPauseIcon
+  );
+  // Instagram-style buffering spinner while the active video wants to play
+  // but is out of data. The CSS reveal delay keeps micro-stalls invisible.
+  const bufferingShow = $derived(isActive && vWaiting && !vPaused);
 
   function singleTap() {
     if (post.kind === 'video') {
@@ -209,19 +241,36 @@
     video.addEventListener('playing', disarmStall, sig);
     video.addEventListener('pause', disarmStall, sig);
 
-    // A centered paused indicator so a stopped video is unmistakable. Only
-    // the playing->paused edge shows it, so activation (paused until the
-    // deferred play) never flashes it; deactivation hides it explicitly.
+    // Mirror the element's play/stall state for the overlay deriveds above.
     video.addEventListener(
       'pause',
       () => {
-        if (isEntryActive(entry.uid) && settings.showPauseIcon && !document.hidden && video.currentTime > 0) {
-          pauseVisible = true;
-        }
+        vPaused = true;
+        vWaiting = false;
       },
       sig
     );
-    video.addEventListener('play', () => (pauseVisible = false), sig);
+    video.addEventListener(
+      'play',
+      () => {
+        vPaused = false;
+        // Starting without buffered data ahead is a stall even if the
+        // engine never fires 'waiting' for it.
+        if (video.readyState < 3) vWaiting = true;
+      },
+      sig
+    );
+    video.addEventListener('playing', () => (vWaiting = false), sig);
+    video.addEventListener('waiting', () => (vWaiting = true), sig);
+    // A source swap (fallback, resolution switch) starts the load over.
+    video.addEventListener(
+      'emptied',
+      () => {
+        vWaiting = false;
+        posterGone = false;
+      },
+      sig
+    );
 
     // Playback progress in the bottom bar (only while this slide is active).
     video.addEventListener('timeupdate', () => videoTimeUpdate(entry.uid, video), sig);
@@ -241,7 +290,6 @@
           video.muted = true; // previews never make sound
           alog(`deactivate p${entry.pos}: muted`);
         }
-        pauseVisible = false;
       },
       galleryCount: () => (post.kind === 'gallery' ? post.images.length : 0),
       galleryIdx: () => gidx,
@@ -314,7 +362,8 @@
     {#if redgifsLoading}
       <div class="loading"><div class="spinner"></div></div>
     {/if}
-    <div class="pause-indicator" class:show={pauseVisible && settings.showPauseIcon}></div>
+    <div class="pause-indicator" class:show={pausedShow}></div>
+    <div class="buffer-spinner" class:show={bufferingShow}></div>
   {:else if post.kind === 'gallery'}
     <!-- gallery: all images in one slide, stacked along the cross axis -->
     <div class="gallery-strip" class:sliding={stripSliding} style:transform={stripTransform}>
