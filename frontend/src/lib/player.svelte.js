@@ -462,6 +462,23 @@ function unlockVideoPool() {
   if (n) alog(`pool unlock: blessing ${n} elements`);
 }
 
+// True once this session has seen a user gesture. Before that, playback
+// always starts muted even when the audio preference is on: WebKit doesn't
+// just reject a gestureless unmuted play(), it MARKS the element as
+// requiring a gesture, after which even the muted fallback is denied — an
+// audio-on restart then sat frozen instead of autoplaying. Starting muted
+// avoids the mark; rescueAudio lifts the mute on the first gesture.
+let hadGesture = false;
+export const preGestureMuted = () => !hadGesture;
+
+// The last resort failed: this video will not start without a tap. Tell its
+// slide, so it can show the paused indicator instead of a dead frame.
+function notifyBlocked(video) {
+  if (P.currentVideo !== video) return;
+  alog('playback blocked: needs a gesture');
+  video.dispatchEvent(new Event('rv-blocked'));
+}
+
 // Autoplay with sound is often blocked before user interaction: fall back
 // to muted playback rather than stalling the feed (unmute with 🔇 / m).
 // ONLY an actual policy rejection may trigger the muted fallback — play()
@@ -476,7 +493,10 @@ export function attemptPlay(video) {
     if (!video.muted) {
       video.muted = true; // policy fallback; the next gesture restores audio
       alog('policy fallback: muted element');
-      video.play().catch(() => {});
+      video.play().catch(() => notifyBlocked(video));
+    } else {
+      // Muted playback denied too (Low Power Mode, autoplay disabled).
+      notifyBlocked(video);
     }
   });
 }
@@ -568,10 +588,12 @@ function activateEntry(entry, animating = false) {
   if (video) {
     clearTimer();
     P.currentVideo = video;
-    video.muted = P.muted;
+    // Before the session's first gesture the element stays muted regardless
+    // of the audio preference (see hadGesture); the first touch unmutes it.
+    video.muted = P.muted || preGestureMuted();
     video.loop = !settings.autoscroll;
     video.playbackRate = 1; // pooled elements may carry a hold-boost rate
-    alog(`activate ${keyOf(entry.pos)}: muted=${P.muted} animating=${animating}`);
+    alog(`activate ${keyOf(entry.pos)}: muted=${video.muted} (pref ${P.muted}) animating=${animating}`);
     P.seekable = true;
     paintFill('0%');
     // Starting playback spins up the decoder and audio pipeline, which makes
@@ -1442,6 +1464,14 @@ export function initPlayer() {
   window.visualViewport?.addEventListener('resize', syncBottomLetterbox);
   window.addEventListener('orientationchange', () => setTimeout(syncBottomLetterbox, 300));
 
+  // Registered before unlock/rescue so the same event that IS the first
+  // gesture already counts as one for them.
+  const markGesture = () => {
+    hadGesture = true;
+  };
+  for (const ev of ['touchend', 'click', 'keydown']) {
+    document.addEventListener(ev, markGesture, { capture: true, passive: true });
+  }
   document.addEventListener('touchend', unlockVideoPool, { capture: true, passive: true });
   document.addEventListener('click', unlockVideoPool, { capture: true, passive: true });
   document.addEventListener('touchend', rescueAudio, { capture: true, passive: true });

@@ -44,6 +44,7 @@
   // starts) still ends up rendered correctly.
   let vPaused = $state(false); // tracks video.paused via play/pause events
   let vWaiting = $state(false); // stalled: wants to play but has no data
+  let vBlocked = $state(false); // autoplay denied outright; a tap will start it
   let posterGone = $state(false); // real frames have rendered
   let redgifsLoading = $state(
     post.kind === 'video' && !!(post.redgifsId && !post.redgifsMp4 && !post.redgifsResolved)
@@ -89,9 +90,11 @@
   // The centered paused indicator: any paused state of the active video
   // once it has shown real frames — user taps, but also playback that never
   // resumed (a rejected play() would otherwise leave a frozen frame with no
-  // hint that a tap starts it).
+  // hint that a tap starts it). A blocked autoplay (rv-blocked) shows it
+  // immediately, frames or not: the poster is sitting there dead and the
+  // icon is what says "tap to start".
   const pausedShow = $derived(
-    isActive && vPaused && posterGone && !activeGrace && settings.showPauseIcon
+    isActive && ((vPaused && posterGone && !activeGrace) || vBlocked) && settings.showPauseIcon
   );
   // Instagram-style buffering spinner while the active video wants to play
   // but is out of data. The CSS reveal delay keeps micro-stalls invisible.
@@ -254,6 +257,7 @@
       'play',
       () => {
         vPaused = false;
+        vBlocked = false;
         // Starting without buffered data ahead is a stall even if the
         // engine never fires 'waiting' for it.
         if (video.readyState < 3) vWaiting = true;
@@ -262,11 +266,15 @@
     );
     video.addEventListener('playing', () => (vWaiting = false), sig);
     video.addEventListener('waiting', () => (vWaiting = true), sig);
+    // attemptPlay's last resort was denied: nothing will start this video
+    // but a tap — say so with the paused indicator.
+    video.addEventListener('rv-blocked', () => (vBlocked = true), sig);
     // A source swap (fallback, resolution switch) starts the load over.
     video.addEventListener(
       'emptied',
       () => {
         vWaiting = false;
+        vBlocked = false;
         posterGone = false;
       },
       sig
