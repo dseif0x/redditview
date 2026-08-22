@@ -2,7 +2,7 @@
   // Opt-in overlay (settings): live video element state, fps, and the recent
   // audio/perf log, so failures can be diagnosed on-device without an
   // inspector.
-  import { P } from '../lib/player.svelte.js';
+  import { P, activeOverlayDebug } from '../lib/player.svelte.js';
   import { settings, activeCookie, cookieSig } from '../lib/settings.svelte.js';
   import { dbg } from '../lib/debug.svelte.js';
 
@@ -97,6 +97,7 @@
       }
       text = [
         `${P.muted ? 'MUTED' : 'audio on'} | ${audio}`,
+        activeOverlayDebug(),
         postLine,
         viewportLine(),
         [fps, dbg.lastTransitionProfile].filter(Boolean).join(' | '),

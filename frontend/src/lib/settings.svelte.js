@@ -16,7 +16,6 @@ export const DEFAULTS = {
   showText: true,
   vertical: false,
   smoothScroll: true,
-  showPauseIcon: true,
   // Opt-in adaptive quality: HLS starts at the measured bandwidth (capped to
   // the player size), and fixed-mp4 providers (redgifs) drop to their SD file
   // when playback stalls. Off = always full quality, like before.
@@ -43,6 +42,10 @@ function migrateStored(raw) {
   delete raw.moveBar;
   // Crop-to-fill became real browser fullscreen (not a setting).
   delete raw.fillScreen;
+  // The paused indicator is core player feedback now (paired with the
+  // buffering spinner), not a setting: a stored/synced false silently killed
+  // it for good, which read as "the paused overlay is broken".
+  delete raw.showPauseIcon;
   return raw;
 }
 
