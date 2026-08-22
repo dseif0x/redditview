@@ -75,12 +75,6 @@ export function isEntryActive(uid) {
   return P.activeUid === uid;
 }
 
-// The active slide's overlay-state line for the debug overlay.
-export function activeOverlayDebug() {
-  const c = activeController();
-  return c?.overlayDebug ? c.overlayDebug() : '';
-}
-
 function activeController() {
   return P.activeUid != null ? controllers.get(P.activeUid) : null;
 }

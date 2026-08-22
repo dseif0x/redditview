@@ -89,10 +89,10 @@
   // The centered paused indicator: any paused state of the active video
   // once it has shown real frames — user taps, but also playback that never
   // resumed (a rejected play() would otherwise leave a frozen frame with no
-  // hint that a tap starts it). Unconditional on purpose: it used to sit
-  // behind a settings toggle, and a stored false read as "the overlay is
-  // broken" — it is core feedback, like the buffering spinner.
-  const pausedShow = $derived(isActive && vPaused && posterGone && !activeGrace);
+  // hint that a tap starts it).
+  const pausedShow = $derived(
+    isActive && vPaused && posterGone && !activeGrace && settings.showPauseIcon
+  );
   // Instagram-style buffering spinner while the active video wants to play
   // but is out of data. The CSS reveal delay keeps micro-stalls invisible.
   const bufferingShow = $derived(isActive && vWaiting && !vPaused);
@@ -247,11 +247,6 @@
       () => {
         vPaused = true;
         vWaiting = false;
-        // A pause OBSERVED while active is a real transition (activation's
-        // deferred-play window starts already paused, eventless), so the
-        // grace hold no longer applies — this also keeps a user pause
-        // visible even if the grace timer were ever lost.
-        if (isEntryActive(entry.uid)) activeGrace = false;
       },
       sig
     );
@@ -296,14 +291,6 @@
           alog(`deactivate p${entry.pos}: muted`);
         }
       },
-      // One line for the debug overlay: every input of the video overlay
-      // deriveds, so "the icon doesn't show" is diagnosable on-device.
-      overlayDebug: () =>
-        post.kind === 'video'
-          ? `overlay: paused=${+vPaused} frames=${+posterGone} grace=${+activeGrace} wait=${+vWaiting} -> ${
-              pausedShow ? 'PAUSED' : bufferingShow ? 'BUFFERING' : 'none'
-            }`
-          : '',
       galleryCount: () => (post.kind === 'gallery' ? post.images.length : 0),
       galleryIdx: () => gidx,
       galleryStep(dir) {
