@@ -26,6 +26,16 @@ advancing; images advance after a configurable duration.
    datacenter/VPS IPs regardless of cookie — run the container somewhere with
    a residential IP. `REDDIT_USER_AGENT` overrides the User-Agent the backend
    sends; matching your own browser's UA (the one the cookie came from) helps.
+
+   Rate limits (429s in long sessions) are handled server-side: all reddit
+   requests are paced through a token bucket (default 1/s sustained with a
+   burst of 4 — tune with `REDDIT_UPSTREAM_RPS`), successful responses are
+   cached for a minute per account+URL so reloads cost nothing, and a 429
+   (or reddit's rate-limit headers approaching zero) puts the backend into a
+   cooldown honoring `Retry-After` — during it, cached pages up to 15
+   minutes old are served instead of hammering reddit and deepening the
+   penalty. Media/video proxying is not paced (CDN limits are separate and
+   far higher).
 2. Enter a feed and press **Go**:
    - empty → your home feed (requires cookie)
    - `r/pics`, `r/pics/top?t=week`

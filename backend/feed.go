@@ -2,8 +2,8 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"net/url"
@@ -199,9 +199,9 @@ func handleFeed(w http.ResponseWriter, r *http.Request) {
 		q.Set("after", after)
 	}
 
-	var resp *http.Response
-	lastStatus := 0
-	lastBody := ""
+	cookie := r.Header.Get("X-Reddit-Cookie")
+	var body []byte
+	var lastErr error
 	servedHost := ""
 	for _, host := range feedHosts {
 		target := host
@@ -210,52 +210,31 @@ func handleFeed(w http.ResponseWriter, r *http.Request) {
 		}
 		target += ".json?" + q.Encode()
 
-		req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, target, nil)
+		b, err := redditGet(r.Context(), cookie, target)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		req.Header.Set("User-Agent", userAgent)
-		req.Header.Set("Accept", "application/json")
-		if cookie := r.Header.Get("X-Reddit-Cookie"); cookie != "" {
-			req.Header.Set("Cookie", cookie)
-		}
-
-		resp, err = httpClient.Do(req)
-		if err != nil {
-			http.Error(w, "reddit request failed: "+err.Error(), http.StatusBadGateway)
-			return
-		}
-		if resp.StatusCode == http.StatusOK {
-			if strings.HasPrefix(host, "https://old.") {
-				servedHost = "old"
-			} else {
-				servedHost = "www"
+			lastErr = err
+			var rle *rateLimitedError
+			if errors.As(err, &rle) {
+				break // the limit is per-IP: the other host is equally limited
 			}
-			break
+			continue
 		}
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
-		resp.Body.Close()
-		lastStatus = resp.StatusCode
-		lastBody = strings.TrimSpace(string(body))
-		resp = nil
+		body = b
+		if strings.HasPrefix(host, "https://old.") {
+			servedHost = "old"
+		} else {
+			servedHost = "www"
+		}
+		break
 	}
 
-	if resp == nil {
-		msg := fmt.Sprintf("reddit returned %d", lastStatus)
-		if strings.Contains(lastBody, "<") || lastBody == "" {
-			// reddit's block page is HTML; don't dump it at the user.
-			msg += " (request blocked by reddit). Tips: paste your browser's FULL Cookie header in settings, not just reddit_session — reddit fingerprints requests and partial cookies look like bots. Reddit also blocks many datacenter/VPS IPs; if this server runs in a cloud, try it from a residential connection."
-		} else {
-			msg += ": " + lastBody
-		}
-		http.Error(w, msg, http.StatusBadGateway)
+	if body == nil {
+		sendUpstreamError(w, lastErr, true)
 		return
 	}
-	defer resp.Body.Close()
 
 	var l listing
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 20<<20)).Decode(&l); err != nil {
+	if err := json.Unmarshal(body, &l); err != nil {
 		http.Error(w, "failed to parse reddit response: "+err.Error(), http.StatusBadGateway)
 		return
 	}
@@ -295,33 +274,21 @@ type subredditListing struct {
 	} `json:"data"`
 }
 
-// redditGetJSON fetches a reddit JSON endpoint with the usual host fallback.
+// redditGetJSON fetches a reddit JSON endpoint with the usual host fallback,
+// through the paced/cached/cooled-down upstream layer.
 func redditGetJSON(r *http.Request, path string, q url.Values, cookie string, out any) error {
 	var lastErr error
 	for _, host := range feedHosts {
-		req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, host+path+"?"+q.Encode(), nil)
-		if err != nil {
-			return err
-		}
-		req.Header.Set("User-Agent", userAgent)
-		req.Header.Set("Accept", "application/json")
-		if cookie != "" {
-			req.Header.Set("Cookie", cookie)
-		}
-		resp, err := httpClient.Do(req)
+		body, err := redditGet(r.Context(), cookie, host+path+"?"+q.Encode())
 		if err != nil {
 			lastErr = err
+			var rle *rateLimitedError
+			if errors.As(err, &rle) {
+				break // per-IP limit: don't burn the fallback host too
+			}
 			continue
 		}
-		if resp.StatusCode != http.StatusOK {
-			_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 2048))
-			resp.Body.Close()
-			lastErr = fmt.Errorf("reddit returned %d", resp.StatusCode)
-			continue
-		}
-		err = json.NewDecoder(io.LimitReader(resp.Body, 20<<20)).Decode(out)
-		resp.Body.Close()
-		return err
+		return json.Unmarshal(body, out)
 	}
 	return lastErr
 }

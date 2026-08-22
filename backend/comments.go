@@ -2,8 +2,8 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"regexp"
 	"sort"
@@ -147,41 +147,31 @@ func handleComments(w http.ResponseWriter, r *http.Request) {
 		sort = "confidence"
 	}
 
-	var resp *http.Response
-	lastStatus := 0
+	cookie := r.Header.Get("X-Reddit-Cookie")
+	var body []byte
+	var lastErr error
 	for _, host := range feedHosts {
 		target := fmt.Sprintf("%scomments/%s/.json?raw_json=1&limit=150&sort=%s", host, id, sort)
-		req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, target, nil)
+		b, err := redditGet(r.Context(), cookie, target)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
+			lastErr = err
+			var rle *rateLimitedError
+			if errors.As(err, &rle) {
+				break // per-IP limit: don't burn the fallback host too
+			}
+			continue
 		}
-		req.Header.Set("User-Agent", userAgent)
-		req.Header.Set("Accept", "application/json")
-		if cookie := r.Header.Get("X-Reddit-Cookie"); cookie != "" {
-			req.Header.Set("Cookie", cookie)
-		}
-		resp, err = httpClient.Do(req)
-		if err != nil {
-			http.Error(w, "reddit request failed: "+err.Error(), http.StatusBadGateway)
-			return
-		}
-		if resp.StatusCode == http.StatusOK {
-			break
-		}
-		lastStatus = resp.StatusCode
-		resp.Body.Close()
-		resp = nil
+		body = b
+		break
 	}
-	if resp == nil {
-		http.Error(w, fmt.Sprintf("reddit returned %d for comments", lastStatus), http.StatusBadGateway)
+	if body == nil {
+		sendUpstreamError(w, lastErr, false)
 		return
 	}
-	defer resp.Body.Close()
 
 	// The payload is [post listing, comment listing].
 	var payload []cListing
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 30<<20)).Decode(&payload); err != nil || len(payload) < 2 {
+	if err := json.Unmarshal(body, &payload); err != nil || len(payload) < 2 {
 		http.Error(w, "failed to parse reddit comments", http.StatusBadGateway)
 		return
 	}
