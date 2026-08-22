@@ -21,9 +21,12 @@ export const P = $state({
   posts: [],
   idx: -1,
   galleryIdx: 0,
-  // Every session starts muted: the first unmute tap is the user interaction
-  // that grants (and pool-blesses) audio playback rights.
-  muted: true,
+  // The audio preference, restored from the last session. Browsers only
+  // grant sound inside a user gesture, so an audio-on session still STARTS
+  // silent (attemptPlay's policy fallback mutes the element) — the first
+  // tap or swipe then lifts the element mute via rescueAudio and blesses
+  // the pool, no trip to the 🔊 button required.
+  muted: !settings.audioOn,
   // Slide window entries: {uid, pos, off, animate, evicted, preloadHint}.
   window: [],
   activeUid: null,
@@ -1044,6 +1047,8 @@ export function toggleAutoscroll() {
 // which the gesture rescue below keeps converging to the preference.
 export function toggleMute() {
   P.muted = !P.muted;
+  settings.audioOn = !P.muted; // the preference carries into the next session
+  saveSettings();
   alog(`toggle -> ${P.muted ? 'muted' : 'audio on'}`);
   if (P.currentVideo) P.currentVideo.muted = P.muted;
   if (!P.muted) {

@@ -17,6 +17,10 @@ export const DEFAULTS = {
   vertical: false,
   smoothScroll: true,
   showPauseIcon: true,
+  // The mute button's state, remembered across sessions. Browsers still
+  // demand a user gesture before sound, so an audio-on session starts
+  // silent and the first tap/swipe brings the audio up (see rescueAudio).
+  audioOn: false,
   // Opt-in adaptive quality: HLS starts at the measured bandwidth (capped to
   // the player size), and fixed-mp4 providers (redgifs) drop to their SD file
   // when playback stalls. Off = always full quality, like before.
@@ -43,6 +47,10 @@ function migrateStored(raw) {
   delete raw.moveBar;
   // Crop-to-fill became real browser fullscreen (not a setting).
   delete raw.fillScreen;
+  // audioOn is live again (the audio preference survives sessions now);
+  // fold the even older inverted start-muted flag into it where present.
+  if (raw.startMuted !== undefined && raw.audioOn === undefined) raw.audioOn = !raw.startMuted;
+  delete raw.startMuted;
   return raw;
 }
 
@@ -57,10 +65,6 @@ function loadSettings() {
   // Migrate the old audio-debug setting into the general debug setting.
   if (s.audioDebug) s.debug = true;
   delete s.audioDebug;
-
-  // Migrate the old start-muted setting into the play-audio setting.
-  delete s.audioOn; // sessions now always start muted
-  delete s.startMuted;
 
   // Migrate a pre-accounts cookie into the account list.
   if (!Array.isArray(s.accounts)) s.accounts = [];

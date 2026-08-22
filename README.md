@@ -66,8 +66,13 @@ vertical bars over the middle 60% of the screen height, with a setting to
 invert whether they fill downwards or upwards. The bar stays seekable in
 every position.
 
-Every session starts muted; the first tap on the 🔊 button is the user
-interaction iOS requires and unlocks audio for the whole session.
+The 🔊 button is a remembered preference: once audio is on, it stays on
+across sessions. Browsers still require a user interaction before sound, so
+an audio-on session starts silent and your first tap or swipe brings the
+audio up (the very first session ever starts muted until you tap 🔊 once).
+iOS never reports hardware volume-button presses to web apps, PWAs included,
+so the volume rocker can't unmute — the first-gesture unlock is the closest
+web-possible equivalent.
 
 Autoscroll is off by default: videos loop and slides stay until you navigate.
 Turning it on (▶ button or `space`) advances images after the configured
