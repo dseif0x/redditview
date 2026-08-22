@@ -2,9 +2,11 @@ package main
 
 import (
 	"log"
+	"math"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -16,6 +18,14 @@ var userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (K
 func main() {
 	if ua := os.Getenv("REDDIT_USER_AGENT"); ua != "" {
 		userAgent = ua
+	}
+	// Sustained upstream request rate against reddit (default 1/s, burst 4x).
+	if v := os.Getenv("REDDIT_UPSTREAM_RPS"); v != "" {
+		if f, err := strconv.ParseFloat(v, 64); err == nil && f > 0 {
+			redditPace = newTokenBucket(f, math.Max(4, f*4))
+		} else {
+			log.Printf("ignoring invalid REDDIT_UPSTREAM_RPS %q", v)
+		}
 	}
 	addr := ":8080"
 	if p := os.Getenv("PORT"); p != "" {

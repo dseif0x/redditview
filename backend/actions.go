@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -42,20 +43,19 @@ func getIdentity(r *http.Request, cookie string, force bool) (identity, error) {
 		return cached, nil
 	}
 
-	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, "https://old.reddit.com/api/me.json", nil)
-	if err != nil {
-		return identity{}, err
+	// A forced refresh means reddit just rejected the cached modhash — a
+	// cached /api/me would replay the same stale one, so skip the cache then.
+	fetch := redditGet
+	if force {
+		fetch = redditGetUncached
 	}
-	req.Header.Set("User-Agent", userAgent)
-	req.Header.Set("Cookie", cookie)
-
-	resp, err := httpClient.Do(req)
+	raw, err := fetch(r.Context(), cookie, "https://old.reddit.com/api/me.json")
 	if err != nil {
+		var ue *upstreamError
+		if errors.As(err, &ue) {
+			return identity{}, fmt.Errorf("reddit /api/me returned %d", ue.status)
+		}
 		return identity{}, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return identity{}, fmt.Errorf("reddit /api/me returned %d", resp.StatusCode)
 	}
 
 	var body struct {
@@ -64,7 +64,7 @@ func getIdentity(r *http.Request, cookie string, force bool) (identity, error) {
 			Name    string `json:"name"`
 		} `json:"data"`
 	}
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&body); err != nil {
+	if err := json.Unmarshal(raw, &body); err != nil {
 		return identity{}, fmt.Errorf("failed to parse /api/me: %w", err)
 	}
 	if body.Data.Modhash == "" || body.Data.Name == "" {
@@ -171,6 +171,14 @@ func doRedditAction(w http.ResponseWriter, r *http.Request, endpoint string, for
 		req.Header.Set("Cookie", cookie)
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
+		// Writes are paced but deliberately not blocked by an active
+		// cooldown: they're rare, user-initiated, and losing a vote hurts
+		// more than one extra request — though a 429 here still (re)arms
+		// the cooldown for the read paths.
+		if err := redditPace.wait(r.Context()); err != nil {
+			http.Error(w, err.Error(), http.StatusBadGateway)
+			return
+		}
 		resp, err := httpClient.Do(req)
 		if err != nil {
 			http.Error(w, "reddit request failed: "+err.Error(), http.StatusBadGateway)
@@ -178,6 +186,11 @@ func doRedditAction(w http.ResponseWriter, r *http.Request, endpoint string, for
 		}
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
 		resp.Body.Close()
+		cooldownFromResponse(resp)
+		if resp.StatusCode == http.StatusTooManyRequests {
+			http.Error(w, (&rateLimitedError{cooldownRemaining()}).Error(), http.StatusTooManyRequests)
+			return
+		}
 
 		rejected := resp.StatusCode == http.StatusForbidden || strings.Contains(string(body), "USER_REQUIRED")
 		if rejected && attempt == 0 {
