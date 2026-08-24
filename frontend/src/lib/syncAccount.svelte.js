@@ -22,7 +22,6 @@ import {
   mergeSeen,
   activeCookie,
 } from './settings.svelte.js';
-import { apiBase } from './api.js';
 import { showToast } from './toast.svelte.js';
 import { P, startFeed } from './player.svelte.js';
 
@@ -457,13 +456,10 @@ export async function syncDeleteAccount() {
 // Startup
 // ---------------------------------------------------------------------------
 export function initSync() {
-  // Passkeys bind to the page's origin, so sync only works when the app is
-  // served by its own backend (the normal deployment) — not with a
-  // cross-origin server URL configured.
   // Device linking only needs WebCrypto, so devices without passkey support
   // (VR headsets, TVs) still get the sync section — minus the passkey
   // buttons.
-  sync.available = apiBase() === '' && !!crypto?.subtle;
+  sync.available = !!crypto?.subtle;
   sync.passkeys = sync.available && !!window.PublicKeyCredential;
   if (!sync.available) return;
 

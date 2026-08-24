@@ -1416,6 +1416,18 @@ export function viewerPointerDown(e) {
 // ---------------------------------------------------------------------------
 let settingsPausedPlayback = false;
 
+// The settings page registers a handler so Escape backs out of an open
+// settings subpage before it leaves the settings tab. Returns true when it
+// consumed the key.
+let settingsBackHook = null;
+
+export function registerSettingsBack(fn) {
+  settingsBackHook = fn;
+  return () => {
+    if (settingsBackHook === fn) settingsBackHook = null;
+  };
+}
+
 export function showTab(tab) {
   P.tab = tab;
   if (tab === 'settings') {
@@ -1686,7 +1698,7 @@ export function initPlayer() {
     // leave the settings tab or dismiss the comments sheet underneath.
     if (e.key === 'Escape' && document.querySelector('[data-select-content]')) return;
     if (P.tab === 'settings') {
-      if (e.key === 'Escape') showTab('posts');
+      if (e.key === 'Escape' && !settingsBackHook?.()) showTab('posts');
       return;
     }
     if (P.commentsOpen) {

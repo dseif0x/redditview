@@ -27,8 +27,14 @@
   import Folder from '@lucide/svelte/icons/folder';
   import Share from '@lucide/svelte/icons/share';
   import ChevronDown from '@lucide/svelte/icons/chevron-down';
+  import ChevronRight from '@lucide/svelte/icons/chevron-right';
+  import ArrowLeft from '@lucide/svelte/icons/arrow-left';
   import Check from '@lucide/svelte/icons/check';
   import Sparkles from '@lucide/svelte/icons/sparkles';
+  import Compass from '@lucide/svelte/icons/compass';
+  import SlidersHorizontal from '@lucide/svelte/icons/sliders-horizontal';
+  import Filter from '@lucide/svelte/icons/filter';
+  import Wrench from '@lucide/svelte/icons/wrench';
 
   const ICONS = {
     play: Play,
@@ -56,8 +62,14 @@
     folder: Folder,
     share: Share,
     'chevron-down': ChevronDown,
+    'chevron-right': ChevronRight,
+    'arrow-left': ArrowLeft,
     check: Check,
     sparkles: Sparkles,
+    compass: Compass,
+    sliders: SlidersHorizontal,
+    filter: Filter,
+    wrench: Wrench,
   };
 </script>
 
