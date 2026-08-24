@@ -1683,6 +1683,56 @@ h2.as-header,
   justify-content: flex-end;
 }
 
+/* ---- settings category menu + subpages ---- */
+.menu-item {
+  width: 100%;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  border: none;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07); /* button resets .item's */
+}
+
+.menu-item:active {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.menu-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.9rem;
+  height: 1.9rem;
+  flex-shrink: 0;
+  border-radius: 8px;
+  background: var(--primary);
+  color: #fff;
+  font-size: 1.1rem;
+}
+
+.menu-chevron {
+  display: inline-flex;
+  color: var(--muted);
+  font-size: 1.1rem;
+}
+
+.subpage-header {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin: 0.25rem 0.75rem 0.5rem;
+}
+
+.subpage-header h2 {
+  margin: 0;
+}
+
+.back-btn {
+  font-size: 1.4rem;
+}
+
 /* ---- Bits UI switch (iOS style) ---- */
 .switch {
   position: relative;

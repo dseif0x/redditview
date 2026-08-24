@@ -3,7 +3,6 @@
 // ---------------------------------------------------------------------------
 const SETTINGS_KEY = 'redditview.settings';
 export const DEFAULTS = {
-  serverUrl: '',
   cookie: '',
   accounts: [],
   activeAccount: 0,
@@ -51,6 +50,9 @@ function migrateStored(raw) {
   delete raw.moveBar;
   // Crop-to-fill became real browser fullscreen (not a setting).
   delete raw.fillScreen;
+  // The remote-backend server URL option was removed; the app is always
+  // served by its own backend.
+  delete raw.serverUrl;
   // audioOn is live again (the audio preference survives sessions now);
   // fold the even older inverted start-muted flag into it where present.
   if (raw.startMuted !== undefined && raw.audioOn === undefined) raw.audioOn = !raw.startMuted;

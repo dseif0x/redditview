@@ -12,8 +12,12 @@
     replaceSettings,
     DEFAULTS,
   } from '../lib/settings.svelte.js';
-  import { P, startFeed, refreshAfterVerticalChange } from '../lib/player.svelte.js';
-  import { apiBase } from '../lib/api.js';
+  import {
+    P,
+    startFeed,
+    refreshAfterVerticalChange,
+    registerSettingsBack,
+  } from '../lib/player.svelte.js';
   import { showToast } from '../lib/toast.svelte.js';
   import { presentActionSheet } from '../lib/sheet.svelte.js';
   import {
@@ -33,16 +37,42 @@
   import Icon from './Icon.svelte';
   import PickerSelect from './PickerSelect.svelte';
 
-  const TOGGLES = [
-    { key: 'vertical', label: 'Vertical navigation (swipe up/down)' },
-    { key: 'smoothScroll', label: 'Smooth scrolling' },
-    { key: 'navZones', label: 'Click near the edges for next/previous post (desktop)' },
-    { key: 'showPauseIcon', label: 'Paused indicator on videos' },
-    { key: 'dynamicResolution', label: 'Dynamic video resolution (less buffering, may lower quality)' },
-    { key: 'barInvert', label: 'Left/right progress bar fills upwards' },
-    { key: 'skipSeen', label: "Skip posts you've already seen" },
-    { key: 'debug', label: 'Debug overlay (audio + performance)' },
+  // The preference controls live in per-category subpages (Reddit-client
+  // style); the root page keeps the account + sync blocks and a menu.
+  const CATEGORIES = [
+    { id: 'navigation', label: 'Navigation', icon: 'compass' },
+    { id: 'playback', label: 'Playback', icon: 'play' },
+    { id: 'bar', label: 'Progress bar', icon: 'sliders' },
+    { id: 'content', label: 'Content', icon: 'filter' },
+    { id: 'advanced', label: 'Advanced', icon: 'wrench' },
   ];
+  const TOGGLES = {
+    navigation: [
+      { key: 'vertical', label: 'Vertical navigation (swipe up/down)' },
+      { key: 'smoothScroll', label: 'Smooth scrolling' },
+      { key: 'navZones', label: 'Click near the edges for next/previous post (desktop)' },
+    ],
+    playback: [
+      { key: 'showPauseIcon', label: 'Paused indicator on videos' },
+      { key: 'dynamicResolution', label: 'Dynamic video resolution (less buffering, may lower quality)' },
+    ],
+    bar: [{ key: 'barInvert', label: 'Left/right progress bar fills upwards' }],
+    content: [{ key: 'skipSeen', label: "Skip posts you've already seen" }],
+    advanced: [{ key: 'debug', label: 'Debug overlay (audio + performance)' }],
+  };
+  // Which subpage is open: a CATEGORIES id, or null for the root page.
+  let subpage = $state(null);
+  const subpageLabel = $derived(CATEGORIES.find((c) => c.id === subpage)?.label || '');
+
+  // Escape backs out of an open subpage before it leaves the settings tab.
+  $effect(() =>
+    registerSettingsBack(() => {
+      if (!subpage) return false;
+      subpage = null;
+      return true;
+    })
+  );
+
   const FILTERS = [
     { key: 'showImages', label: 'Images & galleries' },
     { key: 'showVideos', label: 'Videos' },
@@ -59,7 +89,6 @@
   // the credential on screen. A saved cookie renders as a masked row with a
   // Show button; the textarea (with the real value) appears only on demand.
   let cookieMasked = $state(false);
-  let serverUrl = $state(settings.serverUrl);
   let imageSeconds = $state(settings.imageSeconds);
   let seekSeconds = $state(settings.seekSeconds);
   let preloadCount = $state(settings.preloadCount);
@@ -153,14 +182,6 @@
     loadAccountFields();
     showToast('Account deleted');
     applyActiveCookie();
-  }
-
-  function commitServerUrl() {
-    const prevServer = apiBase();
-    settings.serverUrl = String(serverUrl).trim();
-    serverUrl = settings.serverUrl;
-    saveSettings();
-    if (apiBase() !== prevServer && P.feedActive) startFeed(P.feedPath);
   }
 
   function commitImageSeconds() {
@@ -303,7 +324,6 @@
     }
     replaceSettings(parsed);
     // Refresh the form's local state from the imported settings.
-    serverUrl = settings.serverUrl;
     imageSeconds = settings.imageSeconds;
     seekSeconds = settings.seekSeconds;
     preloadCount = settings.preloadCount;
@@ -317,9 +337,41 @@
 
 <section id="settings-page">
   <form id="settings-form" onsubmit={(e) => e.preventDefault()}>
-    <h2>Settings</h2>
+    {#snippet toggleRows(list)}
+      {#each list as t (t.key)}
+        <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+        <div class="item item-toggle" onclick={(e) => rowToggle(e, t.key)}>
+          <span class="item-label">{t.label}</span>
+          <Switch.Root
+            class="switch"
+            checked={settings[t.key]}
+            onCheckedChange={(v) => applyToggle(t.key, v)}
+          >
+            <Switch.Thumb class="switch-thumb" />
+          </Switch.Root>
+        </div>
+      {/each}
+    {/snippet}
 
-    <div class="list">
+    {#if !subpage}
+      <h2>Settings</h2>
+    {:else}
+      <div class="subpage-header">
+        <button
+          type="button"
+          class="icon-btn back-btn"
+          aria-label="Back to settings"
+          onclick={() => (subpage = null)}
+        >
+          <Icon name="arrow-left" />
+        </button>
+        <h2>{subpageLabel}</h2>
+      </div>
+    {/if}
+
+    <!-- The account + sync blocks live on the root page; they stay mounted
+         (just hidden) so their transient state survives subpage visits. -->
+    <div class="list" hidden={!!subpage}>
       <div class="item">
         <span class="item-label">Account</span>
         <PickerSelect
@@ -368,7 +420,7 @@
       {/if}
     </div>
 
-    <div class="list">
+    <div class="list" hidden={!!subpage}>
       <div class="list-header">Sync</div>
       {#if !sync.available}
         <div class="item">
@@ -501,126 +553,127 @@
       {/if}
     </div>
 
-    <div class="list">
-      <div class="item item-stacked">
-        <label class="stacked-label" for="server-url-input">Backend server URL</label>
-        <input
-          id="server-url-input"
-          type="url"
-          inputmode="url"
-          autocomplete="off"
-          autocapitalize="off"
-          bind:value={serverUrl}
-          onchange={commitServerUrl}
-          placeholder="Empty = this server. Set to use a remote backend, e.g. https://redditview.example.com"
-        />
+    {#if !subpage}
+      <div class="list">
+        {#each CATEGORIES as c (c.id)}
+          <button type="button" class="item menu-item" onclick={() => (subpage = c.id)}>
+            <span class="menu-icon"><Icon name={c.icon} /></span>
+            <span class="item-label">{c.label}</span>
+            <span class="menu-chevron"><Icon name="chevron-right" /></span>
+          </button>
+        {/each}
       </div>
-      <div class="item">
-        <label class="item-label" for="image-seconds-input">Image duration (seconds)</label>
-        <input
-          id="image-seconds-input"
-          class="item-input num"
-          type="number"
-          min="1"
-          max="600"
-          step="0.5"
-          bind:value={imageSeconds}
-          onchange={commitImageSeconds}
-        />
+      <p class="hint">
+        Changes are saved automatically, and only in this browser's localStorage. The cookie is
+        sent to the backend per request and never persisted server-side.
+      </p>
+    {:else if subpage === 'navigation'}
+      <div class="list">
+        {@render toggleRows(TOGGLES.navigation)}
       </div>
-      <div class="item">
-        <label class="item-label" for="seek-seconds-input">Arrow key video seek (seconds)</label>
-        <input
-          id="seek-seconds-input"
-          class="item-input num"
-          type="number"
-          min="0.5"
-          max="60"
-          step="0.5"
-          bind:value={seekSeconds}
-          onchange={commitSeekSeconds}
-        />
-      </div>
-      <div class="item">
-        <label class="item-label" for="preload-count-input">Posts preloaded ahead</label>
-        <input
-          id="preload-count-input"
-          class="item-input num"
-          type="number"
-          min="1"
-          max="4"
-          step="1"
-          bind:value={preloadCount}
-          onchange={commitPreloadCount}
-        />
-      </div>
-      <div class="item">
-        <span class="item-label">Progress bar position</span>
-        <PickerSelect
-          triggerClass="bar-mode-pill"
-          items={BAR_MODES}
-          value={settings.barMode}
-          onchange={pickBarMode}
-        />
-      </div>
-      {#each TOGGLES as t (t.key)}
-        <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-        <div class="item item-toggle" onclick={(e) => rowToggle(e, t.key)}>
-          <span class="item-label">{t.label}</span>
-          <Switch.Root
-            class="switch"
-            checked={settings[t.key]}
-            onCheckedChange={(v) => applyToggle(t.key, v)}
-          >
-            <Switch.Thumb class="switch-thumb" />
-          </Switch.Root>
+    {:else if subpage === 'playback'}
+      <div class="list">
+        <div class="item">
+          <label class="item-label" for="image-seconds-input">Image duration (seconds)</label>
+          <input
+            id="image-seconds-input"
+            class="item-input num"
+            type="number"
+            min="1"
+            max="600"
+            step="0.5"
+            bind:value={imageSeconds}
+            onchange={commitImageSeconds}
+          />
         </div>
-      {/each}
-    </div>
-
-    <div class="list">
-      <div class="list-header">Show post types</div>
-      {#each FILTERS as f (f.key)}
-        <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-        <div class="item item-toggle" onclick={(e) => rowToggle(e, f.key)}>
-          <Checkbox.Root
-            class="checkbox"
-            checked={settings[f.key]}
-            onCheckedChange={(v) => applyToggle(f.key, v)}
-          >
-            <svg class="checkbox-mark" viewBox="0 0 24 24" aria-hidden="true">
-              <path
-                d="M5 12.5l4.5 4.5L19 7.5"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="3"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              />
-            </svg>
-          </Checkbox.Root>
-          <span class="item-label">{f.label}</span>
+        <div class="item">
+          <label class="item-label" for="seek-seconds-input">Arrow key video seek (seconds)</label>
+          <input
+            id="seek-seconds-input"
+            class="item-input num"
+            type="number"
+            min="0.5"
+            max="60"
+            step="0.5"
+            bind:value={seekSeconds}
+            onchange={commitSeekSeconds}
+          />
         </div>
-      {/each}
-    </div>
-
-    <div class="settings-io">
-      <button type="button" class="btn-outline" onclick={exportSettings}>Export settings</button>
-      <button type="button" class="btn-outline" onclick={importSettings}>Import settings</button>
-    </div>
-    {#if ioVisible}
-      <textarea
-        id="io-text"
-        bind:this={ioEl}
-        bind:value={ioValue}
-        rows="3"
-        placeholder="Exported settings JSON appears here — or paste JSON and press Import again"
-      ></textarea>
+        <div class="item">
+          <label class="item-label" for="preload-count-input">Posts preloaded ahead</label>
+          <input
+            id="preload-count-input"
+            class="item-input num"
+            type="number"
+            min="1"
+            max="4"
+            step="1"
+            bind:value={preloadCount}
+            onchange={commitPreloadCount}
+          />
+        </div>
+        {@render toggleRows(TOGGLES.playback)}
+      </div>
+    {:else if subpage === 'bar'}
+      <div class="list">
+        <div class="item">
+          <span class="item-label">Position</span>
+          <PickerSelect
+            triggerClass="bar-mode-pill"
+            items={BAR_MODES}
+            value={settings.barMode}
+            onchange={pickBarMode}
+          />
+        </div>
+        {@render toggleRows(TOGGLES.bar)}
+      </div>
+    {:else if subpage === 'content'}
+      <div class="list">
+        <div class="list-header">Show post types</div>
+        {#each FILTERS as f (f.key)}
+          <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+          <div class="item item-toggle" onclick={(e) => rowToggle(e, f.key)}>
+            <Checkbox.Root
+              class="checkbox"
+              checked={settings[f.key]}
+              onCheckedChange={(v) => applyToggle(f.key, v)}
+            >
+              <svg class="checkbox-mark" viewBox="0 0 24 24" aria-hidden="true">
+                <path
+                  d="M5 12.5l4.5 4.5L19 7.5"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="3"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+              </svg>
+            </Checkbox.Root>
+            <span class="item-label">{f.label}</span>
+          </div>
+        {/each}
+        {@render toggleRows(TOGGLES.content)}
+      </div>
+    {:else if subpage === 'advanced'}
+      <div class="list">
+        {@render toggleRows(TOGGLES.advanced)}
+      </div>
+      <div class="settings-io">
+        <button type="button" class="btn-outline" onclick={exportSettings}>Export settings</button>
+        <button type="button" class="btn-outline" onclick={importSettings}>Import settings</button>
+      </div>
+      {#if ioVisible}
+        <textarea
+          id="io-text"
+          bind:this={ioEl}
+          bind:value={ioValue}
+          rows="3"
+          placeholder="Exported settings JSON appears here — or paste JSON and press Import again"
+        ></textarea>
+      {/if}
+      <p class="hint">
+        Export includes accounts and cookies — treat it like a password.
+      </p>
     {/if}
-    <p class="hint">
-      Changes are saved automatically, and only in this browser's localStorage. The cookie is sent
-      to the backend per request and never persisted server-side. Export includes accounts and
-      cookies — treat it like a password.
-    </p>
   </form>
 </section>
