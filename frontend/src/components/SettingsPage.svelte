@@ -36,6 +36,7 @@
   const TOGGLES = [
     { key: 'vertical', label: 'Vertical navigation (swipe up/down)' },
     { key: 'smoothScroll', label: 'Smooth scrolling' },
+    { key: 'navZones', label: 'Click near the edges for next/previous post (desktop)' },
     { key: 'showPauseIcon', label: 'Paused indicator on videos' },
     { key: 'dynamicResolution', label: 'Dynamic video resolution (less buffering, may lower quality)' },
     { key: 'barInvert', label: 'Left/right progress bar fills upwards' },

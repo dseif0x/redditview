@@ -48,20 +48,22 @@
 </main>
 
 <!-- Touch devices navigate by swiping; the click zones only steal edge taps
-     (hidden on coarse pointers via CSS). -->
-<button
-  id="prev-zone"
-  class="nav-zone"
-  title={settings.vertical ? 'Previous (↑)' : 'Previous (←)'}
-  onclick={prev}
->
-  {settings.vertical ? '⌃' : '‹'}
-</button>
-<button
-  id="next-zone"
-  class="nav-zone"
-  title={settings.vertical ? 'Next (↓)' : 'Next (→)'}
-  onclick={next}
->
-  {settings.vertical ? '⌄' : '›'}
-</button>
+     (hidden on coarse pointers via CSS), and can be turned off in Settings. -->
+{#if settings.navZones}
+  <button
+    id="prev-zone"
+    class="nav-zone"
+    title={settings.vertical ? 'Previous (↑)' : 'Previous (←)'}
+    onclick={prev}
+  >
+    {settings.vertical ? '⌃' : '‹'}
+  </button>
+  <button
+    id="next-zone"
+    class="nav-zone"
+    title={settings.vertical ? 'Next (↓)' : 'Next (→)'}
+    onclick={next}
+  >
+    {settings.vertical ? '⌄' : '›'}
+  </button>
+{/if}

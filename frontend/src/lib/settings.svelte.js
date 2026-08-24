@@ -16,6 +16,9 @@ export const DEFAULTS = {
   showText: true,
   vertical: false,
   smoothScroll: true,
+  // Desktop-only edge click zones for previous/next post (hidden on touch
+  // devices either way — they navigate by swiping).
+  navZones: true,
   showPauseIcon: true,
   // The mute button's state, remembered across sessions. Browsers still
   // demand a user gesture before sound, so an audio-on session starts
