@@ -61,6 +61,7 @@
   let cookieMasked = $state(false);
   let serverUrl = $state(settings.serverUrl);
   let imageSeconds = $state(settings.imageSeconds);
+  let seekSeconds = $state(settings.seekSeconds);
   let preloadCount = $state(settings.preloadCount);
   let ioVisible = $state(false);
   let ioValue = $state('');
@@ -165,6 +166,12 @@
   function commitImageSeconds() {
     settings.imageSeconds = Math.max(1, parseFloat(imageSeconds) || DEFAULTS.imageSeconds);
     imageSeconds = settings.imageSeconds;
+    saveSettings();
+  }
+
+  function commitSeekSeconds() {
+    settings.seekSeconds = Math.min(60, Math.max(0.5, parseFloat(seekSeconds) || DEFAULTS.seekSeconds));
+    seekSeconds = settings.seekSeconds;
     saveSettings();
   }
 
@@ -298,6 +305,7 @@
     // Refresh the form's local state from the imported settings.
     serverUrl = settings.serverUrl;
     imageSeconds = settings.imageSeconds;
+    seekSeconds = settings.seekSeconds;
     preloadCount = settings.preloadCount;
     editingAccount = settings.accounts.length ? settings.activeAccount : -1;
     loadAccountFields();
@@ -518,6 +526,19 @@
           step="0.5"
           bind:value={imageSeconds}
           onchange={commitImageSeconds}
+        />
+      </div>
+      <div class="item">
+        <label class="item-label" for="seek-seconds-input">Arrow key video seek (seconds)</label>
+        <input
+          id="seek-seconds-input"
+          class="item-input num"
+          type="number"
+          min="0.5"
+          max="60"
+          step="0.5"
+          bind:value={seekSeconds}
+          onchange={commitSeekSeconds}
         />
       </div>
       <div class="item">

@@ -976,6 +976,21 @@ export function progressPointerUp() {
   lastScrubEnd = Date.now();
 }
 
+// Cross-axis arrow keys seek the current video by settings.seekSeconds.
+// Returns false without a seekable video so the keys fall through to their
+// gallery/post-navigation roles. Clamped short of the end: landing exactly
+// on it would fire `ended` and (with autoscroll) yank the feed forward.
+function seekBy(deltaSeconds) {
+  const video = P.currentVideo;
+  if (!video || !video.duration) return false;
+  video.currentTime = Math.min(
+    Math.max(0, video.currentTime + deltaSeconds),
+    Math.max(0, video.duration - 0.1)
+  );
+  paintFill((video.currentTime / video.duration) * 100 + '%');
+  return true;
+}
+
 // Playback progress in the bottom bar (only while this slide is active).
 export function videoTimeUpdate(uid, video) {
   if (P.activeUid !== uid || !video.duration || scrubbing) return;
@@ -1672,23 +1687,24 @@ export function initPlayer() {
         toggleAutoscroll();
         break;
       // Arrows on the main axis move between posts; arrows on the cross axis
-      // step through the active gallery (falling back to posts otherwise).
+      // seek the current video, or step through the active gallery (falling
+      // back to posts otherwise).
       case 'ArrowRight':
-        if (settings.vertical && galleryStep(1)) break;
+        if (settings.vertical && (seekBy(settings.seekSeconds) || galleryStep(1))) break;
         next();
         break;
       case 'ArrowLeft':
-        if (settings.vertical && galleryStep(-1)) break;
+        if (settings.vertical && (seekBy(-settings.seekSeconds) || galleryStep(-1))) break;
         prev();
         break;
       case 'ArrowDown':
         e.preventDefault();
-        if (!settings.vertical && galleryStep(1)) break;
+        if (!settings.vertical && (seekBy(settings.seekSeconds) || galleryStep(1))) break;
         next();
         break;
       case 'ArrowUp':
         e.preventDefault();
-        if (!settings.vertical && galleryStep(-1)) break;
+        if (!settings.vertical && (seekBy(-settings.seekSeconds) || galleryStep(-1))) break;
         prev();
         break;
       case 'j':

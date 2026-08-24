@@ -8,6 +8,7 @@ export const DEFAULTS = {
   accounts: [],
   activeAccount: 0,
   imageSeconds: 8,
+  seekSeconds: 5, // cross-axis arrow keys seek videos by this much
   preloadCount: 1, // posts mounted (and loading) ahead of the current one
   autoscroll: false,
   lastFeed: '',
