@@ -37,7 +37,7 @@
           <strong>saved</strong>, <strong>upvoted</strong>,
           <strong>downvoted</strong>, or <strong>hidden</strong>.
         </p>
-        <p class="hint">← / → navigate · space toggles autoscroll · m toggles sound</p>
+        <p class="hint">← / → navigate · space pauses · t toggles autoscroll · m toggles sound</p>
       </div>
     {:else if P.message.kind === 'loading'}
       <div class="loading"><div class="spinner"></div></div>

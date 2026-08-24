@@ -380,6 +380,18 @@ export function timerTapToggle() {
   else resumeTimer();
 }
 
+// Space mirrors a single tap on the slide: pause/resume the current video,
+// or hold/resume the autoscroll countdown on image/gallery/text slides.
+export function playPauseToggle() {
+  const video = P.currentVideo;
+  if (video) {
+    if (video.paused) video.play().catch(() => {});
+    else video.pause();
+  } else {
+    timerTapToggle();
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Video element pool. WebKit grants playback-with-sound rights PER ELEMENT,
 // permanently, once the element has played inside a user gesture. A fresh
@@ -1684,6 +1696,9 @@ export function initPlayer() {
     switch (e.key) {
       case ' ':
         e.preventDefault();
+        playPauseToggle();
+        break;
+      case 't':
         toggleAutoscroll();
         break;
       // Arrows on the main axis move between posts; arrows on the cross axis
