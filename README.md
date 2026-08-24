@@ -46,8 +46,8 @@ advancing; images advance after a configurable duration.
    - or paste any full reddit URL
 
 Controls: arrow keys, edge clicks, swipe, or mouse wheel to navigate; `space`
-toggles autoscroll, `m` toggles sound, `f` toggles fill-screen, `a`/`z`/`s`
-vote/save. Double-tap a post to upvote it. Pinch to zoom into the post media
+pauses/resumes, `t` toggles autoscroll, `m` toggles sound, `f` toggles
+fill-screen, `a`/`z`/`s` vote/save. Double-tap a post to upvote it. Pinch to zoom into the post media
 (Instagram-style: only the media zooms — the UI stays put — and it springs
 back on release); browser page zoom is disabled in exchange. The sort selector next to the
 feed input applies hot/new/rising/top/controversial (with time ranges) to
@@ -75,7 +75,7 @@ so the volume rocker can't unmute — the first-gesture unlock is the closest
 web-possible equivalent.
 
 Autoscroll is off by default: videos loop and slides stay until you navigate.
-Turning it on (▶ button or `space`) advances images after the configured
+Turning it on (▶ button or `t`) advances images after the configured
 duration and videos when they end. The bottom bar shows video playback
 progress and can be clicked/dragged to seek; tapping a video pauses it.
 
