@@ -35,6 +35,7 @@
   import SlidersHorizontal from '@lucide/svelte/icons/sliders-horizontal';
   import Filter from '@lucide/svelte/icons/filter';
   import Wrench from '@lucide/svelte/icons/wrench';
+  import Keyboard from '@lucide/svelte/icons/keyboard';
 
   const ICONS = {
     play: Play,
@@ -70,6 +71,7 @@
     sliders: SlidersHorizontal,
     filter: Filter,
     wrench: Wrench,
+    keyboard: Keyboard,
   };
 </script>
 

@@ -46,6 +46,27 @@
     { id: 'content', label: 'Content', icon: 'filter' },
     { id: 'advanced', label: 'Advanced', icon: 'wrench' },
   ];
+  const HELP = [{ id: 'shortcuts', label: 'Keyboard shortcuts', icon: 'keyboard' }];
+
+  // The shortcut list mirrors the live bindings in player.svelte.js: the
+  // arrow roles swap with the navigation axis and the seek row shows the
+  // configured duration.
+  const SHORTCUTS = $derived([
+    { keys: settings.vertical ? ['↑', '↓'] : ['←', '→'], desc: 'Previous / next post' },
+    {
+      keys: settings.vertical ? ['←', '→'] : ['↑', '↓'],
+      desc: `Seek videos ${settings.seekSeconds}s back / forward, or step through a gallery`,
+    },
+    { keys: ['k', 'j'], desc: 'Previous / next post' },
+    { keys: ['space'], desc: 'Pause / resume the current post' },
+    { keys: ['t'], desc: 'Autoscroll on / off' },
+    { keys: ['m'], desc: 'Sound on / off' },
+    { keys: ['f'], desc: 'Fullscreen' },
+    { keys: ['a', 'z'], desc: 'Upvote / downvote' },
+    { keys: ['s'], desc: 'Save / unsave the post' },
+    { keys: ['c'], desc: 'Open comments (c or esc closes them)' },
+    { keys: ['esc'], desc: 'Close comments, or step back out of settings' },
+  ]);
   const TOGGLES = {
     navigation: [
       { key: 'vertical', label: 'Vertical navigation (swipe up/down)' },
@@ -62,7 +83,9 @@
   };
   // Which subpage is open: a CATEGORIES id, or null for the root page.
   let subpage = $state(null);
-  const subpageLabel = $derived(CATEGORIES.find((c) => c.id === subpage)?.label || '');
+  const subpageLabel = $derived(
+    [...CATEGORIES, ...HELP].find((c) => c.id === subpage)?.label || ''
+  );
 
   // Escape backs out of an open subpage before it leaves the settings tab.
   $effect(() =>
@@ -553,15 +576,22 @@
       {/if}
     </div>
 
+    {#snippet menuRows(list)}
+      {#each list as c (c.id)}
+        <button type="button" class="item menu-item" onclick={() => (subpage = c.id)}>
+          <span class="menu-icon"><Icon name={c.icon} /></span>
+          <span class="item-label">{c.label}</span>
+          <span class="menu-chevron"><Icon name="chevron-right" /></span>
+        </button>
+      {/each}
+    {/snippet}
+
     {#if !subpage}
       <div class="list">
-        {#each CATEGORIES as c (c.id)}
-          <button type="button" class="item menu-item" onclick={() => (subpage = c.id)}>
-            <span class="menu-icon"><Icon name={c.icon} /></span>
-            <span class="item-label">{c.label}</span>
-            <span class="menu-chevron"><Icon name="chevron-right" /></span>
-          </button>
-        {/each}
+        {@render menuRows(CATEGORIES)}
+      </div>
+      <div class="list">
+        {@render menuRows(HELP)}
       </div>
       <p class="hint">
         Changes are saved automatically, and only in this browser's localStorage. The cookie is
@@ -654,6 +684,22 @@
         {/each}
         {@render toggleRows(TOGGLES.content)}
       </div>
+    {:else if subpage === 'shortcuts'}
+      <div class="list">
+        {#each SHORTCUTS as s}
+          <div class="item">
+            <span class="kbd-group">
+              {#each s.keys as k (k)}<kbd>{k}</kbd>{/each}
+            </span>
+            <span class="item-label">{s.desc}</span>
+          </div>
+        {/each}
+      </div>
+      <p class="hint">
+        Shortcuts work on the feed and are ignored while typing in a text field. Bonus mouse/touch
+        moves: double-tap upvotes, holding a playing video runs it at 2×, and pinch zooms into the
+        media.
+      </p>
     {:else if subpage === 'advanced'}
       <div class="list">
         {@render toggleRows(TOGGLES.advanced)}
