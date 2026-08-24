@@ -1733,6 +1733,25 @@ h2.as-header,
   font-size: 1.4rem;
 }
 
+/* keyboard shortcut list */
+.kbd-group {
+  display: inline-flex;
+  gap: 0.3rem;
+  flex-shrink: 0;
+  min-width: 4.6rem;
+}
+
+.kbd-group kbd {
+  font-family: inherit;
+  font-size: 0.85rem;
+  line-height: 1;
+  padding: 0.3rem 0.45rem;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--border-strong);
+  border-bottom-width: 2px;
+}
+
 /* ---- Bits UI switch (iOS style) ---- */
 .switch {
   position: relative;
