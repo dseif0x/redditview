@@ -1260,6 +1260,9 @@ let touchStartX = 0;
 let touchStartY = 0;
 let dragMode = null; // null | 'main' | 'gallery'
 let canDrag = false;
+// The gesture began on a reading surface with real overflow — its vertical
+// scroll must not double as a vertical flick.
+let scrollingSurface = false;
 let chromeDismissAt = 0; // last gesture spent on closing the search panel
 // A gesture that must not navigate at all — canDrag=false alone isn't
 // enough, because gestureEnd's flick fallback fires on plain distance.
@@ -1281,12 +1284,14 @@ function gestureBegin(x, y, target, isTouch = false) {
     canDrag = false;
     return;
   }
+  // Scrollable reading surfaces own their touches (an expanded title or
+  // caption scrolls its overflow just like a text post's body).
+  const surface = target.closest('.text-post, #meta-title.expanded, #meta-body.expanded');
+  scrollingSurface = !!surface && surface.scrollHeight > surface.clientHeight + 1;
   canDrag =
     settings.smoothScroll &&
     P.window.length > 0 &&
-    // Scrollable reading surfaces own their touches (an expanded title or
-    // caption scrolls its overflow just like a text post's body).
-    !target.closest('.text-post, #meta-title.expanded, #meta-body.expanded') &&
+    !surface &&
     // Touches starting at the screen edge belong to history back/forward.
     !(isTouch && (x <= EDGE_SWIPE_PX || x >= window.innerWidth - EDGE_SWIPE_PX));
 }
@@ -1335,7 +1340,13 @@ function gestureEnd(x, y) {
     return true;
   }
 
-  const fired = Math.abs(main) >= 60 && Math.abs(main) >= Math.abs(cross) * 1.5;
+  const fired =
+    Math.abs(main) >= 60 &&
+    Math.abs(main) >= Math.abs(cross) * 1.5 &&
+    // In a vertical feed a reading surface's scroll travels along the feed
+    // axis; browsers keep sending touchmoves while the surface pans, so
+    // without this a fast scroll of the caption reads as a flick.
+    !(scrollingSurface && settings.vertical);
   if (mode === 'main') {
     // Snap everything back; a completed swipe immediately re-targets the
     // window from the dragged position, so the transition continues on.
