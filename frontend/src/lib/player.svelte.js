@@ -869,14 +869,14 @@ export function slideTap(node, params) {
       boostEl = video;
       setRateSmooth(video, BOOST_RATE);
       P.rateBoost = true;
+      lockGestureForBoost(); // the finger stays down: its swipe must not fire
     }, HOLD_BOOST_MS);
   };
   const onMove = (e) => {
-    if (!holdTimer && !boostEl) return;
-    if (Math.hypot(e.clientX - downX, e.clientY - downY) > 12) {
-      cancelHold();
-      endBoost(); // the press became a drag
-    }
+    // Once the boost is on, the finger is allowed to wander — only lifting
+    // (or a pinch) ends it. Movement only cancels a not-yet-engaged hold.
+    if (!holdTimer) return;
+    if (Math.hypot(e.clientX - downX, e.clientY - downY) > 12) cancelHold();
   };
   const onCancel = () => {
     cancelHold();
@@ -1378,6 +1378,15 @@ function abortDragForPinch() {
   }
   dragMode = null;
   canDrag = false;
+}
+
+// Hold-to-2x engaging locks the rest of the gesture out of navigation: the
+// held finger drifting (or deliberately dragging) must neither drag the
+// slide window nor count as a flick on release. suppressGesture also blocks
+// gestureEnd's plain-distance flick fallback.
+function lockGestureForBoost() {
+  abortDragForPinch(); // snap back anything the pre-hold jitter dragged
+  suppressGesture = true;
 }
 
 export function viewerTouchStart(e) {
