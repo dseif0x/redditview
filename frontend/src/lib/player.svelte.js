@@ -55,6 +55,14 @@ let loadedNames = new Set();
 let after = null;
 let exhausted = false;
 let loadingPage = false;
+// Cursor-rot restarts since the last page that actually added posts. Dynamic
+// listings (home above all) shift under their fullname cursors, and the
+// server's response cache can hand back a page whose cursor is minutes old;
+// reddit answers such a cursor with an empty page and no next cursor —
+// indistinguishable from the end of the feed. One restart from the top (the
+// loadedNames dedup drops the overlap) recovers; a second empty end without
+// any progress in between means the feed really is done.
+let cursorRotRestarts = 0;
 
 // The post a resume is targeting must never be filtered as already-seen.
 let resumeExemptName = null;
@@ -177,8 +185,15 @@ async function fetchPage(seq = feedSeq) {
         loadedNames.add(p.name || p.id);
       }
       P.posts.push(...added);
+      if (added.length > 0) cursorRotRestarts = 0;
       after = data.after || null;
       if (!after) {
+        // An empty page for a cursor we sent is almost always an expired
+        // cursor, not the end (see cursorRotRestarts) — restart from the top.
+        if (cursorUsed && data.posts.length === 0 && cursorRotRestarts === 0) {
+          cursorRotRestarts++;
+          continue; // after is null now, so the next attempt starts fresh
+        }
         exhausted = true;
         break;
       }
@@ -200,6 +215,7 @@ export async function startFeed(path, resume = null) {
   loadedNames = new Set();
   after = resume?.cursor || null;
   exhausted = false;
+  cursorRotRestarts = 0;
   P.idx = -1;
   P.feedPath = path;
   P.feedActive = true;
