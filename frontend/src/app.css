@@ -117,10 +117,11 @@ button {
    iOS-only — flagged by main.js) gives up the top of the page: a solid
    strip in the status bar's own color, with the whole shell — body's
    absolute overlays included — pushed down below it. The blur's fade
-   reaches further than the strip, through the search row, which therefore
-   gets a flat backdrop of its own (#feed-form::before). The strip includes
-   whatever inset the page still runs under (0 with the opaque bar; the
-   bar's height for an older, translucent install). */
+   reaches further than the strip and softens the media behind the search
+   row; that is left alone — a flat backdrop there reads as a box behind
+   the bar. The strip includes whatever inset the page still runs under
+   (0 with the opaque bar; the bar's height for an older, translucent
+   install). */
 html.ios-standalone {
   --status-strip: calc(env(safe-area-inset-top, 0px) + 16px);
   --safe-top: 0px;
@@ -314,36 +315,16 @@ html.ios-standalone #app {
   padding: calc(var(--topbar-pad-y) + var(--safe-top))
     calc(var(--topbar-pad-x) + env(safe-area-inset-right)) var(--topbar-pad-y)
     calc(var(--topbar-pad-x) + env(safe-area-inset-left));
-  background: linear-gradient(rgba(11, 11, 15, 0.85), rgba(11, 11, 15, 0.5), rgba(11, 11, 15, 0));
+  /* No backdrop of its own: the field and buttons float over the media. */
 }
 
 #feed-form {
-  position: relative;
   display: flex;
   gap: 0.3rem;
   align-items: center;
   /* Full-width so the search field always gets its own row; the tool icons
      and playback controls share the row below. */
   flex: 1 1 100%;
-}
-
-/* The installed iOS app's system blur (see html.ios-standalone) fades out
-   well below the 16px strip — through the search row. Its media showed
-   through the top bar's gradient there as a smeared band. Nothing switches
-   the blur off, so the search row gets a flat backdrop instead: solid
-   from the shell's top edge to halfway into the gap below the row, edge
-   to edge, painted over the bar's gradient and under the field. Flat
-   color blurs to itself, so the band is gone; the gradient carries on
-   over the tool row beneath. */
-html.ios-standalone #feed-form::before {
-  content: '';
-  position: absolute;
-  z-index: -1;
-  top: calc(-1 * (var(--topbar-pad-y) + var(--safe-top)));
-  bottom: calc(var(--topbar-gap) / -2);
-  left: calc(-1 * (var(--topbar-pad-x) + env(safe-area-inset-left)));
-  right: calc(-1 * (var(--topbar-pad-x) + env(safe-area-inset-right)));
-  background: var(--bg);
 }
 
 #feed-tools {
@@ -948,17 +929,6 @@ html.ios-standalone #feed-form::before {
   align-items: flex-end;
   gap: 0.75rem;
   padding: 3rem calc(0.75rem + env(safe-area-inset-right)) 0 calc(0.9rem + env(safe-area-inset-left));
-  pointer-events: none;
-}
-
-/* bottom shading runs all the way to the screen edge (behind the scrubber
-   and the tab pill), so the caption never ends on a hard gradient edge */
-#meta::before {
-  content: '';
-  position: absolute;
-  inset: 0 0 calc(-1 * (var(--tabbar-h) + 1.35rem)) 0;
-  background: linear-gradient(rgba(11, 11, 15, 0), rgba(11, 11, 15, 0.72));
-  z-index: -1;
   pointer-events: none;
 }
 
