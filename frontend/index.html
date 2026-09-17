@@ -12,7 +12,13 @@
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <!-- Opaque, theme-colored status bar. black-translucent would run the
+         page under it, and from iOS 26 the system fills that strip with a
+         Liquid Glass blur that bleeds into the page (a wash over the top of
+         the feed, much stronger since iOS 27) — no CSS or meta switches it
+         off; not painting up there is the only lever. iOS reads this tag
+         at install time: remove and re-add the home screen icon. -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <title>redditview</title>
   </head>
   <body>

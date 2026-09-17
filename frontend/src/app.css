@@ -279,7 +279,8 @@ button {
   flex-wrap: wrap;
   gap: 0.4rem;
   align-items: center;
-  /* keep clear of the iOS status bar / notch in standalone PWA mode */
+  /* keep clear of the notch (and of the status bar wherever the page
+     still runs under it — the installed app is inset below its opaque bar) */
   padding: calc(0.5rem + env(safe-area-inset-top)) calc(0.75rem + env(safe-area-inset-right)) 0.5rem
     calc(0.75rem + env(safe-area-inset-left));
   background: linear-gradient(rgba(11, 11, 15, 0.85), rgba(11, 11, 15, 0.5), rgba(11, 11, 15, 0));

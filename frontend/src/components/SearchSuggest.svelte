@@ -150,8 +150,10 @@
   </button>
 {/snippet}
 
-<!-- pointerdown is swallowed so taps inside the panel never blur the input
-     (blur is what closes the panel) -->
+<!-- pointerdown is swallowed so taps inside the panel keep the input
+     focused (and the keyboard up) where the platform honors it. iOS blurs
+     regardless, which is why the owner keeps the panel open across a press
+     in here rather than closing on blur. -->
 {#if open}
   <div id="suggest" bind:this={panelEl} onpointerdown={(e) => e.preventDefault()}>
     <!-- single-select with tap-again-to-deselect is exactly a ToggleGroup;

@@ -21,8 +21,61 @@
 
   let inputEl = $state(null);
   let searchFocused = $state(false);
+
+  // The suggestion panel opens with focus but is NOT tied to it. On iOS a
+  // tap inside the panel blurs the input before the tap's click lands
+  // (swallowing pointerdown stops that on desktop, not there), and with
+  // open === focused the {#if} unmounted the tapped row before its click,
+  // so taps only ever closed the panel. Instead the panel closes on: a
+  // pick, Escape, submit, a press outside the panel and form, or a blur
+  // that no press inside the panel caused (keyboard dismissed, Tab, the
+  // feed's dismissing gesture).
+  let suggestOpen = $state(false);
+  let panelPress = false; // a press inside the panel whose click hasn't landed yet
+  let panelPressTimer;
+
+  function closeSuggest() {
+    suggestOpen = false;
+    inputEl?.blur();
+  }
+
   $effect(() => {
-    registerFeedInput(inputEl);
+    registerFeedInput(inputEl, {
+      isOpen: () => suggestOpen,
+      close: closeSuggest,
+    });
+  });
+
+  $effect(() => {
+    if (!suggestOpen) return;
+    const onDown = (e) => {
+      const t = e.target instanceof Element ? e.target : null;
+      if (t?.closest('#suggest')) {
+        panelPress = true;
+        clearTimeout(panelPressTimer);
+      } else if (!t?.closest('#feed-form, #viewer')) {
+        // (#viewer's own gesture start dismisses the panel — and spends the
+        // gesture on that, so the tap never reaches the post.)
+        suggestOpen = false;
+      }
+    };
+    // iOS delivers blur and click after pointerup, so the flag outlives the
+    // press by a beat; a long enough beat that a lost click can't wedge it.
+    const onUp = () => {
+      if (!panelPress) return;
+      clearTimeout(panelPressTimer);
+      panelPressTimer = setTimeout(() => (panelPress = false), 500);
+    };
+    document.addEventListener('pointerdown', onDown, true);
+    document.addEventListener('pointerup', onUp, true);
+    document.addEventListener('pointercancel', onUp, true);
+    return () => {
+      document.removeEventListener('pointerdown', onDown, true);
+      document.removeEventListener('pointerup', onUp, true);
+      document.removeEventListener('pointercancel', onUp, true);
+      clearTimeout(panelPressTimer);
+      panelPress = false;
+    };
   });
 
   const bookmarkIndex = $derived(settings.bookmarks.findIndex((b) => b.path === P.feedInput.trim()));
@@ -108,7 +161,7 @@
 
   function submit(e) {
     e.preventDefault();
-    inputEl?.blur();
+    closeSuggest();
     goToFeed(P.feedInput.trim());
   }
 </script>
@@ -123,10 +176,16 @@
       autocomplete="off"
       spellcheck="false"
       placeholder="r/pics · user/name/m/multi · saved · upvoted · empty = home"
-      onfocus={() => (searchFocused = true)}
-      onblur={() => (searchFocused = false)}
+      onfocus={() => {
+        searchFocused = true;
+        suggestOpen = true;
+      }}
+      onblur={() => {
+        searchFocused = false;
+        if (!panelPress) suggestOpen = false;
+      }}
       onkeydown={(e) => {
-        if (e.key === 'Escape') inputEl?.blur();
+        if (e.key === 'Escape') closeSuggest();
       }}
     />
     <!-- pointerdown is swallowed so tapping Go doesn't blur the input first
@@ -139,7 +198,7 @@
       onpointerdown={(e) => e.preventDefault()}>Go</button
     >
   </form>
-  <SearchSuggest open={searchFocused} query={P.feedInput} onpick={() => inputEl?.blur()} />
+  <SearchSuggest open={suggestOpen} query={P.feedInput} onpick={closeSuggest} />
   <div id="feed-tools">
     <button
       id="bm-btn"
