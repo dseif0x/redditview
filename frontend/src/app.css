@@ -30,6 +30,12 @@
      space, so every bottom inset in the app uses --safe-bottom instead. */
   --bottom-letterbox: 0px;
   --safe-bottom: max(0px, calc(env(safe-area-inset-bottom, 0px) - var(--bottom-letterbox)));
+  /* Top inset the UI keeps clear of (status bar / notch). The installed iOS
+     app zeroes it and instead pushes the whole shell down by --status-strip
+     (see html.ios-standalone), so every top inset in the app uses
+     --safe-top, never raw env(). */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --status-strip: 0px;
   /* fallback; JS measures the real rendered bar height into this variable */
   --tabbar-h: calc(3.2rem + var(--safe-bottom));
 }
@@ -102,6 +108,27 @@ button {
     inset: 0 0 auto 0;
     height: 100vh;
   }
+}
+
+/* From iOS 26 the system lays a Liquid Glass blur over the top of an
+   installed web app (the status-bar strip plus a fade below it), whatever
+   the status-bar style, and nothing in CSS or meta switches it off. Blur of
+   a flat color is that color, so the installed app (navigator.standalone,
+   iOS-only — flagged by main.js) gives up the top of the page: a solid
+   strip in the status bar's own color, with the whole shell — body's
+   absolute overlays included — pushed down below it. Anything the strip
+   doesn't cover blurs the top bar's soft gradient, which reads fine. The
+   strip includes whatever inset the page still runs under (0 with the
+   opaque bar; the bar's height for an older, translucent install). */
+html.ios-standalone {
+  --status-strip: calc(env(safe-area-inset-top, 0px) + 16px);
+  --safe-top: 0px;
+}
+
+html.ios-standalone body,
+html.ios-standalone #app {
+  top: var(--status-strip);
+  height: calc(100vh - var(--status-strip));
 }
 
 /* ---- inline icons (lucide SVGs, tinted via currentColor) ---- */
@@ -279,9 +306,8 @@ button {
   flex-wrap: wrap;
   gap: 0.4rem;
   align-items: center;
-  /* keep clear of the notch (and of the status bar wherever the page
-     still runs under it — the installed app is inset below its opaque bar) */
-  padding: calc(0.5rem + env(safe-area-inset-top)) calc(0.75rem + env(safe-area-inset-right)) 0.5rem
+  /* keep clear of the notch and of whatever status bar the page runs under */
+  padding: calc(0.5rem + var(--safe-top)) calc(0.75rem + env(safe-area-inset-right)) 0.5rem
     calc(0.75rem + env(safe-area-inset-left));
   background: linear-gradient(rgba(11, 11, 15, 0.85), rgba(11, 11, 15, 0.5), rgba(11, 11, 15, 0));
 }
@@ -371,7 +397,7 @@ button {
 
 @media (max-width: 480px) {
   #topbar {
-    padding: calc(0.4rem + env(safe-area-inset-top)) calc(0.5rem + env(safe-area-inset-right)) 0.4rem
+    padding: calc(0.4rem + var(--safe-top)) calc(0.5rem + env(safe-area-inset-right)) 0.4rem
       calc(0.5rem + env(safe-area-inset-left));
     gap: 0.3rem;
   }
@@ -811,7 +837,7 @@ button {
 }
 
 #progress.pos-top {
-  top: env(safe-area-inset-top);
+  top: var(--safe-top);
 }
 
 #progress.pos-bottom #progress-track,
@@ -1059,7 +1085,7 @@ button {
    fresh layer over a playing video causes a compositing hitch. */
 #rate-boost {
   position: absolute;
-  top: calc(6.5rem + env(safe-area-inset-top));
+  top: calc(6.5rem + var(--safe-top));
   left: 50%;
   z-index: 12;
   padding: 0.3rem 0.75rem;
@@ -1137,7 +1163,7 @@ button {
 }
 
 #app.vertical #prev-zone {
-  top: calc(4.5rem + env(safe-area-inset-top));
+  top: calc(4.5rem + var(--safe-top));
   bottom: auto;
 }
 
@@ -1173,7 +1199,7 @@ button {
   right: 0;
   bottom: 0; /* covers the tab bar, like a modal sheet */
   z-index: 31;
-  height: min(78dvh, 100dvh - env(safe-area-inset-top) - 3rem);
+  height: min(78dvh, 100dvh - var(--safe-top) - 3rem);
   display: flex;
   flex-direction: column;
   background: #14141c;
@@ -1531,7 +1557,7 @@ h2.as-header,
 /* ---- toast ---- */
 .toast {
   position: absolute;
-  top: calc(env(safe-area-inset-top) + 0.6rem);
+  top: calc(var(--safe-top) + 0.6rem);
   left: 50%;
   transform: translateX(-50%);
   z-index: 60;
@@ -1561,9 +1587,10 @@ h2.as-header,
 }
 
 /* ---- settings page (tab) ---- */
-/* The page itself never scrolls: its safe-area padding is a solid mask
-   under the iOS status bar. The form inside is the scroll container, so
-   scrolled content clips below the mask instead of sliding over the clock. */
+/* The page itself never scrolls: its top padding is a solid mask under
+   whatever status bar the page runs beneath. The form inside is the scroll
+   container, so scrolled content clips below the mask instead of sliding
+   over the clock. */
 #settings-page {
   position: absolute;
   inset: 0;
@@ -1572,7 +1599,7 @@ h2.as-header,
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  padding-top: calc(env(safe-area-inset-top) + 0.25rem);
+  padding-top: calc(var(--safe-top) + 0.25rem);
 }
 
 #settings-page #settings-form {
@@ -1879,7 +1906,7 @@ h2.as-header,
 /* ---- debug overlay ---- */
 #debug-overlay {
   position: absolute;
-  top: calc(env(safe-area-inset-top) + 6rem);
+  top: calc(var(--safe-top) + 6rem);
   left: 0.5rem;
   right: 0.5rem;
   z-index: 40;
