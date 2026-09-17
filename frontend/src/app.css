@@ -133,6 +133,15 @@ html.ios-standalone #app {
   height: calc(100vh - var(--status-strip));
 }
 
+/* With the shell no longer starting at the screen's top edge, whatever
+   it lets spill upward — the slide swiped past in vertical mode, media
+   mid-pinch — would paint over the strip. Clip at the shell's edge, which
+   is where the screen edge used to cut it. `clip`, not `hidden`: a
+   scroll container here would let focus reveals shift the whole shell. */
+html.ios-standalone #app {
+  overflow: clip;
+}
+
 /* ---- inline icons (lucide SVGs, tinted via currentColor) ---- */
 .icon {
   display: inline-flex;
