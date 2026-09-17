@@ -2,7 +2,7 @@
   // Opt-in overlay (settings): live video element state, fps, and the recent
   // audio/perf log, so failures can be diagnosed on-device without an
   // inspector.
-  import { P } from '../lib/player.svelte.js';
+  import { P, safeAreaTop } from '../lib/player.svelte.js';
   import { settings, activeCookie, cookieSig } from '../lib/settings.svelte.js';
   import { dbg } from '../lib/debug.svelte.js';
 
@@ -58,10 +58,11 @@
     const standalone =
       navigator.standalone === true || window.matchMedia?.('(display-mode: standalone)')?.matches;
     return [
-      `vp: ${standalone ? 'standalone' : 'browser'} scr=${screenH} inner=${window.innerHeight}`,
+      `vp: ${standalone ? 'standalone' : 'browser'} scr=${screenH} outer=${window.outerHeight}`,
+      `inner=${window.innerHeight}`,
       `icb=${document.documentElement.clientHeight}`,
       `vv=${vv ? `${Math.round(vv.height)}@${Math.round(vv.offsetTop + vv.pageTop)}` : '-'}`,
-      `y=${Math.round(window.scrollY)} envB=${envBottom()}`,
+      `y=${Math.round(window.scrollY)} envT=${Math.round(safeAreaTop())} envB=${envBottom()}`,
       `appB=${app ? Math.round(app.getBoundingClientRect().bottom) : '-'}`,
       `barB=${bar ? Math.round(bar.getBoundingClientRect().bottom) : '-'}`,
       `lb=${document.documentElement.style.getPropertyValue('--bottom-letterbox') || '0px'}`,

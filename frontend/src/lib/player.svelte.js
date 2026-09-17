@@ -1289,12 +1289,14 @@ function gestureBegin(x, y, target, isTouch = false) {
   touchStartY = y;
   dragMode = null;
   suppressGesture = false;
-  // While the search field is focused (suggestion panel open, keyboard up
-  // on phones) the first gesture on the feed dismisses that UI instead of
+  // While the search UI is up (field focused with the keyboard up on
+  // phones, or its suggestion panel still open after iOS dropped the
+  // focus) the first gesture on the feed dismisses that UI instead of
   // navigating — swipes during the keyboard's resize dance land somewhere
   // unpredictable. The next gesture behaves normally.
-  if (feedInputEl && document.activeElement === feedInputEl) {
-    feedInputEl.blur();
+  if ((feedInputEl && document.activeElement === feedInputEl) || searchPanel?.isOpen()) {
+    feedInputEl?.blur();
+    searchPanel?.close();
     chromeDismissAt = Date.now();
     suppressGesture = true;
     canDrag = false;
@@ -1497,10 +1499,12 @@ export function refreshAfterVerticalChange() {
 const EDGE_SWIPE_PX = 28;
 const EDGE_BAND = 32;
 let feedInputEl = null;
+let searchPanel = null; // { isOpen(), close() } for the suggestion panel
 let initialized = false;
 
-export function registerFeedInput(el) {
+export function registerFeedInput(el, panel = null) {
   feedInputEl = el;
+  searchPanel = panel;
 }
 
 // Standalone iOS can end the shell short of the physical screen bottom (the
@@ -1513,6 +1517,15 @@ export function registerFeedInput(el) {
 // when the shell stays short, the padding shrinks by exactly the shortfall.
 // iOS reports screen dimensions portrait-fixed, so compare against the axis
 // that currently runs vertically.
+//
+// The screen edge is only the web view's edge while the page runs under
+// the status bar. With an opaque status bar (the app's setting: it keeps
+// iOS 26+ from laying its Liquid Glass blur over the top of the page) the
+// web view starts below it, so screen minus shell bottom would count the
+// status bar as bottom letterbox. That case shows as a portrait shell
+// with no top inset; there the web view's own height (outerHeight is the
+// frame view on iOS) stands in for the screen, or, failing a usable
+// value, the shell is assumed to reach the bottom and env() applies.
 function syncBottomLetterbox() {
   let gap = 0;
   const standalone =
@@ -1523,9 +1536,27 @@ function syncBottomLetterbox() {
     const screenH = landscape
       ? Math.min(screen.width, screen.height)
       : Math.max(screen.width, screen.height);
-    gap = Math.max(0, Math.round(screenH - app.getBoundingClientRect().bottom));
+    let viewH = screenH;
+    if (!landscape && safeAreaTop() === 0) {
+      const outer = window.outerHeight;
+      viewH = outer > 0 && outer < screenH ? outer : 0;
+    }
+    gap = Math.max(0, Math.round(viewH - app.getBoundingClientRect().bottom));
   }
   document.documentElement.style.setProperty('--bottom-letterbox', gap + 'px');
+}
+
+// env(safe-area-inset-top) in px, read off a hidden probe (there is no
+// script API for it).
+let safeTopProbe = null;
+export function safeAreaTop() {
+  if (!safeTopProbe) {
+    safeTopProbe = document.createElement('div');
+    safeTopProbe.style.cssText =
+      'position:fixed;visibility:hidden;pointer-events:none;padding-top:env(safe-area-inset-top,0px)';
+    document.body.appendChild(safeTopProbe);
+  }
+  return parseFloat(getComputedStyle(safeTopProbe).paddingTop) || 0;
 }
 
 export function initPlayer() {
