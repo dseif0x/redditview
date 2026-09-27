@@ -12,16 +12,19 @@
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <!-- Opaque, theme-colored status bar, so the page does not run under
-         it. From iOS 26 the system lays a Liquid Glass blur over the top of
-         an installed web app either way (much stronger since iOS 27), and
-         no CSS or meta switches it off: app.css hides it under a solid strip
-         in the installed app (html.ios-standalone). iOS reads this tag at
-         install time: remove and re-add the home screen icon. -->
+    <!-- Opaque status bar: from iOS 26 the system lays a Liquid Glass blur
+         over the top of a black-translucent web app (much stronger since
+         iOS 27), and only this setting is free of it. iOS reads the tag at
+         install time: remove and re-add the home screen icon. The bar's
+         color comes from #status-bar-fill below (theme-color is no longer
+         read in the installed app). -->
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <title>redditview</title>
   </head>
   <body>
+    <!-- Real element (pseudo-elements don't count) iOS samples for the
+         installed app's status bar color; styled in app.css. -->
+    <div id="status-bar-fill" aria-hidden="true"></div>
     <div id="root"></div>
     <script type="module" src="/src/main.js"></script>
   </body>
