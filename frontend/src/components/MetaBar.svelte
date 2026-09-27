@@ -216,10 +216,14 @@
         {/if}
         {#if post.nsfw}NSFW ·{/if}
         {#if post.kind === 'gallery'}{P.galleryIdx + 1}/{post.images.length} ·{/if}
+        <!-- data-external: the one reddit link meant to LEAVE the app (the
+             in-app link handler skips it). -->
         <a
           href={post.permalink}
           target="_blank"
           rel="noopener"
+          data-external
+          title="Open on reddit"
           onclick={(e) => {
             if (recentDragEnd()) e.preventDefault();
           }}>open ↗</a

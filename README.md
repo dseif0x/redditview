@@ -43,7 +43,20 @@ advancing; images advance after a configurable duration.
    - `u/<name>/submitted`
    - `saved`, `upvoted`, `downvoted`, `hidden` → your own listings (require
      cookie; the backend resolves your username automatically)
-   - or paste any full reddit URL
+   - or paste any full reddit URL — a post permalink, `redd.it` short link
+     or `r/<sub>/s/<id>` share link shows just that post
+
+Reddit links inside the app (comment bodies, captions, a link post's
+destination) open in the app instead of a reddit.com tab: subreddit, user
+and multireddit links start that feed, post links show that post, and
+comment permalinks open the comments sheet on that thread (with an
+"All comments" switch). Pages the viewer can't show (wiki, modmail, search)
+stay external, and the `open ↗` link under the title always goes to reddit.
+The same routing applies to the app's own URL, so
+`https://<your host>/r/pics/comments/…` (or `/open?u=<any reddit URL>`)
+opens that content — handy for share-sheet shortcuts that rewrite
+`reddit.com` links to your host. iOS has no link capturing for home-screen
+web apps, so such a link opens in Safari rather than the installed app.
 
 Controls: arrow keys, edge clicks, swipe, or mouse wheel to navigate; `space`
 pauses/resumes, `t` toggles autoscroll, `m` toggles sound, `f` toggles

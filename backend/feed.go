@@ -1,14 +1,18 @@
 package main
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
 	"net/http"
 	"net/url"
+	"regexp"
 	"sort"
 	"strings"
+	"time"
 )
 
 // Post is the normalized shape the frontend consumes.
@@ -159,6 +163,98 @@ func normalizeFeedPath(raw string) (path string, query url.Values, err error) {
 // but its anti-bot filtering is far less aggressive than www.reddit.com's.
 var feedHosts = []string{"https://old.reddit.com/", "https://www.reddit.com/"}
 
+// parseListingBody decodes a reddit listing response. A post permalink
+// (…/comments/<id>/…) answers with a two-element array — [post listing,
+// comment listing] — instead of a bare listing; the first element is the
+// one-post "feed" for it. single reports that shape.
+func parseListingBody(body []byte) (l listing, single bool, err error) {
+	trimmed := bytes.TrimLeft(body, " \t\r\n")
+	if len(trimmed) > 0 && trimmed[0] == '[' {
+		var pages []listing
+		if err = json.Unmarshal(body, &pages); err != nil {
+			return l, false, err
+		}
+		if len(pages) == 0 {
+			return l, false, errors.New("empty post page")
+		}
+		l = pages[0]
+		l.Data.After = "" // one post: nothing to page to
+		return l, true, nil
+	}
+	err = json.Unmarshal(body, &l)
+	return l, false, err
+}
+
+// Share links: reddit.com/r/<sub>/s/<share id>. They 3xx to the real
+// permalink (plus tracking params), and the JSON API knows nothing about
+// them, so the redirect target has to be looked up.
+var shareLinkRe = regexp.MustCompile(`^r/[^/]+/s/[A-Za-z0-9]+$`)
+
+// shareResolveClient follows nothing: the Location header IS the answer.
+var shareResolveClient = &http.Client{
+	Timeout: 15 * time.Second,
+	CheckRedirect: func(*http.Request, []*http.Request) error {
+		return http.ErrUseLastResponse
+	},
+}
+
+// resolveShareLink turns a share path into the permalink path it redirects
+// to ("r/pics/comments/abc123/some_title"). Paced like every reddit call,
+// and cached: the same link tapped twice must not cost two lookups.
+func resolveShareLink(ctx context.Context, cookie, path string) (string, error) {
+	key := respCacheKey("", "share:"+path)
+	if b, age, ok := cacheGet(key); ok && age <= cacheStaleFor {
+		return string(b), nil
+	}
+	if wait := cooldownRemaining(); wait > 0 {
+		return "", &rateLimitedError{wait}
+	}
+	if err := redditPace.wait(ctx); err != nil {
+		return "", err
+	}
+	var lastErr error
+	for _, host := range feedHosts {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, host+path, nil)
+		if err != nil {
+			return "", err
+		}
+		req.Header.Set("User-Agent", userAgent)
+		if cookie != "" {
+			req.Header.Set("Cookie", cookie)
+		}
+		resp, err := shareResolveClient.Do(req)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		resp.Body.Close()
+		cooldownFromResponse(resp)
+		if resp.StatusCode == http.StatusTooManyRequests {
+			return "", &rateLimitedError{cooldownRemaining()}
+		}
+		loc := resp.Header.Get("Location")
+		if resp.StatusCode < 300 || resp.StatusCode > 399 || loc == "" {
+			lastErr = &upstreamError{status: resp.StatusCode, body: "share link did not redirect"}
+			continue
+		}
+		target, err := url.Parse(loc)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		// Only the path matters (the query is share tracking); a redirect
+		// anywhere but a post page isn't something the feed can show.
+		resolved, _, err := normalizeFeedPath(target.Path)
+		if err != nil || !strings.Contains("/"+resolved+"/", "/comments/") {
+			lastErr = &upstreamError{status: resp.StatusCode, body: "share link does not lead to a post"}
+			continue
+		}
+		cachePut(key, []byte(resolved))
+		return resolved, nil
+	}
+	return "", lastErr
+}
+
 func handleFeed(w http.ResponseWriter, r *http.Request) {
 	path, extra, err := normalizeFeedPath(r.URL.Query().Get("path"))
 	if err != nil {
@@ -170,6 +266,17 @@ func handleFeed(w http.ResponseWriter, r *http.Request) {
 	if path == "fresh" {
 		handleFresh(w, r)
 		return
+	}
+
+	// Share links (r/<sub>/s/<id>) are opaque redirects to a permalink;
+	// resolve them first so the post page fetch below applies.
+	if shareLinkRe.MatchString(path) {
+		resolved, err := resolveShareLink(r.Context(), r.Header.Get("X-Reddit-Cookie"), path)
+		if err != nil {
+			sendUpstreamError(w, err, true)
+			return
+		}
+		path = resolved
 	}
 
 	// Pseudo-feeds for the logged-in user's own listings; reddit only serves
@@ -233,15 +340,20 @@ func handleFeed(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var l listing
-	if err := json.Unmarshal(body, &l); err != nil {
+	l, single, err := parseListingBody(body)
+	if err != nil {
 		http.Error(w, "failed to parse reddit response: "+err.Error(), http.StatusBadGateway)
 		return
 	}
 
 	out := feedResponse{After: l.Data.After, Posts: []Post{}, Host: servedHost}
 	for _, child := range l.Data.Children {
-		if child.Kind != "t3" || child.Data.Stickied || child.Data.Promoted {
+		if child.Kind != "t3" {
+			continue
+		}
+		// Listing hygiene (pinned posts, ads) doesn't apply to a post the
+		// user opened by link: they asked for that one, stickied or not.
+		if !single && (child.Data.Stickied || child.Data.Promoted) {
 			continue
 		}
 		if p, ok := extractPost(child.Data); ok {

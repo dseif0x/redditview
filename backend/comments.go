@@ -146,12 +146,22 @@ func handleComments(w http.ResponseWriter, r *http.Request) {
 	if !commentSorts[sort] {
 		sort = "confidence"
 	}
+	// A focus comment (from a followed comment permalink) narrows the page
+	// to that comment's thread, with a few ancestors for context.
+	focus := strings.ToLower(r.URL.Query().Get("comment"))
+	if focus != "" && !postIDRe.MatchString(focus) {
+		http.Error(w, "invalid comment id", http.StatusBadRequest)
+		return
+	}
 
 	cookie := r.Header.Get("X-Reddit-Cookie")
 	var body []byte
 	var lastErr error
 	for _, host := range feedHosts {
 		target := fmt.Sprintf("%scomments/%s/.json?raw_json=1&limit=150&sort=%s", host, id, sort)
+		if focus != "" {
+			target = fmt.Sprintf("%scomments/%s/_/%s/.json?raw_json=1&limit=150&sort=%s&context=3", host, id, focus, sort)
+		}
 		b, err := redditGet(r.Context(), cookie, target)
 		if err != nil {
 			lastErr = err
