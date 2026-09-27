@@ -66,6 +66,7 @@
       `appB=${app ? Math.round(app.getBoundingClientRect().bottom) : '-'}`,
       `barB=${bar ? Math.round(bar.getBoundingClientRect().bottom) : '-'}`,
       `lb=${document.documentElement.style.getPropertyValue('--bottom-letterbox') || '0px'}`,
+      `fit=${document.documentElement.classList.contains('shell-fit') ? 1 : 0}`,
     ].join(' ');
   }
 

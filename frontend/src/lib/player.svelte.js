@@ -1547,39 +1547,47 @@ export function registerFeedInput(el, panel = null) {
 // layout viewport stops above the home indicator) while
 // env(safe-area-inset-bottom) still reports the inset — padding with raw
 // env() then pads for space the shell never covers. Measure where #app
-// ACTUALLY ends versus the screen and publish the shortfall for the CSS to
-// subtract (--safe-bottom). When the standalone 100vh sizing reclaims the
-// full screen this measures 0 and the normal safe-area padding applies;
-// when the shell stays short, the padding shrinks by exactly the shortfall.
-// iOS reports screen dimensions portrait-fixed, so compare against the axis
-// that currently runs vertically.
+// ACTUALLY ends versus the web view and publish the shortfall for the CSS
+// to subtract (--safe-bottom): when the shell reaches the bottom this is 0
+// and the normal safe-area padding applies; when it stays short, the
+// padding shrinks by exactly the shortfall.
 //
-// The screen edge is only the web view's edge while the page runs under
-// the status bar. With an opaque status bar (the app's setting: it keeps
-// iOS 26+ from laying its Liquid Glass blur over the top of the page) the
-// web view starts below it, so screen minus shell bottom would count the
-// status bar as bottom letterbox. That case shows as a portrait shell
-// with no top inset; there the web view's own height (outerHeight is the
-// frame view on iOS) stands in for the screen, or, failing a usable
-// value, the shell is assumed to reach the bottom and env() applies.
+// Which edge the shell is measured against depends on whether the page
+// runs under the status bar:
+// - Under a translucent bar (a top inset is reported) the web view is the
+//   whole screen, 100vh spans it, and the shell is sized with 100vh so the
+//   tab bar reaches the real bottom edge; the shortfall is screen minus
+//   shell bottom. iOS reports screen dimensions portrait-fixed, so the
+//   axis that currently runs vertically is the one compared.
+// - With no bar to run under (the opaque bar the app installs with, or
+//   landscape) the web view sits below the bar while 100vh is still
+//   derived from the screen, so a 100vh shell overshoots and the tab bar
+//   falls off the bottom. There the shell is the layout viewport instead
+//   (html.shell-fit), and the shortfall is the web view's frame
+//   (outerHeight on iOS) minus the shell bottom — a frame taller than the
+//   viewport means the viewport already stops above the home indicator.
+//   A frame reading that is missing or taller than the screen is ignored.
 function syncBottomLetterbox() {
   let gap = 0;
   const standalone =
     navigator.standalone === true || window.matchMedia?.('(display-mode: standalone)')?.matches;
   const app = document.getElementById('app');
+  const root = document.documentElement;
+  const underBar = standalone && safeAreaTop() > 0;
+  root.classList.toggle('shell-fit', standalone && !underBar);
   if (standalone && window.screen && app) {
     const landscape = window.innerWidth > window.innerHeight;
     const screenH = landscape
       ? Math.min(screen.width, screen.height)
       : Math.max(screen.width, screen.height);
     let viewH = screenH;
-    if (!landscape && safeAreaTop() === 0) {
+    if (!underBar) {
       const outer = window.outerHeight;
-      viewH = outer > 0 && outer < screenH ? outer : 0;
+      viewH = outer > 0 && outer <= screenH ? outer : 0;
     }
     gap = Math.max(0, Math.round(viewH - app.getBoundingClientRect().bottom));
   }
-  document.documentElement.style.setProperty('--bottom-letterbox', gap + 'px');
+  root.style.setProperty('--bottom-letterbox', gap + 'px');
 }
 
 // env(safe-area-inset-top) in px, read off a hidden probe (there is no
