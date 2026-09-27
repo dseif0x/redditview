@@ -3,7 +3,8 @@
   import Comment from './Comment.svelte';
   import { renderCommentHtml } from '../lib/commentHtml.js';
 
-  let { c, depth } = $props();
+  // `focus`: id of the comment a followed permalink pointed at (highlighted).
+  let { c, depth, focus = '' } = $props();
   let collapsed = $state(false);
 
   // Reddit's rendered body, sanitized + media inlined; plain text fallback
@@ -31,6 +32,7 @@
   class="comment"
   class:nested={depth > 0}
   class:collapsed
+  class:focused={!!focus && c.id === focus}
   onclick={(e) => {
     e.stopPropagation(); // innermost comment wins, don't toggle ancestors
     const spoiler = e.target.closest?.('.md-spoiler-text');
@@ -58,7 +60,7 @@
   {/if}
   <div class="c-kids">
     {#each c.replies || [] as r}
-      <Comment c={r} depth={depth + 1} />
+      <Comment c={r} depth={depth + 1} {focus} />
     {/each}
     {#if c.moreCount}
       <div class="c-more">… {c.moreCount} more repl{c.moreCount === 1 ? 'y' : 'ies'} on reddit</div>

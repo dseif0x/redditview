@@ -19,20 +19,26 @@
   let sort = $state('confidence');
   let view = $state({ loading: true, comments: [], more: 0, error: '' });
 
-  async function load(post, sortVal) {
+  // With a focus comment (a comment permalink was followed) the sheet shows
+  // that comment's thread — its ancestors for context and its replies —
+  // instead of the whole page, until "all comments" is tapped.
+  async function load(post, sortVal, focus) {
     view = { loading: true, comments: [], more: 0, error: '' };
+    const stale = () => P.commentsPost !== post || !P.commentsOpen || sort !== sortVal || P.commentsFocus !== focus;
     try {
-      const data = await api(`/api/comments?id=${encodeURIComponent(post.id)}&sort=${sortVal}`);
-      if (P.commentsPost !== post || !P.commentsOpen || sort !== sortVal) return; // user moved on
+      let url = `/api/comments?id=${encodeURIComponent(post.id)}&sort=${sortVal}`;
+      if (focus) url += `&comment=${encodeURIComponent(focus)}`;
+      const data = await api(url);
+      if (stale()) return; // user moved on
       view = { loading: false, comments: data.comments, more: data.more || 0, error: '' };
     } catch (err) {
-      if (P.commentsPost !== post || !P.commentsOpen || sort !== sortVal) return;
+      if (stale()) return;
       view = { loading: false, comments: [], more: 0, error: String(err.message || err) };
     }
   }
 
   $effect(() => {
-    if (P.commentsOpen && P.commentsPost) load(P.commentsPost, sort);
+    if (P.commentsOpen && P.commentsPost) load(P.commentsPost, sort, P.commentsFocus);
   });
 
 </script>
@@ -70,6 +76,14 @@
         </Dialog.Close>
       </header>
       <div id="comments-list">
+        {#if P.commentsFocus}
+          <div class="c-focus">
+            Showing one thread ·
+            <button type="button" class="c-focus-all" onclick={() => (P.commentsFocus = '')}>
+              All comments
+            </button>
+          </div>
+        {/if}
         {#if view.loading}
           <div class="loading"><div class="spinner"></div></div>
         {:else if view.error}
@@ -78,7 +92,7 @@
           <div class="loading">No comments yet.</div>
         {:else}
           {#each view.comments as c}
-            <Comment {c} depth={0} />
+            <Comment {c} depth={0} focus={P.commentsFocus} />
           {/each}
           {#if view.more}
             <div class="c-more">… {view.more} more comments on reddit</div>

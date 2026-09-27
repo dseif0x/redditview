@@ -9,6 +9,7 @@ import { flushSync } from 'svelte';
 import Hls from 'hls.js';
 import { settings, saveSettings, markSeen, hasSeen, activeCookie, cookieSig } from './settings.svelte.js';
 import { api, mediaUrl } from './api.js';
+import { isPostPath, postIdOf, parseRedditLink, parseRedditPath } from './redditLinks.js';
 import { showToast } from './toast.svelte.js';
 import { alog, timed, profileTransition } from './debug.svelte.js';
 
@@ -43,6 +44,9 @@ export const P = $state({
   fullscreen: false,
   commentsOpen: false,
   commentsPost: null,
+  // A comment id to open the sheet on (a comment permalink was followed):
+  // the sheet then shows that thread alone until "all comments" is tapped.
+  commentsFocus: '',
   tab: 'posts',
 });
 
@@ -112,6 +116,7 @@ function applySort(raw) {
   const params = new URLSearchParams(qi >= 0 ? raw.slice(qi + 1) : '');
 
   if (['fresh', 'saved', 'upvoted', 'downvoted', 'hidden'].includes(path)) return raw;
+  if (isPostPath(path)) return raw; // a single post has nothing to sort
 
   t ? params.set('t', t) : params.delete('t');
 
@@ -170,11 +175,14 @@ async function fetchPage(seq = feedSeq) {
       // The fresh feed's whole point is unseen posts: it drops seen ones no
       // matter what the skip-seen setting says.
       const dropSeen = settings.skipSeen || P.feedPath === 'fresh';
+      // A followed post link shows that post whatever the listing filters
+      // say — the user asked for it by name, seen or not, kind or not.
+      const single = isPostPath(P.feedPath);
       const added = data.posts.filter(
         (p) =>
-          kindEnabled(p) &&
           !loadedNames.has(p.name || p.id) &&
-          (!dropSeen || !hasSeen(p.id) || p.name === resumeExemptName)
+          (single ||
+            (kindEnabled(p) && (!dropSeen || !hasSeen(p.id) || p.name === resumeExemptName)))
       );
       // Remember which cursor fetched each post (for resume) plus fetch
       // provenance (upstream host, account signature) for the debug overlay.
@@ -233,7 +241,9 @@ export async function startFeed(path, resume = null) {
   }
   if (seq !== feedSeq) return; // superseded while loading
   if (P.posts.length === 0) {
-    P.message = { text: 'No viewable posts in this feed.' };
+    P.message = {
+      text: isPostPath(path) ? 'Nothing in that post this app can show.' : 'No viewable posts in this feed.',
+    };
     return;
   }
   // When resuming, jump straight to the remembered post if it's still there.
@@ -292,7 +302,29 @@ export function goToFeed(path) {
     /* history unavailable/throttled — navigation still works, just untracked */
   }
   P.feedInput = path;
-  startFeed(path);
+  return startFeed(path);
+}
+
+// Follow a reddit link (see redditLinks.js) inside the app: feeds start
+// like a typed feed, posts become a one-post feed, and a comment permalink
+// opens the comments on that thread. A link to the post already on screen
+// only (re)opens its comments, keeping the feed and its position.
+export async function openRedditLink(link) {
+  if (!link) return;
+  if (P.tab !== 'posts') showTab('posts');
+  const id = link.kind === 'post' ? postIdOf(link.path) : '';
+  if (id && P.posts[P.idx]?.id === id && !P.message) {
+    openComments(link.comment);
+    return;
+  }
+  closeComments(); // the sheet belongs to the post being left
+  await goToFeed(link.path);
+  // Comment permalinks land in the comments; whole-post links stay on the
+  // media (the comments are one tap away). Both only if the post loaded and
+  // nothing else started meanwhile.
+  if (link.kind === 'post' && link.comment && P.feedPath === link.path && !P.message) {
+    openComments(link.comment);
+  }
 }
 
 let lastPopstateAt = 0;
@@ -1033,10 +1065,11 @@ export function videoEnded(uid) {
 // ---------------------------------------------------------------------------
 // Comments
 // ---------------------------------------------------------------------------
-export function openComments() {
+export function openComments(focusComment = '') {
   const post = P.posts[P.idx];
   if (!post) return;
   P.commentsPost = post;
+  P.commentsFocus = focusComment || '';
   P.commentsOpen = true;
   pauseTimer(); // hold the autoscroll countdown while reading
 }
@@ -1044,6 +1077,7 @@ export function openComments() {
 export function closeComments() {
   if (!P.commentsOpen) return;
   P.commentsOpen = false;
+  P.commentsFocus = '';
   resumeTimer();
 }
 
@@ -1559,6 +1593,16 @@ export function safeAreaTop() {
   return parseFloat(getComputedStyle(safeTopProbe).paddingTop) || 0;
 }
 
+function deepLinkFromLocation() {
+  const { pathname, search } = location;
+  if (pathname === '/open') {
+    const u = new URLSearchParams(search).get('u') || '';
+    return parseRedditLink(u) || parseRedditLink('https://www.reddit.com/' + u.replace(/^\/+/, ''));
+  }
+  if (pathname === '/' || pathname === '/index.html') return null;
+  return parseRedditPath(pathname, search);
+}
+
 export function initPlayer() {
   if (initialized) return;
   initialized = true;
@@ -1617,6 +1661,27 @@ export function initPlayer() {
       P.currentVideo?.play().catch(() => {});
     }
   });
+
+  // Reddit links anywhere in the app (comment bodies, captions, a link
+  // post's destination) open in the app instead of a reddit.com tab.
+  // Capture phase: comment rows stop click propagation for their own
+  // collapse handling. Modified clicks (new tab, etc.) keep the browser's
+  // meaning, and links marked data-external ("open on reddit") stay
+  // external on purpose.
+  document.addEventListener(
+    'click',
+    (e) => {
+      if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      const a = e.target instanceof Element ? e.target.closest('a[href]') : null;
+      if (!a || a.hasAttribute('data-external')) return;
+      const link = parseRedditLink(a.href);
+      if (!link) return;
+      e.preventDefault();
+      if (recentDragEnd()) return; // a mouse drag's residual click, not a tap
+      openRedditLink(link).catch((err) => showToast('Failed to open link: ' + (err?.message || err)));
+    },
+    true
+  );
 
   window.addEventListener('popstate', (e) => {
     lastPopstateAt = Date.now();
@@ -1899,6 +1964,23 @@ export function initPlayer() {
     },
     { passive: false }
   );
+
+  // Opened at a reddit-shaped URL on the app's own origin (/r/pics,
+  // /r/pics/comments/abc/…, or /open?u=<any reddit URL>): that link wins
+  // over the session resume. Browsers that route links to installed web
+  // apps (Android) and share-sheet shortcuts that rewrite reddit.com to
+  // this host both land here. The URL is put back to / so a reload goes
+  // through the normal resume.
+  const deep = deepLinkFromLocation();
+  if (deep) {
+    try {
+      history.replaceState({ feed: deep.path, sort: settings.sort }, '', '/');
+    } catch {
+      /* fine either way */
+    }
+    openRedditLink(deep).catch((err) => showToast('Failed to open link: ' + (err?.message || err)));
+    return;
+  }
 
   // Resume the last session's feed and position — but only under the same
   // account; another account's cursor would splice its feed in.
