@@ -1069,7 +1069,9 @@ export function openComments(focusComment = '') {
   const post = P.posts[P.idx];
   if (!post) return;
   P.commentsPost = post;
-  P.commentsFocus = focusComment || '';
+  // Only a real id focuses the sheet — an event object handed in by a
+  // direct onclick binding must not end up in the request.
+  P.commentsFocus = typeof focusComment === 'string' ? focusComment : '';
   P.commentsOpen = true;
   pauseTimer(); // hold the autoscroll countdown while reading
 }

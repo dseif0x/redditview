@@ -260,7 +260,7 @@
       >
         <Icon name="star" filled={!!post.saved} />
       </button>
-      <button id="comments-btn" class="icon-btn" title="Comments (c)" onclick={openComments}>
+      <button id="comments-btn" class="icon-btn" title="Comments (c)" onclick={() => openComments()}>
         <Icon name="message-circle" />
         <span class="action-count">{fmtCount(post.numComments || 0)}</span>
       </button>
