@@ -30,12 +30,9 @@
      space, so every bottom inset in the app uses --safe-bottom instead. */
   --bottom-letterbox: 0px;
   --safe-bottom: max(0px, calc(env(safe-area-inset-bottom, 0px) - var(--bottom-letterbox)));
-  /* Top inset the UI keeps clear of (status bar / notch). The installed iOS
-     app zeroes it and instead pushes the whole shell down by --status-strip
-     (see html.ios-standalone), so every top inset in the app uses
-     --safe-top, never raw env(). */
+  /* Top inset the UI keeps clear of (status bar / notch); every top inset
+     in the app uses --safe-top, the counterpart of --safe-bottom. */
   --safe-top: env(safe-area-inset-top, 0px);
-  --status-strip: 0px;
   /* fallback; JS measures the real rendered bar height into this variable */
   --tabbar-h: calc(3.2rem + var(--safe-bottom));
 }
@@ -110,36 +107,23 @@ button {
   }
 }
 
-/* From iOS 26 the system lays a Liquid Glass blur over the top of an
-   installed web app (the status-bar strip plus a fade below it), whatever
-   the status-bar style, and nothing in CSS or meta switches it off. Blur of
-   a flat color is that color, so the installed app (navigator.standalone,
-   iOS-only — flagged by main.js) gives up the top of the page: a solid
-   strip in the status bar's own color, with the whole shell — body's
-   absolute overlays included — pushed down below it. The blur's fade
-   reaches further than the strip and softens the media behind the search
-   row; that is left alone — a flat backdrop there reads as a box behind
-   the bar. The strip includes whatever inset the page still runs under
-   (0 with the opaque bar; the bar's height for an older, translucent
-   install). */
-html.ios-standalone {
-  --status-strip: calc(env(safe-area-inset-top, 0px) + 16px);
-  --safe-top: 0px;
-}
-
-html.ios-standalone body,
-html.ios-standalone #app {
-  top: var(--status-strip);
-  height: calc(100vh - var(--status-strip));
-}
-
-/* With the shell no longer starting at the screen's top edge, whatever
-   it lets spill upward — the slide swiped past in vertical mode, media
-   mid-pinch — would paint over the strip. Clip at the shell's edge, which
-   is where the screen edge used to cut it. `clip`, not `hidden`: a
-   scroll container here would let focus reveals shift the whole shell. */
-html.ios-standalone #app {
-  overflow: clip;
+/* iOS 26+ colors an installed web app's (opaque, see index.html) status
+   bar by sampling the page's own top edge — the body's background, or a
+   position: fixed element sitting there — and lays a Liquid Glass blur
+   over the top of the page instead when it can't read a flat color. It
+   no longer reads theme-color, and pseudo-elements are invisible to it,
+   so index.html carries a real 1px element pinned to the very top in the
+   page color, above everything, for it to sample. */
+#status-bar-fill {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  z-index: 1000;
+  background-color: var(--bg);
+  /* Deliberately hit-testable: whatever iOS looks up at the top edge,
+     painted pixels or the element there, finds this. */
 }
 
 /* ---- inline icons (lucide SVGs, tinted via currentColor) ---- */
