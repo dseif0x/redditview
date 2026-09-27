@@ -107,6 +107,26 @@ button {
   }
 }
 
+/* With no status bar to run under (the opaque bar the app installs with,
+   or landscape) the web view sits below the bar while 100vh is still
+   derived from the screen, so the 100vh shell overshot the view and the
+   tab bar fell off the bottom. There the shell is the layout viewport,
+   sized the way the browser sizes it; syncBottomLetterbox() sets the
+   flag and measures the shortfall against the view's frame instead. */
+html.shell-fit,
+html.shell-fit body {
+  height: 100%;
+}
+
+html.shell-fit body {
+  bottom: 0;
+}
+
+html.shell-fit #app {
+  inset: 0;
+  height: auto;
+}
+
 /* iOS 26+ colors an installed web app's (opaque, see index.html) status
    bar by sampling the page's own top edge — the body's background, or a
    position: fixed element sitting there — and lays a Liquid Glass blur
