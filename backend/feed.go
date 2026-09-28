@@ -358,6 +358,10 @@ func handleFeed(w http.ResponseWriter, r *http.Request) {
 		}
 		if p, ok := extractPost(child.Data); ok {
 			out.Posts = append(out.Posts, p)
+		} else if single {
+			// Nothing a listing would show (a bare link, say) — but the user
+			// opened this post on purpose: show it as a text slide.
+			out.Posts = append(out.Posts, fallbackPost(child.Data))
 		}
 	}
 
@@ -547,8 +551,61 @@ func handleSearch(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(map[string]any{"subreddits": subreddits, "users": users})
 }
 
-// extractPost classifies a reddit post into one of our media kinds.
+// extractPost classifies a reddit post into one of our media kinds. A
+// crosspost carries its content on the parent post, so when the post
+// itself yields nothing showable the parent's media/text is shown under
+// this post's identity (id, votes, permalink, comment count).
 func extractPost(d postData) (Post, bool) {
+	p, ok := extractOwn(d)
+	if ok {
+		return p, true
+	}
+	for _, parent := range d.CrosspostParentList {
+		pp, ok := extractPost(parent)
+		if !ok {
+			continue
+		}
+		p.Kind = pp.Kind
+		p.Images = pp.Images
+		p.VideoHLS = pp.VideoHLS
+		p.VideoMP4 = pp.VideoMP4
+		p.RedgifsID = pp.RedgifsID
+		p.Poster = pp.Poster
+		p.Duration = pp.Duration
+		p.Text = pp.Text
+		p.LinkURL = pp.LinkURL
+		if p.BodyHTML == "" {
+			p.BodyHTML = pp.BodyHTML
+		}
+		return p, true
+	}
+	return p, false
+}
+
+// fallbackPost is the last resort for a post the user opened by link: a
+// text slide with the title (and the destination, for a bare link post),
+// so the post and its comments are reachable instead of a dead end.
+func fallbackPost(d postData) Post {
+	p, _ := extractOwn(d)
+	p.Kind = "text"
+	p.Text = d.Selftext
+	if u := firstNonEmpty(d.URLOverridden, d.URL); u != "" && !strings.Contains(u, d.Permalink) {
+		p.LinkURL = u
+	}
+	return p
+}
+
+func firstNonEmpty(vals ...string) string {
+	for _, v := range vals {
+		if v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+// extractOwn classifies a post from its own fields only.
+func extractOwn(d postData) (Post, bool) {
 	p := Post{
 		ID:          d.ID,
 		Name:        d.Name,
@@ -662,6 +719,15 @@ func extractPost(d postData) (Post, bool) {
 	if poster != "" {
 		p.Kind = "image"
 		p.Images = []string{poster}
+		p.LinkURL = mediaURL
+		return p, true
+	}
+
+	// Link posts can carry body text (is_self stays false); with no preview
+	// to show, the body is the content and the link rides along.
+	if d.Selftext != "" {
+		p.Kind = "text"
+		p.Text = d.Selftext
 		p.LinkURL = mediaURL
 		return p, true
 	}
